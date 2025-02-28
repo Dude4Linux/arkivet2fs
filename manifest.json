@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "DigitalArkivet to FamilySearch",
+  "version": "1.0",
+  "description": "A tool to extract data from Norwegian DigitalArkivet and format it for FamilySearch.org SourceBox",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.familysearch.org/*",
+    "https://*.digitalarkivet.no/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
