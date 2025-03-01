@@ -16,7 +16,6 @@ function fillSourceForm(data) {
   // Wait for the button to appear
   waitForElement('[data-testid="source-box-create-source-button"]', (createSourceButton) => {
     // Click the "Create Source" button
-    // const createSourceButton = document.querySelector('[data-testid="source-box-create-source-button"]');
     if (createSourceButton) {
       createSourceButton.click();
       console.log('Create Source button clicked');
