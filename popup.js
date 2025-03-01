@@ -63,11 +63,29 @@ document.getElementById('fillFormButton').addEventListener('click', () => {
 
 // Function to gather data from the current page
 function gatherData() {
+  // Function to format date from 'YYYY-MM-DD' to 'DD MMMM YYYY'
+  function formatDate(dateStr) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const [year, month, day] = dateStr.split('-');
+    return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
+  }
+
+  // Extract the type of record and record date
+  const recordType = document.querySelector("body > article > div:nth-child(1) > div > div.parent-post > h4").innerText;
+  const recordDate = document.querySelector("body > article > div:nth-child(1) > div > div.parent-post > h4 > a").innerText;
+  const date = formatDate(recordDate);
+
+  // Extract the title from the page title
+  const title = document.title;
+
   return {
-    date: '2025-02-21', // Replace with logic to extract date from DigitalArkivet page
-    title: 'Sample Title', // Replace with logic to extract title from DigitalArkivet page
+    date: date,
+    title: title,
     url: window.location.href,
     citation: 'Sample Citation', // Replace with logic to extract citation from DigitalArkivet page
-    notes: 'Sample Notes' // Replace with logic to extract notes from DigitalArkivet page
+    notes: `${recordType}: ${recordDate}` // Move `${recordType}: ${recordDate}` to notes
   };
 }
