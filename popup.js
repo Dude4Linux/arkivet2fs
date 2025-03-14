@@ -74,8 +74,8 @@ function gatherData() {
   }
 
   // Extract the type of record and record date
-  const recordType = document.querySelector("body > article > div:nth-child(1) > div > div.parent-post > h4").innerText;
-  const recordDate = document.querySelector("body > article > div:nth-child(1) > div > div.parent-post > h4 > a").innerText;
+  const parentPost = document.querySelector("div.parent-post > h4")?.innerText;
+  const [recordType, recordDate] = parentPost.split(':');
   const date = formatDate(recordDate);
 
   // Extract the title from the page title
@@ -86,6 +86,6 @@ function gatherData() {
     title: title,
     url: window.location.href,
     citation: 'Sample Citation', // Replace with logic to extract citation from DigitalArkivet page
-    notes: `${recordType}: ${recordDate}` // Move `${recordType}: ${recordDate}` to notes
+    notes: `${recordType} : ${recordDate}`
   };
 }
