@@ -73,6 +73,13 @@ function gatherData() {
     return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
   }
 
+  const permanentId = document.querySelector("#permanentId")?.textContent;
+
+  const personsInvolved = document.querySelector("#collapse-section-0");
+  const primaryPerson = personsInvolved ? personsInvolved.querySelector("a") : null;
+  const personHref = primaryPerson ? primaryPerson.getAttribute("href") : null;
+  const primaryPersonId = personHref ? personHref.split('/').pop() : null;
+
   // Extract the type of record and record date
   const parentPost = document.querySelector("div.parent-post > h4")?.innerText;
   const [recordType, recordDate] = parentPost.split(':');
@@ -81,11 +88,16 @@ function gatherData() {
   // Extract the title from the page title
   const title = document.title;
 
+  // Create the notes string
+  let notes = `${recordType}: ${recordDate}`;
+  notes += `\npermanentID: ${permanentId}`;
+  notes += `\nprimaryPersonID: ${primaryPersonId}`;
+
   return {
     date: date,
     title: title,
     url: window.location.href,
     citation: 'Sample Citation', // Replace with logic to extract citation from DigitalArkivet page
-    notes: `${recordType} : ${recordDate}`
+    notes: notes,
   };
 }
