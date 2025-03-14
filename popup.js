@@ -14,7 +14,7 @@ document.getElementById('fillFormButton').addEventListener('click', () => {
       target: { tabId: digitalArkivetTabId },
       function: gatherData
     }, (results) => {
-      if (!results || results.length === 0) {
+      if (!results || results == null) {
         console.error('No data gathered from DigitalArkivet');
         return;
       }
