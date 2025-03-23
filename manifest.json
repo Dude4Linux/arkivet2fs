@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "tabs",
-    "scripting"
+    "scripting",
+    "notifications"
   ],
   "host_permissions": [
     "https://*.familysearch.org/*",
@@ -16,7 +17,6 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon.png",
       "48": "icon.png",
@@ -32,3 +32,4 @@
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
+
