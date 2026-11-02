@@ -2,13 +2,17 @@
 function openSourceForm(data) {
   console.log('Received data:', data);
 
-  // Wait for a DOM element to appear
-  function waitForElement(selector, callback) {
+  // Wait for a DOM element to appear (with timeout)
+  function waitForElement(selector, callback, timeoutMs = 10000) {
+    const startTime = Date.now();
     const intervalId = setInterval(() => {
       const element = document.querySelector(selector);
       if (element) {
         clearInterval(intervalId);
         callback(element);
+      } else if (Date.now() - startTime > timeoutMs) {
+        clearInterval(intervalId);
+        console.error('arkivet2fs: Timeout waiting for element: ' + selector);
       }
     }, 100); // Check every 100ms
   }
@@ -25,6 +29,8 @@ function openSourceForm(data) {
       dateInput.dispatchEvent(new Event('input', { bubbles: true }));
       dateInput.dispatchEvent(new Event('change', { bubbles: true }));
       dateInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    } else {
+      console.warn('arkivet2fs: Date field not found');
     }
 
     if (titleInput) {
@@ -32,6 +38,8 @@ function openSourceForm(data) {
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
       titleInput.dispatchEvent(new Event('change', { bubbles: true }));
       titleInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    } else {
+      console.warn('arkivet2fs: Title field not found');
     }
 
     if (urlInput) {
@@ -39,6 +47,8 @@ function openSourceForm(data) {
       urlInput.dispatchEvent(new Event('input', { bubbles: true }));
       urlInput.dispatchEvent(new Event('change', { bubbles: true }));
       urlInput.dispatchEvent(new Event('blur', { bubbles: true }));
+    } else {
+      console.warn('arkivet2fs: URL field not found');
     }
 
     if (citationTextarea) {
@@ -46,6 +56,8 @@ function openSourceForm(data) {
       citationTextarea.dispatchEvent(new Event('input', { bubbles: true }));
       citationTextarea.dispatchEvent(new Event('change', { bubbles: true }));
       citationTextarea.dispatchEvent(new Event('blur', { bubbles: true }));
+    } else {
+      console.warn('arkivet2fs: Citation field not found');
     }
 
     if (notesTextarea) {
@@ -53,6 +65,8 @@ function openSourceForm(data) {
       notesTextarea.dispatchEvent(new Event('input', { bubbles: true }));
       notesTextarea.dispatchEvent(new Event('change', { bubbles: true }));
       notesTextarea.dispatchEvent(new Event('blur', { bubbles: true }));
+    } else {
+      console.warn('arkivet2fs: Notes field not found');
     }
   }
 
