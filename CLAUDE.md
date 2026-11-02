@@ -18,20 +18,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **manifest.json** — Manifest V3 config. No popup; the extension icon click triggers `chrome.action.onClicked` directly. Icons in `icons/` directory.
 - **background.js** — Service worker with two main parts:
-  - **Click handler** (lines 1-73): Validates DA URL, injects `gatherData()`, checks for errors, opens FS tab, injects `content.js`, sends data.
-  - **`gatherData()`** (lines 75+): Self-contained function injected into DA page context. Contains all helper functions internally (cannot reference background.js scope). Helpers:
+  - **Click handler**: Validates DA URL, injects `gatherData()`, checks for errors, opens FS tab, injects `content.js`, sends data.
+  - **`fillFormError` listener**: shows a notification for problems reported by `content.js`.
+  - **`gatherData()`**: Self-contained function injected into DA page context. Contains all helper functions internally (cannot reference background.js scope). Helpers:
     - `validatePermanentId()` — validates 2-alpha + 14-digit format
     - `parseRecordType()` — maps ID prefix to record type (`pd`→birth, `pv`→marriage, `pg`→death, `pf`→census, etc.)
     - `formatDate()` — handles full, partial, and missing dates
     - `translateRole()` — Norwegian→English role translation (barn→Child, far→Father, etc.)
-    - `extractRoleFromEntry()` — finds Norwegian role keywords in surrounding DOM text
-    - `extractChurchPeople()` — extracts persons from `#collapse-section-0` (birth/marriage/death records)
-    - `extractCensusPeople()` — extracts persons from `#collapse-persons` (census records)
+    - `readFields()` / `fieldMap()` — read DA's `<div>Label:</div><div class="ssp-semibold">Value</div>` pairs from the DOM (all field parsing goes through these)
+    - `translateCensusPosition()` — census family-position codes (hp→Head of Household, hu→Wife, s→Son, d→Daughter)
+    - `extractChurchPeople()` — extracts persons from `#collapse-section-0` `.data-item`s (birth/marriage/death/probate records); the open person (`.data-item.current`) is always included and marked primary
+    - `extractCensusPeople()` — extracts residents from `#collapse-persons` `.data-item`s (census records)
     - `extractSourceInfo()` — extracts parish, county, source title from page title and detail sections
     - `buildCitation()` — assembles formatted genealogical citation
     - `buildNotes()` — builds enriched notes with all persons and their roles
   - **`showErrorMessage()`**: Chrome notification-based error display.
-- **content.js** — Content script injected into FamilySearch. Listens for `fillForm` message, clicks the "Create Source" button, waits for form elements (with 10s timeout), and fills them using `dispatchEvent` to trigger React's synthetic event handling.
+- **content.js** — Content script injected into FamilySearch. Listens for `fillForm` message, checks it landed on the SourceBox (not a sign-in redirect), clicks the "Create Source" button, waits for form elements (with 10s timeout), and fills them using `dispatchEvent` to trigger React's synthetic event handling. Failures are sent back to `background.js` as `fillFormError`.
 
 ### Key Constraints
 

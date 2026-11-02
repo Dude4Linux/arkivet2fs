@@ -72,6 +72,13 @@ chrome.action.onClicked.addListener((tab) => {
   });
 });
 
+// Errors reported by content.js while filling the FamilySearch form
+chrome.runtime.onMessage.addListener((request) => {
+  if (request && request.action === 'fillFormError') {
+    showErrorMessage(request.message);
+  }
+});
+
 // Function to gather data from the current page
 // NOTE: This function is injected into the DA page context via chrome.scripting.executeScript.
 // All helper functions MUST be defined inside gatherData() — they cannot reference
@@ -136,7 +143,10 @@ function gatherData() {
         return `${months[monthIdx]} ${parts[0]}`;
       }
     }
-    // Year only or unrecognized format — return as-is
+    // Uncertain dates like "1846-20??.09" can't be parsed by FamilySearch — keep the year
+    const yearMatch = trimmed.match(/^(\d{4})\b/);
+    if (yearMatch && trimmed.includes('?')) return yearMatch[1];
+    // Year only, year range (e.g. "1740-1743"), or unrecognized format — return as-is
     return trimmed;
   }
 
@@ -172,39 +182,56 @@ function gatherData() {
     return role; // Return original if no translation found
   }
 
-  // --- Helper: Get readable text from an element ---
-  // textContent works even when sections are collapsed (hidden via CSS),
-  // but it doesn't add line breaks between elements. We normalize by
-  // inserting newlines before known DA field labels.
-  function getReadableText(element) {
-    if (!element) return '';
-    const raw = element.textContent || '';
-    // Insert a newline before each known field label so line-based parsing works
-    return raw.replace(/(Role:|Given name:|Last name:|Name:|Gender:|Position:|Birth year:|Birth place:|Residence:|Date of birth:|Year of birth:|Birth date:|Date of death:|Date of marriage:|Legitimate\/Illegitimate born:|Age:|Married:|Page:|Serial no\.:|Year:|Introduction:|Baptism date:|Baptism place:|Parish\/Church:|Marriage date:|Death date:|Burial date:|Reported:|Confirmed:|Remarks:)/gi, '\n$1');
+  // --- Helper: Collapse whitespace and trim ---
+  function cleanText(s) {
+    return (s || '').replace(/\s+/g, ' ').trim();
   }
 
-  // --- Helper: Find all values for a labeled field in a text block ---
-  function findAllFieldValues(text, label) {
-    const pattern = new RegExp(label + ':\\s*([^\\n\\r]+)', 'gi');
-    const values = [];
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      const val = match[1].trim();
-      values.push(val === '-' ? '' : val);
+  // --- Helper: Clean a field value; DA shows '-' for empty fields ---
+  function cleanValue(s) {
+    const v = cleanText(s);
+    return v === '-' ? '' : v;
+  }
+
+  // --- Helper: Read labeled fields from a DA page region ---
+  // DA renders every field as a pair of sibling elements:
+  //   <div>Label:</div><div class="ssp-semibold">Value</div>
+  // This reads the DOM structure directly, so it works when sections are
+  // collapsed and isn't confused by labels that contain other labels
+  // (e.g. "Given name" vs "Name", "Birth year" vs "Year").
+  // `skip` is an optional selector; values inside matching elements are ignored.
+  function readFields(root, skip) {
+    const fields = [];
+    if (!root) return fields;
+    for (const valueEl of root.querySelectorAll('.ssp-semibold')) {
+      if (skip && valueEl.closest(skip)) continue;
+      const labelEl = valueEl.previousElementSibling;
+      if (!labelEl) continue;
+      const label = cleanText(labelEl.textContent);
+      if (!label.endsWith(':')) continue;
+      fields.push({ label: label.slice(0, -1).trim(), value: cleanValue(valueEl.textContent) });
     }
-    return values;
+    return fields;
   }
 
-  // --- Helper: Find a single field value in a text block ---
-  function findFieldValue(text, label) {
-    const pattern = new RegExp(label + ':\\s*([^\\n\\r]+)', 'i');
-    const match = text.match(pattern);
-    if (!match) return '';
-    const val = match[1].trim();
-    return val === '-' ? '' : val;
+  // --- Helper: Turn a field list into a lowercase-label → value map (first wins) ---
+  function fieldMap(fields) {
+    const map = {};
+    for (const f of fields) {
+      const key = f.label.toLowerCase();
+      if (!(key in map)) map[key] = f.value;
+    }
+    return map;
   }
 
-  // Roles to include in output (family members only, not witnesses/godparents)
+  // --- Helper: Get the permanent ID from a person link's href ---
+  function idFromLink(link) {
+    const href = link ? link.getAttribute('href') : '';
+    return href ? href.split('/').pop() : '';
+  }
+
+  // Roles to include in output (family members only, not witnesses/godparents).
+  // The person whose page is being viewed is always included, whatever their role.
   const familyRoles = new Set([
     'barn', 'far', 'fader', 'mor', 'moder',
     'brudgom', 'brur', 'brud',
@@ -215,86 +242,66 @@ function gatherData() {
   // --- Helper: Extract all people from church record pages ---
   // The persons section (#collapse-section-0) can be displayed as either
   // a TABLE or a LIST (user toggles via button). Detect which and parse accordingly.
-  function extractChurchPeople() {
+  // Each person is flagged `current` when it is the person whose page is open.
+  function extractChurchPeople(permanentId) {
     const people = [];
     const section = document.querySelector("#collapse-section-0");
     if (!section) return people;
 
-    const clean = function(val) {
-      const v = (val || '').trim();
-      return (v === '-' || v === '') ? '' : v;
-    };
-
-    // Detect format: table has <td> cells, list uses "Label: Value" text
-    const rows = section.querySelectorAll("tr");
     const hasTdCells = section.querySelector("td") !== null;
 
-    if (hasTdCells && rows.length > 0) {
+    if (hasTdCells) {
       // --- TABLE FORMAT ---
       // Columns: Serial no(0), Role(1), Name(2), Position(3), Birth year(4), Birth place(5), Residence(6)
-      for (const row of rows) {
+      for (const row of section.querySelectorAll("tr")) {
         const cells = row.querySelectorAll("td");
         if (cells.length < 3) continue;
 
-        const role = clean(cells[1]?.textContent).toLowerCase();
-        const name = clean(cells[2]?.textContent);
-
-        const link = row.querySelector("a[href]");
-        let personId = '';
-        if (link) {
-          const href = link.getAttribute("href");
-          if (href) personId = href.split('/').pop();
-        }
-
-        if (!familyRoles.has(role)) continue;
+        const role = cleanValue(cells[1]?.textContent).toLowerCase();
+        const personId = idFromLink(row.querySelector("a[href]"));
+        const current = personId !== '' && personId === permanentId;
+        if (!familyRoles.has(role) && !current) continue;
 
         people.push({
-          id: personId, name: name, role: role,
+          id: personId, name: cleanValue(cells[2]?.textContent), role: role,
           roleEnglish: translateRole(role),
-          position: clean(cells[3]?.textContent),
-          birthYear: clean(cells[4]?.textContent),
-          birthPlace: clean(cells[5]?.textContent),
-          residence: clean(cells[6]?.textContent),
-          primary: false
+          position: cleanValue(cells[3]?.textContent),
+          birthYear: cleanValue(cells[4]?.textContent),
+          birthPlace: cleanValue(cells[5]?.textContent),
+          residence: cleanValue(cells[6]?.textContent),
+          current: current, primary: false
         });
       }
     } else {
       // --- LIST FORMAT ---
-      // Labeled pairs: "Role: barn", "Name: Hans", etc.
-      // Use getReadableText to normalize, then find all field instances.
-      const fullText = getReadableText(section);
-      const roles = findAllFieldValues(fullText, 'Role');
-      const names = findAllFieldValues(fullText, 'Name');
-      const positions = findAllFieldValues(fullText, 'Position');
-      const birthYears = findAllFieldValues(fullText, 'Birth year');
-      const birthPlaces = findAllFieldValues(fullText, 'Birth place');
-      const residences = findAllFieldValues(fullText, 'Residence');
-
-      const links = section.querySelectorAll("a[href]");
-      const personIds = [];
-      for (const link of links) {
-        const href = link.getAttribute("href");
-        if (!href) continue;
-        const id = href.split('/').pop();
-        if (id && id.startsWith('p')) personIds.push(id);
-      }
-
-      const count = Math.max(roles.length, names.length, personIds.length);
-      for (let i = 0; i < count; i++) {
-        const role = (roles[i] || '').toLowerCase();
-        const name = names[i] || '';
-        const personId = personIds[i] || '';
-
-        if (!familyRoles.has(role)) continue;
+      // One .data-item per person: <h4><a href=".../pdXXX">Serial no. N</a></h4>
+      // followed by labeled fields. The open person's item has class "current".
+      // Probate items instead put the name in the heading: <h4><a><span>Name</span> Lars Halvorsen</a></h4>
+      for (const item of section.querySelectorAll(".data-item")) {
+        const link = item.querySelector("h4 a[href]");
+        const personId = idFromLink(link);
+        const f = fieldMap(readFields(item));
+        if (!f['name'] && link) {
+          const label = link.querySelector(".de-emphasized");
+          if (label && /^name$/i.test(cleanText(label.textContent))) {
+            const nameEl = link.cloneNode(true);
+            nameEl.querySelector(".de-emphasized").remove();
+            f['name'] = cleanValue(nameEl.textContent);
+          }
+        }
+        const role = (f['role'] || '').toLowerCase();
+        const current = item.classList.contains('current') ||
+                        (personId !== '' && personId === permanentId);
+        if (!familyRoles.has(role) && !current) continue;
 
         people.push({
-          id: personId, name: clean(name), role: role,
+          id: personId, name: f['name'] || '', role: role,
           roleEnglish: translateRole(role),
-          position: clean(positions[i]),
-          birthYear: clean(birthYears[i]),
-          birthPlace: clean(birthPlaces[i]),
-          residence: clean(residences[i]),
-          primary: false
+          position: f['position'] || '',
+          birthYear: f['birth year'] || f['year of birth'] || '',
+          birthPlace: f['birth place'] || '',
+          residence: f['residence'] || '',
+          current: current, primary: false
         });
       }
     }
@@ -302,150 +309,114 @@ function gatherData() {
   }
 
   // --- Helper: Extract record details from #collapse-section-1 ---
-  // Church records have event-specific details (dates, page, parish, etc.)
+  // Church records have event-specific details. Returns a lowercase-label map
+  // of non-empty fields, e.g. 'page', 'year', 'baptism date', 'parish/church',
+  // 'marriage date', 'death date', 'burial date', 'introduction', 'remarks'.
   function extractRecordDetails() {
-    const section = document.querySelector("#collapse-section-1");
-    if (!section) return {};
-    const text = getReadableText(section);
+    const map = fieldMap(readFields(document.querySelector("#collapse-section-1")));
     const details = {};
-
-    const fields = [
-      ['page', 'Page'],
-      ['year', 'Year'],
-      ['introduction', 'Introduction'],
-      ['baptism date', 'Baptism date'],
-      ['parish/church', 'Parish\\/Church'],
-      ['baptism place', 'Baptism place'],
-      ['marriage date', 'Marriage date'],
-      ['death date', 'Death date'],
-      ['burial date', 'Burial date'],
-      ['remarks', 'Remarks']
-    ];
-
-    for (const [key, pattern] of fields) {
-      const value = findFieldValue(text, pattern);
+    for (const [key, value] of Object.entries(map)) {
       if (value) details[key] = value;
     }
     return details;
   }
 
   // --- Helper: Extract primary person details from always-visible section ---
-  // The primary person fields live in div.left-view-column but NOT inside
-  // the collapsible sections. We clone the element, strip out sections we
-  // already process elsewhere, and parse the remaining labeled fields.
+  // The open person's own fields live in div.left-view-column but NOT inside
+  // the collapsible sections, the header, or the persons list.
   // Returns { isPrimary: bool, fields: [{label, value}, ...] } with all non-empty fields.
+  // isPrimary is true when the open person is Serial no. 1 of the record.
   function extractPrimaryPersonDetails() {
     const result = { isPrimary: false, fields: [] };
     const leftCol = document.querySelector("div.left-view-column");
     if (!leftCol) return result;
 
-    // Clone and remove sections we already process elsewhere
-    const clone = leftCol.cloneNode(true);
-    clone.querySelectorAll("[id^='collapse']").forEach(function(el) { el.remove(); });
-    clone.querySelectorAll("div.parent-post").forEach(function(el) { el.remove(); });
-    const permId = clone.querySelector("#permanentId");
-    if (permId) permId.remove();
-
-    const text = getReadableText(clone);
-    const lines = text.split('\n');
-
-    for (const line of lines) {
-      const colonIdx = line.indexOf(':');
-      if (colonIdx < 1) continue;
-      const label = line.substring(0, colonIdx).trim();
-      const value = line.substring(colonIdx + 1).trim();
-
-      // Skip empty or dash-only values
-      if (!value || value === '-' || value === '') continue;
-      if (!label) continue;
-
+    const skip = "[id^='collapse'], div.parent-post, .data-item";
+    for (const field of readFields(leftCol, skip)) {
+      if (!field.value) continue;
       // Check Serial no. for primary verification but don't include in output
-      if (/^serial no\.?$/i.test(label)) {
-        result.isPrimary = (value === '1');
+      if (/^serial no\.?$/i.test(field.label)) {
+        result.isPrimary = (field.value === '1');
         continue;
       }
-
-      result.fields.push({ label: label, value: value });
+      result.fields.push(field);
     }
     return result;
   }
 
+  // --- Helper: Translate census family-position codes (e.g. "hp", "d, fl") ---
+  // Codes are matched exactly (they're too short for substring matching);
+  // unknown codes are kept as-is.
+  function translateCensusPosition(position) {
+    if (!position) return 'Resident';
+    const codes = { 'hp': 'Head of Household', 'hu': 'Wife', 's': 'Son', 'd': 'Daughter' };
+    return position.split(',').map(function(c) {
+      const code = c.trim();
+      return codes[code.toLowerCase()] || code;
+    }).join(', ');
+  }
+
   // --- Helper: Extract all people from census record pages ---
-  // Census records use #collapse-persons with linked resident entries.
-  function extractCensusPeople() {
+  // Census records use #collapse-persons with one .data-item per resident:
+  //   <h4><a href=".../pfXXX"><span class="de-emphasized">001</span> Name</a></h4>
+  // followed by labeled fields (Age/born, Place of birth, Family position, Occupation).
+  function extractCensusPeople(permanentId) {
     const people = [];
     const section = document.querySelector("#collapse-persons");
     if (!section) return people;
 
-    const links = section.querySelectorAll("a[href]");
-    for (const link of links) {
-      const href = link.getAttribute("href");
-      if (!href) continue;
-      const personId = href.split('/').pop();
+    for (const item of section.querySelectorAll(".data-item")) {
+      const link = item.querySelector("h4 a[href]");
+      const personId = idFromLink(link);
       if (!personId || !personId.startsWith('p')) continue;
 
-      const name = link.textContent.trim();
+      // Name without the leading person number
+      const nameEl = link.cloneNode(true);
+      nameEl.querySelectorAll(".de-emphasized").forEach(function(el) { el.remove(); });
 
+      const f = fieldMap(readFields(item));
+      const familyPosition = f['family position'] || '';
       people.push({
         id: personId,
-        name: name,
-        role: '',
-        roleEnglish: 'Resident',
-        position: '',
-        birthYear: '',
-        birthPlace: '',
+        name: cleanText(nameEl.textContent),
+        role: familyPosition,
+        roleEnglish: translateCensusPosition(familyPosition),
+        position: f['occupation'] || '',
+        birthYear: f['age/born'] || '',
+        birthPlace: f['place of birth'] || '',
         residence: '',
+        current: item.classList.contains('current') || personId === permanentId,
         primary: false
       });
     }
     return people;
   }
 
-  // --- Helper: Extract source information from page title and record sections ---
+  // --- Helper: Extract source information ---
+  // Primary source is the right-hand ".infobox" ("Source information:"), which has
+  // the source title plus County / Municipality (1947) / Parish/Church fields.
+  // Falls back to the page title, whose last segment before
+  // " - The Digital Archive" is the source title for both church and census pages:
+  //   "Name - Church book from X parish 1828-1841 (0301M4) - The Digital Archive"
+  //   "001 Name - farm - district - ... - 1891 census for 0529 Vestre Toten - The Digital Archive"
   function extractSourceInfo() {
-    const info = {
-      sourceTitle: '',
-      county: '',
-      municipality: '',
-      parish: ''
-    };
+    const info = { sourceTitle: '', county: '', municipality: '', parish: '', startYear: '' };
 
-    // Page title format: "PersonName - SourceTitle (Code) - The Digital Archive"
-    // or for census: "NNN PersonName - YYYY Census for Municipality"
-    const titleParts = document.title.split(' - ');
-    if (titleParts.length >= 3) {
-      // Church records: middle part is the source title
-      info.sourceTitle = titleParts[1].trim();
-    } else if (titleParts.length === 2) {
-      info.sourceTitle = titleParts[1].trim();
+    const infobox = document.querySelector(".right-view-column .infobox");
+    if (infobox) {
+      info.sourceTitle = cleanValue(infobox.querySelector(":scope > p.ssp-semibold")?.textContent);
+      const f = fieldMap(readFields(infobox));
+      info.county = f['county'] || '';
+      const muniKey = Object.keys(f).find(function(k) { return k.startsWith('municipality'); });
+      info.municipality = muniKey ? f[muniKey] : '';
+      info.parish = f['parish/church'] || f['parish'] || '';
+      info.startYear = f['start year'] || '';
     }
 
-    // Remove " - The Digital Archive" suffix if present
-    if (info.sourceTitle.endsWith('The Digital Archive')) {
-      info.sourceTitle = info.sourceTitle.replace(/\s*-?\s*The Digital Archive$/, '').trim();
-    }
-
-    // Try to extract location from record details sections
-    // Church records: #collapse-section-1 or later sections
-    // Census records: #collapse-more
-    const detailSections = [
-      document.querySelector("#collapse-section-1"),
-      document.querySelector("#collapse-section-2"),
-      document.querySelector("#collapse-more")
-    ];
-    for (const section of detailSections) {
-      if (!section) continue;
-      const text = section.textContent;
-
-      // Look for county/municipality/parish in labeled fields
-      const countyMatch = text.match(/County:\s*([^\n]+)/i);
-      if (countyMatch) info.county = countyMatch[1].trim();
-
-      const municipalityMatch = text.match(/Municipality:\s*([^\n]+)/i);
-      if (municipalityMatch) info.municipality = municipalityMatch[1].trim();
-
-      const parishMatch = text.match(/(?:Parish|Church):\s*([^\n]+)/i);
-      if (parishMatch) info.parish = parishMatch[1].trim();
+    if (!info.sourceTitle) {
+      const parts = document.title.split(' - ').map(cleanText);
+      if (parts.length && /^the digital archive$/i.test(parts[parts.length - 1])) parts.pop();
+      if (parts.length >= 2) info.sourceTitle = parts[parts.length - 1];
     }
 
     return info;
@@ -553,11 +524,18 @@ function gatherData() {
     const permanentId = idValidation.id;
     const recordTypeInfo = parseRecordType(permanentId);
 
-    // Extract record type and date from parent-post header (church records)
-    // Census and other record types may not have this element
-    const parentPost = document.querySelector("div.parent-post > h4")?.innerText;
+    const isCensus = recordTypeInfo.type === 'census';
+
+    // Extract source information for citation
+    const sourceInfo = extractSourceInfo();
+
+    // Extract record type and date from parent-post header (church records),
+    // e.g. "Births and baptisms: 1836-01-03".
+    // Census pages also have a parent-post, but it holds the census district and
+    // residence ("Census district: 01 ..."), not a date — so skip it for census.
     let recordType = '';
     let recordDate = '';
+    const parentPost = isCensus ? null : document.querySelector("div.parent-post > h4")?.innerText;
     if (parentPost && parentPost.includes(':')) {
       const colonIdx = parentPost.indexOf(':');
       recordType = parentPost.substring(0, colonIdx).trim();
@@ -566,7 +544,13 @@ function gatherData() {
       recordType = parentPost.trim();
     }
 
-    // For census records without parent-post, derive type from recordTypeInfo
+    // Census date is the census year ("1891 census for ..." / Start year)
+    if (isCensus) {
+      const yearMatch = sourceInfo.sourceTitle.match(/\b(\d{4})\b/);
+      recordDate = sourceInfo.startYear || (yearMatch ? yearMatch[1] : '');
+    }
+
+    // For records without a parent-post header, derive type from recordTypeInfo
     if (!recordType && recordTypeInfo.type !== 'unknown') {
       const typeLabels = {
         'birth_baptism': 'Births and baptisms',
@@ -585,19 +569,11 @@ function gatherData() {
     }
 
     const date = formatDate(recordDate);
-    const title = document.title;
+    const title = document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
     const url = window.location.href;
 
-    // Extract source information for citation
-    const sourceInfo = extractSourceInfo();
-
     // Extract people from collapsible section
-    let people = [];
-    if (recordTypeInfo.type === 'census') {
-      people = extractCensusPeople();
-    } else {
-      people = extractChurchPeople();
-    }
+    const people = isCensus ? extractCensusPeople(permanentId) : extractChurchPeople(permanentId);
 
     // Extract record details from #collapse-section-1 (church records)
     const recordDetails = extractRecordDetails();
@@ -605,11 +581,10 @@ function gatherData() {
     // Extract primary person details from always-visible section
     const primaryDetails = extractPrimaryPersonDetails();
 
-    // Mark the first person as primary
-    const primaryPersonId = people.length > 0 ? people[0].id : null;
-    if (people.length > 0) {
-      people[0].primary = true;
-    }
+    // Mark the person whose page is open as primary (falls back to the first person)
+    const primaryPerson = people.find(function(p) { return p.current; }) || people[0];
+    const primaryPersonId = primaryPerson ? primaryPerson.id : null;
+    if (primaryPerson) primaryPerson.primary = true;
 
     // Build enriched notes with all people and details
     const notes = buildNotes(recordType, recordDate, permanentId, people, sourceInfo, recordTypeInfo, recordDetails, primaryDetails);
