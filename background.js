@@ -419,77 +419,127 @@ function gatherData() {
       if (parts.length >= 2) info.sourceTitle = parts[parts.length - 1];
     }
 
+    // Jurisdiction named in the source title:
+    //   "Church book from Folda parish 1836-1856 (1845P)"            → "Folda Parish"
+    //   "Probate register for Ytre Sogn judicial district 1698-1853" → "Ytre Sogn Judicial District"
+    //   "1891 census for 0529 Vestre Toten"                          → "Vestre Toten"
+    const t = info.sourceTitle;
+    let m;
+    if ((m = t.match(/\bfrom (.+?) parish\b/i))) info.jurisdiction = m[1] + ' Parish';
+    else if ((m = t.match(/\bfor (.+?) judicial district\b/i))) info.jurisdiction = m[1] + ' Judicial District';
+    else if ((m = t.match(/\bcensus for (?:\d{3,4} )?(.+)$/i))) info.jurisdiction = m[1];
+    else info.jurisdiction = '';
+
     return info;
   }
 
-  // --- Helper: Build a formatted genealogical citation ---
-  // Includes source title, page, record type, event date, parish, permanent ID, URL.
-  function buildCitation(recordTypeInfo, sourceInfo, permanentId, recordDate, url, recordDetails) {
-    const parts = [];
-
-    // Source title with page number
-    let source = sourceInfo.sourceTitle || '';
-    if (recordDetails && recordDetails['page']) {
-      source += ', p. ' + recordDetails['page'];
-    }
-    if (source) parts.push(source);
-
-    // Record type in English
-    const typeNames = {
-      'birth_baptism': 'Births and baptisms',
-      'marriage': 'Marriages',
-      'death_burial': 'Deaths and burials',
-      'census': 'Census',
-      'emigration': 'Emigration',
-      'probate': 'Probate',
-      'tax': 'Tax records',
-      'school': 'School records',
-      'landed_property': 'Landed property',
-      'fire_insurance': 'Fire insurance'
-    };
-    const typeName = typeNames[recordTypeInfo.type];
-    if (typeName) parts.push(typeName);
-
-    if (recordDate) parts.push(recordDate.trim());
-
-    // Event-specific dates from record details
-    if (recordDetails) {
-      if (recordDetails['baptism date']) parts.push('baptism ' + recordDetails['baptism date']);
-      if (recordDetails['introduction']) parts.push('introduction ' + recordDetails['introduction']);
-      if (recordDetails['marriage date']) parts.push('marriage ' + recordDetails['marriage date']);
-      if (recordDetails['death date']) parts.push('death ' + recordDetails['death date']);
-      if (recordDetails['burial date']) parts.push('burial ' + recordDetails['burial date']);
-    }
-
-    // Parish/Church from record details
-    const parish = (recordDetails && (recordDetails['parish/church'] || recordDetails['parish'])) ||
-                   sourceInfo.parish || '';
-    if (parish) parts.push(parish);
-
-    let citation = parts.join('; ');
-    if (permanentId) citation += '. Permanent ID: ' + permanentId;
-    citation += '. ' + url;
-
-    return citation;
+  // --- Helper: Extract links to the scanned original image(s) ---
+  // DA's "Scanned" toolbar button: <a id="scannedImageLink" href="https://goto.digitalarkivet.no/kb..."
+  // data-scans='["kb..."]'>. Image IDs are permanent (kb = church book, ft = census).
+  // The button is disabled (href="#", data-scans="[]") when the record has no scan.
+  function extractScans() {
+    const link = document.querySelector("#scannedImageLink");
+    const href = link ? link.getAttribute("href") || '' : '';
+    if (!/^https?:\/\//.test(href)) return [];
+    let ids = [];
+    try { ids = JSON.parse(link.getAttribute("data-scans") || '[]'); } catch (e) { ids = []; }
+    if (!Array.isArray(ids) || ids.length === 0) ids = [href.split('/').pop()];
+    const base = href.substring(0, href.lastIndexOf('/') + 1);
+    return ids.map(function(id) { return { id: id, url: base + id }; });
   }
 
-  // --- Helper: Build enriched notes with people and unique details ---
-  // Source title, event dates, page, parish, permanent ID are now in the citation.
-  // Notes contain: primary person birth info, remarks, and persons section.
-  function buildNotes(recordType, recordDate, permanentId, people, sourceInfo, recordTypeInfo, recordDetails, primaryDetails) {
+  // --- Helper: Describe the record entry by its principal person(s) ---
+  // e.g. "baptism of Hans Peder", "marriage of Peder Andersen and Johanne Andreasd."
+  // Falls back to "entry for <open person>" for other record types.
+  function describeEntry(type, people, pageName) {
+    const withRole = function(roles) {
+      return people.find(function(p) { return roles.includes(p.role) && p.name; });
+    };
+    if (type === 'birth_baptism') {
+      const child = withRole(['barn']);
+      if (child) return 'baptism of ' + child.name;
+    } else if (type === 'marriage') {
+      const couple = [withRole(['brudgom']), withRole(['brur', 'brud'])].filter(Boolean);
+      if (couple.length) return 'marriage of ' + couple.map(function(p) { return p.name; }).join(' and ');
+    } else if (type === 'death_burial') {
+      const deceased = withRole(['avdøde', 'avdød']);
+      if (deceased) return 'burial of ' + deceased.name;
+    }
+    return pageName ? 'entry for ' + pageName : '';
+  }
+
+  // --- Helper: Build a citation in Evidence Explained style (see citation.md) ---
+  // Layers: original record (place, source, locator, entry) → repository
+  // (National Archives of Norway, Digitalarkivet) + Permanent ID link + access date
+  // → scanned original image(s). Place runs from most general to most specific.
+  // FamilySearch citations are plain text, so titles are quoted rather than italicized.
+  //   Church: Norway, Oslo, Garnisonsmenigheten Parish, Garnisonskirken, "Church book from
+  //           Garnisonsmenigheten parish 1828-1841 (0301M4)," Births and baptisms, p. 55, entry 6,
+  //           baptism of Hans Peder, 3 January 1836; database, National Archives of Norway,
+  //           Digitalarkivet, Permanent ID pd99000000000901 (https://www.digitalarkivet.no/en/pd99000000000901
+  //           : accessed 2 November 2026); scanned image kb99000000000902 (https://goto.digitalarkivet.no/kb99000000000902).
+  //   Census: Norway, Oppland, Vestre Toten, "1891 census for 0529 Vestre Toten," census district
+  //           01 Fjellsmarkas skolekrets, rural residence 009 Hager af Drager, household 1,
+  //           entry for Andreas Olsen; database, ...
+  function buildCitation(c) {
+    const parts = [];
+    const details = c.recordDetails || {};
+    const isCensus = c.recordTypeInfo.type === 'census';
+
+    // Place, general → specific (skipping repeats, e.g. county "Oslo" and church "Oslo")
+    const place = [];
+    for (const p of ['Norway', c.sourceInfo.county, c.sourceInfo.jurisdiction,
+                     details['parish/church'] || c.sourceInfo.parish]) {
+      if (p && !place.includes(p)) place.push(p);
+    }
+    parts.push(place.join(', '));
+
+    if (c.sourceInfo.sourceTitle) parts.push('"' + c.sourceInfo.sourceTitle + '"');
+    // Record section (e.g. "Births and baptisms"), unless the source title already says it
+    if (c.recordType && !c.sourceInfo.sourceTitle.toLowerCase().includes(c.recordType.toLowerCase())) {
+      parts.push(c.recordType);
+    }
+    parts.push.apply(parts, c.censusLocation);
+    if (c.householdNo) parts.push('household ' + c.householdNo);
+    if (details['protocol reference']) parts.push('protocol ' + details['protocol reference']);
+    if (details['page']) parts.push('p. ' + details['page']);
+    if (details['serial no.']) parts.push('entry ' + details['serial no.']);
+    parts.push(describeEntry(c.recordTypeInfo.type, c.people, c.pageName));
+    if (c.date && !isCensus) parts.push(c.date);  // census year is already in the title
+
+    // Evidence Explained puts the comma inside the closing quote: "Title," next
+    let citation = parts.filter(Boolean).join(', ').replace('", ', '," ');
+    citation += '; database, National Archives of Norway, Digitalarkivet' +
+                (c.permanentId ? ', Permanent ID ' + c.permanentId : '') +
+                ' (' + c.permalink + ' : accessed ' + c.accessDate + ')';
+    for (const scan of c.scans) {
+      citation += '; scanned image ' + scan.id + ' (' + scan.url + ')';
+    }
+    return citation + '.';
+  }
+
+  // Record detail fields already used in the citation (left out of the notes).
+  // Partial event dates like "Baptism date: 01-03" are covered by the full date in the citation.
+  const citedDetailKeys = new Set(['page', 'serial no.', 'year', 'parish/church', 'protocol reference']);
+
+  // --- Helper: Build enriched notes with people and details not in the citation ---
+  // Notes contain: permanent ID, the open person's own fields, remaining record
+  // details (introduction, banns, remarks, ...), and the persons section.
+  function buildNotes(permanentId, people, recordDetails, primaryDetails) {
     const lines = [];
+    if (permanentId) lines.push('Permanent ID: ' + permanentId);
 
     // Primary person details from always-visible section — all non-empty fields
-    if (primaryDetails && primaryDetails.fields && primaryDetails.fields.length > 0) {
+    if (primaryDetails && primaryDetails.fields) {
       for (const field of primaryDetails.fields) {
         lines.push(field.label + ': ' + field.value);
       }
     }
 
-    // Only include details NOT already in citation (introduction, remarks)
-    if (recordDetails) {
-      if (recordDetails['introduction']) lines.push('Introduction: ' + recordDetails['introduction']);
-      if (recordDetails['remarks']) lines.push('Remarks: ' + recordDetails['remarks']);
+    // Remaining record details, in page order
+    for (const [key, value] of Object.entries(recordDetails || {})) {
+      if (citedDetailKeys.has(key) || / date$/.test(key)) continue;
+      lines.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + value);
     }
 
     // People section — family members with full details
@@ -544,10 +594,20 @@ function gatherData() {
       recordType = parentPost.trim();
     }
 
-    // Census date is the census year ("1891 census for ..." / Start year)
+    // Census: date is the census year ("1891 census for ..." / Start year), and the
+    // parent-post headings give the location, e.g. ["census district 01 Fjellsmarkas
+    // skolekrets", "rural residence 009 Hager af Drager"]
+    const censusLocation = [];
     if (isCensus) {
       const yearMatch = sourceInfo.sourceTitle.match(/\b(\d{4})\b/);
       recordDate = sourceInfo.startYear || (yearMatch ? yearMatch[1] : '');
+      for (const h4 of document.querySelectorAll("div.parent-post > h4")) {
+        const text = cleanText(h4.textContent);
+        const colonIdx = text.indexOf(':');
+        if (colonIdx > 0) {
+          censusLocation.push(text.substring(0, colonIdx).toLowerCase() + ' ' + text.substring(colonIdx + 1).trim());
+        }
+      }
     }
 
     // For records without a parent-post header, derive type from recordTypeInfo
@@ -569,8 +629,10 @@ function gatherData() {
     }
 
     const date = formatDate(recordDate);
-    const title = document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
-    const url = window.location.href;
+    // Permanent link (as shown in DA's Share box) — stable, unlike the browser URL
+    const url = idValidation.valid ? 'https://www.digitalarkivet.no/en/' + permanentId : window.location.href;
+    const now = new Date();
+    const accessDate = formatDate(now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate());
 
     // Extract people from collapsible section
     const people = isCensus ? extractCensusPeople(permanentId) : extractChurchPeople(permanentId);
@@ -586,16 +648,40 @@ function gatherData() {
     const primaryPersonId = primaryPerson ? primaryPerson.id : null;
     if (primaryPerson) primaryPerson.primary = true;
 
+    // Name of the open person: from the persons list, else Given name + Last name fields
+    const scans = extractScans();
+
+    const ownFields = {};
+    for (const field of primaryDetails.fields) ownFields[field.label.toLowerCase()] = field.value;
+    const pageName = (primaryPerson && primaryPerson.current && primaryPerson.name) ||
+                     [ownFields['given name'], ownFields['last name']].filter(Boolean).join(' ');
+
+    const citation = buildCitation({
+      recordTypeInfo: recordTypeInfo, recordType: recordType, date: date,
+      sourceInfo: sourceInfo, recordDetails: recordDetails, people: people,
+      pageName: pageName, censusLocation: censusLocation,
+      householdNo: ownFields['household no.'] || '',
+      permanentId: idValidation.valid ? permanentId : '',
+      permalink: url, accessDate: accessDate, scans: scans
+    });
+
+    // FS title: "<open person> - <source title>" for every record type, e.g.
+    //   "Andreas Olsen - Church book from Garnisonsmenigheten parish 1828-1841 (0301M4)"
+    //   "Andreas Olsen - 1891 census for 0529 Vestre Toten"
+    const title = [pageName, sourceInfo.sourceTitle].filter(Boolean).join(' - ') ||
+                  document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
+
     // Build enriched notes with all people and details
-    const notes = buildNotes(recordType, recordDate, permanentId, people, sourceInfo, recordTypeInfo, recordDetails, primaryDetails);
+    const notes = buildNotes(permanentId, people, recordDetails, primaryDetails);
 
     return {
       date: date,
       title: title,
       url: url,
-      citation: buildCitation(recordTypeInfo, sourceInfo, permanentId, recordDate, url, recordDetails),
+      citation: citation,
       notes: notes,
       permanentId: permanentId,
+      scans: scans,
       recordTypeInfo: recordTypeInfo,
       recordType: recordType,
       recordDate: recordDate,
@@ -609,7 +695,7 @@ function gatherData() {
       url: window.location.href,
       date: '', title: '', citation: '', notes: '',
       permanentId: null, recordTypeInfo: { prefix: null, type: 'unknown' },
-      recordType: '', recordDate: '', primaryPersonId: null, people: []
+      recordType: '', recordDate: '', primaryPersonId: null, people: [], scans: []
     };
   }
 }
