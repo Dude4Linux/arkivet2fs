@@ -1,0 +1,61 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**arkivet2fs** is a Chrome/Brave browser extension (Manifest V3) that extracts genealogical record data from Norway's DigitalArkivet (digitalarkivet.no) and auto-fills the FamilySearch.org SourceBox "Create Source" form.
+
+### Workflow
+
+1. User navigates to a person/record detail page on DigitalArkivet
+2. Clicks the extension icon in the toolbar
+3. `background.js` injects `gatherData()` into the DA page to extract record metadata, all persons with roles, source info, and builds a citation
+4. Extension opens a background tab to FamilySearch SourceBox
+5. `content.js` is injected into the FS tab, waits for the "Create Source" button, clicks it, then fills the form fields
+
+## Architecture
+
+- **manifest.json** — Manifest V3 config. No popup; the extension icon click triggers `chrome.action.onClicked` directly. Icons in `icons/` directory.
+- **background.js** — Service worker with two main parts:
+  - **Click handler** (lines 1-73): Validates DA URL, injects `gatherData()`, checks for errors, opens FS tab, injects `content.js`, sends data.
+  - **`gatherData()`** (lines 75+): Self-contained function injected into DA page context. Contains all helper functions internally (cannot reference background.js scope). Helpers:
+    - `validatePermanentId()` — validates 2-alpha + 14-digit format
+    - `parseRecordType()` — maps ID prefix to record type (`pd`→birth, `pv`→marriage, `pg`→death, `pf`→census, etc.)
+    - `formatDate()` — handles full, partial, and missing dates
+    - `translateRole()` — Norwegian→English role translation (barn→Child, far→Father, etc.)
+    - `extractRoleFromEntry()` — finds Norwegian role keywords in surrounding DOM text
+    - `extractChurchPeople()` — extracts persons from `#collapse-section-0` (birth/marriage/death records)
+    - `extractCensusPeople()` — extracts persons from `#collapse-persons` (census records)
+    - `extractSourceInfo()` — extracts parish, county, source title from page title and detail sections
+    - `buildCitation()` — assembles formatted genealogical citation
+    - `buildNotes()` — builds enriched notes with all persons and their roles
+  - **`showErrorMessage()`**: Chrome notification-based error display.
+- **content.js** — Content script injected into FamilySearch. Listens for `fillForm` message, clicks the "Create Source" button, waits for form elements (with 10s timeout), and fills them using `dispatchEvent` to trigger React's synthetic event handling.
+
+### Key Constraints
+
+- `gatherData()` executes in the DA page context (injected via `chrome.scripting.executeScript`). **All helper functions must be defined inside it** — they cannot reference anything else in `background.js`.
+- Form filling in `content.js` requires dispatching `input`, `change`, and `blur` events for FamilySearch's React-based UI to register the values.
+- DA Permanent IDs: two alpha characters + 14+ numeric digits (e.g., `pd00000012345678`). The prefix indicates record type (see `ai_prompt.md` for the full table).
+
+### DA Page Structure Differences
+
+- **Church records** (birth `pd`, marriage `pv`, death `pg`): URL `/view/NNN/pXXX`, persons in `#collapse-section-0`, record details in `#collapse-section-1`, header in `div.parent-post > h4`
+- **Census records** (`pf`): URL `/census/person/pfXXX`, persons in `#collapse-persons`, details in `#collapse-more`, no parent-post header
+
+## Development
+
+This is a browser extension with no build step, no package manager, and no test framework. To develop and test:
+
+- Load as unpacked extension in Chrome/Brave via `chrome://extensions` → "Load unpacked" → select repo directory
+- After code changes, click the reload button on the extension card in `chrome://extensions`
+- Debug with the browser DevTools: service worker console (click "Inspect views: service worker" on the extension card) and page console for content script logs
+
+## Host Permissions
+
+The extension requires access to `https://*.familysearch.org/*` and `https://*.digitalarkivet.no/*`.
+
+## Reference
+
+`ai_prompt.md` contains the original project specification, including DA Permanent ID type prefixes and the planned multi-record-type workflow.
