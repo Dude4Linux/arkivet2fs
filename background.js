@@ -105,6 +105,7 @@ function gatherData() {
       'pf': 'census',
       'pg': 'death_burial',
       'pv': 'marriage',
+      'pk': 'confirmation',
       'pe': 'emigration',
       'pt': 'tax',
       'pl': 'school',
@@ -155,6 +156,7 @@ function gatherData() {
     if (!role) return 'Unknown';
     const translations = {
       'barn': 'Child',
+      'konfirmant': 'Confirmand',
       'far': 'Father', 'fader': 'Father',
       'mor': 'Mother', 'moder': 'Mother',
       'fadder': 'Godparent',
@@ -224,6 +226,11 @@ function gatherData() {
     return map;
   }
 
+  // --- Helper: Drop DA's name variants, marked %...% ("Ommund %Ole% Olsen %Olsen%") ---
+  function stripNameVariants(name) {
+    return (name || '').replace(/%[^%]*%/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // --- Helper: Get the permanent ID from a person link's href ---
   function idFromLink(link) {
     const href = link ? link.getAttribute('href') : '';
@@ -236,7 +243,7 @@ function gatherData() {
     'barn', 'far', 'fader', 'mor', 'moder',
     'brudgom', 'brur', 'brud',
     'brudgommens far', 'bruras far', 'brudgommens mor', 'bruras mor',
-    'avdøde', 'avdød'
+    'avdøde', 'avdød', 'konfirmant'
   ]);
 
   // --- Helper: Extract all people from church record pages ---
@@ -453,8 +460,10 @@ function gatherData() {
   // Falls back to "entry for <open person>" for other record types.
   function describeEntry(type, people, pageName) {
     const withRole = function(roles) {
-      return people.find(function(p) { return roles.includes(p.role) && p.name; });
+      const p = people.find(function(p) { return roles.includes(p.role) && p.name; });
+      return p && { name: stripNameVariants(p.name) };
     };
+    pageName = stripNameVariants(pageName);
     if (type === 'birth_baptism') {
       const child = withRole(['barn']);
       if (child) return 'baptism of ' + child.name;
@@ -464,6 +473,9 @@ function gatherData() {
     } else if (type === 'death_burial') {
       const deceased = withRole(['avdøde', 'avdød']);
       if (deceased) return 'burial of ' + deceased.name;
+    } else if (type === 'confirmation') {
+      const confirmand = withRole(['konfirmant']);
+      if (confirmand) return 'confirmation of ' + confirmand.name;
     }
     return pageName ? 'entry for ' + pageName : '';
   }
@@ -526,6 +538,10 @@ function gatherData() {
   // Notes contain: permanent ID, the open person's own fields, remaining record
   // details (introduction, banns, remarks, ...), and the persons section.
   function buildNotes(permanentId, people, recordDetails, primaryDetails) {
+    // Full dates like "1812-10-11" read as "11 October 1812"; other values as-is
+    const noteValue = function(v) {
+      return /^\d{4}-\d{1,2}-\d{1,2}$/.test(v) ? formatDate(v) : v;
+    };
     const lines = [];
     if (permanentId) lines.push('Permanent ID: ' + permanentId);
 
@@ -548,7 +564,7 @@ function gatherData() {
           merged.add(yearIdx);
           return formatDate(year[0] + '-' + field.value);
         }
-        return field.value;
+        return noteValue(field.value);
       });
       fields.forEach(function(field, i) {
         if (!merged.has(i)) lines.push(field.label + ': ' + values[i]);
@@ -558,7 +574,7 @@ function gatherData() {
     // Remaining record details, in page order
     for (const [key, value] of Object.entries(recordDetails || {})) {
       if (citedDetailKeys.has(key) || / date$/.test(key)) continue;
-      lines.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + value);
+      lines.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + noteValue(value));
     }
 
     // People section — family members with full details
@@ -636,6 +652,7 @@ function gatherData() {
         'census': 'Census',
         'death_burial': 'Deaths and burials',
         'marriage': 'Marriages',
+        'confirmation': 'Confirmations',
         'emigration': 'Emigration',
         'probate': 'Probate',
         'tax': 'Tax records',
@@ -693,18 +710,18 @@ function gatherData() {
     // source title already names it (probate).
     const titleTypes = {
       'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
+      'confirmation': 'Confirmation',
       'census': 'Census', 'probate': 'Probate', 'emigration': 'Emigration',
       'tax': 'Tax', 'school': 'School', 'landed_property': 'Property',
       'fire_insurance': 'Fire Insurance'
     };
-    // Unmapped types (e.g. confirmations): singular of DA's section header
+    // Unmapped types (e.g. migration records): singular of DA's section header
     const titleType = titleTypes[recordTypeInfo.type] || recordType.replace(/s$/, '');
     const titleSource = sourceInfo.sourceTitle
       .replace(/^church book from\s+/i, '')
       .replace(/^\d{4} census for\s+/i, '');  // year is already at the front
     const titleYear = (recordDate.match(/\d{4}/) || [''])[0];
-    // DA marks name variants with %...% (e.g. "Andreas Olsen %Anton Olsen%") — drop them
-    const titleName = pageName.replace(/%[^%]*%/g, ' ').replace(/\s+/g, ' ').trim();
+    const titleName = stripNameVariants(pageName);
     const titleParts = [[titleYear, titleName].filter(Boolean).join(', '), titleSource];
     if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {
       titleParts.push(titleType);
