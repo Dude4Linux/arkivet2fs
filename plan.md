@@ -185,11 +185,11 @@ Built from the FS person. Each query targets one life event.
 | Own baptism | given name, role `barn`, related = father (first name; surname if not a patronymic), else mother | birth/christening year ±1 |
 | Confirmation | given name, role `konfirmant`, (lastname) | birth + 13…19 |
 | Marriage | given + last name, role `brudgom`/`brud`, related = spouse's first name | marriage year ±1, else birth + 18…50 |
-| Children's baptisms | given + last name, role `far`/`mor`, related = spouse's first name; plus one query per child (child's name, role `barn`, related = this person) | each child's birth ±1 |
+| Children's baptisms | given + last name, role `far`/`mor` (one query; it also finds children FS doesn't have, and known children are matched by birth year when scoring) | birth + 16 … birth + 50 (mother) or 70 (father), up to death |
 | Census | given + last name, `jt[]` = census years within the lifespan, `birth_year` ±3 (census rows do record it) | census year |
-| Emigration | given + last name, emigration sources (`sc[]=em`, plus church-book departure lists), `birth_year` ±3 | from about age 15 to the first FS place outside Norway or death |
-| Burial | given + last name, role `avdød` | death/burial year ±1 |
-| Fallback | given + last name only | lifespan, county filter |
+| Emigration | given + last name, emigration sources (`sc[]=em`); church-book departure lists are still to do (milestone 7) | from age 10 to death |
+| Burial | given + last name, role `avdød`; skipped when FS has the death outside Norway | death/burial year … +1 |
+| Fallback | given + last name only | lifespan |
 
 ### Name rules
 
@@ -268,6 +268,10 @@ Each milestone is testable on its own.
 3. **Single query end to end:** query builder plus DA fetch and parse for the own-baptism
    query; the results list with links.
 4. **Full query plan:** the remaining queries, merging, scoring and grouping.
+   Done: `da_match.js` merges by permanent ID and scores with visible reasons;
+   tested on Per Aslaksen and Anna Lindeman, where the right record leads each
+   group. Per-child baptism queries were left out (one parent query finds them
+   all, with fewer requests); a "too young for the role" check separates namesakes.
 5. **Criteria panel:** editable criteria, reruns, "Open on DA" links.
 6. **Name and place rules:** patronymic spellings, farm names, municipality matching
    with the cached code list.

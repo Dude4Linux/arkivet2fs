@@ -148,29 +148,39 @@ function hitRow(hit) {
     hit.domicile,
     hit.position
   ].filter(Boolean).join(' · ');
-  return el('li', { class: 'hit' }, [
-    el('span', { class: 'hit-type', text: hit.type }),
+  const reasons = el('ul', { class: 'reasons' }, hit.reasons.map((r) => el('li', {
+    class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : 'near',
+    text: (r.ok === true ? '✓ ' : r.ok === false ? '✗ ' : '≈ ') + r.text
+  })));
+  return el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') }, [
+    el('span', { class: 'hit-score', title: 'Score', text: String(hit.score) }),
     el('div', { class: 'hit-main' }, [
       el('a', { href: hit.url, target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
       el('div', { class: 'hit-details', text: details }),
-      el('div', { class: 'hit-source muted', text: hit.source })
+      el('div', { class: 'hit-source muted', text: hit.source }),
+      reasons
     ])
   ]);
 }
 
-function querySection(query) {
-  const status = el('span', { class: 'query-status muted', text: 'Waiting…' });
-  const list = el('ol', { class: 'hits' });
-  const section = el('section', { class: 'query', 'data-query': query.id }, [
-    el('div', { class: 'query-head' }, [
-      el('h3', { text: query.title }),
-      status,
-      el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on Digital Arkivet' })
-    ]),
-    el('div', { class: 'query-summary muted', text: query.summary }),
-    list
+// One line per query: what it searched for, how many hits, and the same search on DA
+function queryRow(query) {
+  const status = el('span', { class: 'query-status muted', text: query.skip || 'Waiting…' });
+  const row = el('li', { class: 'query' + (query.skip ? ' skipped' : ''), 'data-query': query.id }, [
+    el('span', { class: 'query-title', text: query.title }),
+    el('span', { class: 'query-summary muted', text: query.summary }),
+    status,
+    query.skip ? '' : el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on DA' })
   ]);
-  return { section, status, list };
+  return { row, status };
+}
+
+function renderGroups(container, merged, person) {
+  const groups = groupHits(merged, person);
+  container.replaceChildren(...groups.map((group) => el('section', { class: 'group-hits' }, [
+    el('h3', {}, [group.title, el('span', { class: 'count muted', text: ' ' + group.hits.length })]),
+    el('ol', { class: 'hits' }, group.hits.map(hitRow))
+  ])));
 }
 
 async function renderResults(criteria) {
@@ -186,30 +196,40 @@ async function renderResults(criteria) {
     results.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'Enter a given name or surname to search.' })]));
     return;
   }
-  const views = queries.map((query) => ({ query, ...querySection(query) }));
-  results.replaceChildren(...views.map((v) => v.section));
+  const person = profile(criteria);
+  const views = queries.map((query) => ({ query, ...queryRow(query) }));
+  const groups = el('div', { class: 'groups' });
+  results.replaceChildren(
+    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }), el('ul', { class: 'queries' }, views.map((v) => v.row))]),
+    groups
+  );
 
   // One query at a time: DA rate-limits automated traffic
-  for (const view of views) {
+  const merged = new Map();
+  for (const [i, view] of views.entries()) {
     if (run !== generation) return;
-    if (view.query.skip) {
-      view.status.textContent = view.query.skip;
-      continue;
-    }
+    if (view.query.skip) continue;
     view.status.textContent = 'Searching…';
     try {
       const { total, hits } = await runQuery(view.query);
       if (run !== generation) return;
       view.status.textContent = total === 0 ? 'No hits'
-        : total > hits.length ? `${total} hits, showing the first ${hits.length}`
+        : total > hits.length ? `${total} hits, the first ${hits.length} used`
         : `${total} hit${total === 1 ? '' : 's'}`;
-      view.list.replaceChildren(...hits.map(hitRow));
+      mergeHits(merged, view.query, hits);
+      renderGroups(groups, merged, person);
     } catch (error) {
       if (run !== generation) return;
       view.status.textContent = error.message;
       view.status.classList.add('error');
-      if (/refusing/.test(error.message)) break;
+      if (/refusing/.test(error.message)) {
+        for (const rest of views.slice(i + 1)) if (!rest.query.skip) rest.status.textContent = 'Not run';
+        break;
+      }
     }
+  }
+  if (run === generation && merged.size === 0) {
+    groups.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'No records found. Try removing details in the criteria, or a shorter surname.' })]));
   }
 }
 
