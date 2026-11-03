@@ -1,13 +1,21 @@
 // DigitalArkivet person search (Phase 2): builds DA advanced-search queries from the
 // search page's criteria, fetches the result pages and parses the hits.
-// Used by search.js; no DOM access except DOMParser.
+// Used by search.js; uses municipalityCodes() and municipalityName() from da_places.js; no DOM access
+// except DOMParser.
 //
 // What DA's advanced search does with names (tested November 2026):
 // - It adds its own name variants (Jon → Joen, John), but not for patronymic endings.
-// - A trailing * works and keeps the variants on the other name ("Per" + "Aslaks*").
-//   A * inside a word or a ? doesn't ("J*n", "Tol*fs*", "Lindem?n" find nothing useful).
-// - firstname "Anna" also matches "Anna Kristine", but "Anna Magdaline" doesn't match
-//   "Anna Magdalene": search on the first given name only.
+// - A trailing * works, and DA still applies its variants to the stem (Christ* finds
+//   Kristian). A * inside a word or a ? doesn't ("J*n", "Tol*fs*", "Lindem?n").
+// - DA doesn't treat Anna and Anne, or Magdaline and Magdalene, as variants; cutting
+//   the final vowel does (Ann*, Magdalin*). See givenStem().
+// - firstname matches each of its words against any given name ("Magdalin*" finds
+//   "Anna Magdalena"), and every word must match: "Ann* Magdalin*" finds
+//   "Anne Magdalen" but not "Anne". Records often leave out a middle name, so only
+//   the baptism by place uses more than the first given name.
+// - Transcribed parents' names can be far off: Anna Lindeman's parents Johannes
+//   Lindeman and Gjertrud Johanne are "Johanne Olsen" and "Johanne Stubbe" on her
+//   baptism, so the baptism is also searched for by name and birthplace (m[]).
 // - Most church records give no birth year for parents and godparents: filter on the
 //   event year, not birth_year.
 // - genders[] drops every record without a gender (many censuses): never use it.
@@ -43,9 +51,36 @@ const ROLES = {
 
 // --- Names and years ------------------------------------------------------------------
 
-const firstWord = (s) => ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, '');
+// Functions used by other scripts are declared with `function`: a const in one
+// script isn't visible to the others when they are eval'd separately (tests)
+function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, ''); }
 
-const isPatronymic = (surname) => PATRONYMIC_ENDING.test(surname || '');
+function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
+
+// Given name for a DA search: without its final vowel(s), with a trailing *, so
+// spellings DA doesn't treat as variants match too (Anna → Ann*, finding Anne;
+// Magdaline → Magdalin*, finding Magdalene and Magdalena). Names that don't end in a
+// vowel, or would be cut below 3 letters, are used as they are, with DA's own
+// variants (Jon → Joen, John; Johannes → Johanes; Ole).
+function givenStem(name) {
+  const s = (name || '').trim().replace(/[.,]$/, '');
+  if (!s || /[\s*]/.test(s)) return s;
+  const cut = s.replace(/[aeiouyæøå]+$/i, '');
+  return cut !== s && cut.length >= 3 ? cut + '*' : s;
+}
+
+// Irregular patronymics: Ole → Olsen
+const PATRONYMIC_BASE = { ole: 'Ol', ola: 'Ol' };
+
+// The patronymic a child of `father` has (Aslak → Aslaksen, Aslaksdatter; Johannes →
+// Johannesdatter). Used when FS has no surname, and as a surname to score with, since
+// FS's patronymics are sometimes someone's guess.
+function patronymicOf(father, sex) {
+  const name = firstWord(father);
+  if (!name || isPatronymic(name)) return '';
+  const base = PATRONYMIC_BASE[name.toLowerCase()] || name;
+  return base + (/s$/i.test(base) ? '' : 's') + (sex === 'Female' ? 'datter' : 'en');
+}
 
 // Surname for a DA search: the stem with a trailing *, so spellings DA doesn't treat
 // as variants still match. Patronymics keep the genitive s (Aslaksen → Aslaks*,
@@ -78,6 +113,7 @@ function profile(criteria) {
   const relative = (r, prefix) => ({ given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim() });
   const P = {
     given: firstWord(names[0] && names[0].givenName),
+    givenNames: ((names[0] && names[0].givenName) || '').trim().split(/\s+/).filter(Boolean),
     givens: unique(names.map((n) => firstWord(n.givenName)).filter(Boolean)),
     surname: ((names[0] && names[0].surname) || '').trim(),
     surnames: unique(names.map((n) => (n.surname || '').trim()).filter(Boolean)),
@@ -93,6 +129,11 @@ function profile(criteria) {
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };
   P.places = unique([P.birthPlace, P.marriagePlace, P.deathPlace, ...P.residences].filter(Boolean));
+  P.patronymic = patronymicOf(P.father.given, P.sex);
+  if (P.patronymic) {
+    if (!P.surname) P.surname = P.patronymic;
+    P.surnames = unique([...P.surnames, P.patronymic]);
+  }
   return P;
 }
 
@@ -132,7 +173,8 @@ function buildQueries(criteria) {
   const stem = surnameStem(P.surname);
   const [lifeFrom, lifeTo] = lifetime(P);
   const span = (from, to) => (from || to ? (from || '…') + '–' + (to || '…') : 'any year');
-  const nameText = [P.given, stem].filter(Boolean).join(' ');
+  const given = givenStem(P.given);
+  const nameText = [given, stem].filter(Boolean).join(' ');
   const byRole = (male, female) => (P.sex === 'Male' ? [male] : P.sex === 'Female' ? [female] : [male, female]);
   const roleText = { brudgom: 'groom', brud: 'bride', far: 'father', mor: 'mother', barn: 'child', konfirmant: 'confirmand', 'avdød': 'deceased' };
 
@@ -146,7 +188,7 @@ function buildQueries(criteria) {
     queries.push(q);
     return q;
   };
-  const named = { firstname: P.given, lastname: stem };
+  const named = { firstname: given, lastname: stem };
   const years = (from, to) => ({ event_year_from: from, event_year_to: to });
 
   // Own baptism: the child is usually given without a surname, so search on the first
@@ -155,20 +197,36 @@ function buildQueries(criteria) {
   if (P.given) {
     const parent = P.father.given ? { role: 'father', ...P.father } : P.mother.given ? { role: 'mother', ...P.mother } : null;
     const from = P.birth && P.birth.from, to = P.birth && P.birth.to + 1; // baptism can fall in the next year
-    const fields = { firstname: P.given, 'roles[]': 'barn', ...years(from, to) };
+    const fields = { firstname: given, 'roles[]': 'barn', ...years(from, to) };
     let relative = '';
     if (parent) {
-      fields.related_first_name = relative = firstWord(parent.given);
+      fields.related_first_name = relative = givenStem(firstWord(parent.given));
       if (parent.surname && !isPatronymic(parent.surname)) {
         fields.related_last_name = surnameStem(parent.surname);
         relative += ' ' + fields.related_last_name;
       }
     }
     const q = query('baptism', 'Baptism', fields,
-      [P.given + ' as child', parent && parent.role + ' ' + relative, span(from, to)]);
+      [given + ' as child', parent && parent.role + ' ' + relative, span(from, to)]);
     if (parent) q.reasons.push(parent.role + ' ' + relative);
     // A given name and years alone match thousands of baptisms
-    else q.skip = 'Add the father or mother to search for the baptism.';
+    else q.skip = 'Add the father or mother to search for the baptism by parent.';
+  }
+
+  // Own baptism by name and birthplace, for when the parents are unknown or were
+  // transcribed differently: up to two given names (all must match), the
+  // municipalities the FS birthplace names, and the birth years
+  if (P.given) {
+    const from = P.birth && P.birth.from, to = P.birth && P.birth.to + 1;
+    const codes = municipalityCodes(P.birthPlace);
+    const givens = P.givenNames.slice(0, 2).map(givenStem).join(' ');
+    const where = codes.map(municipalityName).join(', ');
+    const q = query('baptism-place', 'Baptism by birthplace',
+      { firstname: givens, 'roles[]': 'barn', ...years(from, to), 'm[]': codes },
+      [givens + ' as child', where, span(from, to)]);
+    if (codes.length) q.reasons.push('baptised in ' + where.replace(/, ([^,]*)$/, ' or $1'));
+    if (!P.birth) q.skip = 'Add a birth year to search for the baptism by birthplace.';
+    else if (!codes.length) q.skip = P.birthPlace ? 'No DA municipality in the birthplace (' + P.birthPlace + ').' : 'Add a birthplace to search for the baptism by birthplace.';
   }
 
   // Confirmation, usually at 14–16

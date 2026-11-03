@@ -227,7 +227,10 @@ cope with FS entries others made with a farm in the name.
 - Keep a small table of historical county names, e.g. Lister og Mandal amt =
   Vest-Agder (10).
 - Use places to **score** first, and to filter only when a query returns too many
-  hits. The municipality filter cut 63 hits to 53 without losing the record;
+  hits. The exception is the baptism by birthplace, which has no other filter: an
+  FS place part can be a farm with a municipality's name (Jon's "Hægebostad" is a
+  farm in Vigmostad, 1028, not the municipality 1034), so it may find nothing,
+  and the baptism by parent still runs. The municipality filter cut 63 hits to 53 without losing the record;
   county alone changed nothing.
 - The user can always add or remove counties and parishes in the sidebar (see
   above); a filter set there applies to every query.
@@ -275,6 +278,12 @@ Each milestone is testable on its own.
 5. **Criteria panel:** editable criteria, reruns, "Open on DA" links.
 6. **Name and place rules:** patronymic spellings, farm names, municipality matching
    with the cached code list.
+   Started: given-name stems (`givenStem`, Anna → Ann*), consonant matching when
+   scoring, patronymics from the father, the municipality list (`da_places.js`,
+   generated from DA's form rather than fetched) and the baptism by birthplace. It
+   found Anna's baptism (pd99000000000903, parents mistranscribed) and her 1875
+   census (pf99000000000904). Still to do: patronymic spelling variants, farm names
+   from FS names, alternate names in queries.
 7. **Emigration:** find how DA's emigration sources are searched (emigrant
    protocols, church-book departure lists: their `sc[]`/`lt[]` codes and roles), add
    the query, and make sure Phase 3 extracts those records.

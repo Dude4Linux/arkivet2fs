@@ -1,29 +1,11 @@
 // Matching DA hits to the person (Phase 2): merges the hits of all queries by
 // permanent ID, scores each against the person and groups them by record kind.
-// Uses profile(), lifetime(), firstWord() and surnameStem() from da_search.js.
+// Uses profile(), firstWord(), givenStem() and surnameStem() from da_search.js and
+// placeAliases() from da_places.js.
 
 // The groups, in the order they're shown
 const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", 'Census', 'Emigration', 'Burial', 'Other'];
 
-// Old and new names for the same place. Each list is one place; any of its names
-// in an FS place matches any of them in a DA hit.
-const PLACE_ALIASES = [
-  ['oslo', 'christiania', 'kristiania', 'chra', 'chria', 'chrania', 'kria'],
-  ['trondheim', 'trondhjem', 'thjem', 'nidaros'],
-  ['vest-agder', 'lister og mandal'],
-  ['aust-agder', 'nedenes'],
-  ['buskerud', 'buskeruds'],
-  ['akershus', 'aggershus'],
-  ['hedmark', 'hedemarken'],
-  ['oppland', 'christians', 'kristians'],
-  ['telemark', 'bratsberg'],
-  ['vestfold', 'jarlsberg og larvik'],
-  ['østfold', 'smaalenene', 'smålenene'],
-  ['rogaland', 'stavanger amt'],
-  ['hordaland', 'søndre bergenhus'],
-  ['sogn og fjordane', 'nordre bergenhus'],
-  ['møre og romsdal', 'romsdal']
-];
 // The youngest a person can be in a role; younger means a namesake
 const MIN_AGE = { Groom: 16, Bride: 16, Father: 16, Mother: 15, Godparent: 12, Confirmand: 12, Witness: 16 };
 // Parts of FS places that say nothing about where in Norway
@@ -61,10 +43,29 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // `word` as a whole word (or words) in `text`
 const hasWord = (text, word) => new RegExp('(^|[^\\p{L}])' + escapeRegex(word) + '($|[^\\p{L}])', 'iu').test(text);
 
+// A name's consonants, spelled one way (Christine, Kristina → krstn; John, Joen → jn):
+// spellings of a name mostly differ in their vowels, doubled letters, a silent h,
+// and ch/k, th/t, w/v
+function skeleton(name) {
+  return fold(name).replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's')
+    .replace(/[^\p{L}]/gu, '')
+    .replace(/(?<=.)h(?![aeiouyæøåäöüé])/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
+}
+
+// A word of a hit's name is the FS name, starts with its stem (Anne for Anna), or has
+// its consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole)
+function nameMatch(word, name) {
+  if (fold(word) === fold(name)) return true;
+  const stem = givenStem(name);
+  if (stem.endsWith('*') && fold(word).startsWith(fold(stem.slice(0, -1)))) return true;
+  const sk = skeleton(name);
+  return sk.length >= 2 && skeleton(word) === sk;
+}
+
 // An FS place's parts, each with its other names
 function placeNames(place) {
   return place.split(',').map((part) => part.trim()).filter((part) => part.length >= 3 && !PLACE_IGNORE.test(part))
-    .map((part) => ({ part, names: PLACE_ALIASES.find((list) => list.includes(fold(part))) || [fold(part)] }));
+    .map((part) => ({ part, names: placeAliases(part) }));
 }
 
 // A hit → { score, reasons: [{ text, ok, points }] }. ok is true (matches), false
@@ -75,16 +76,35 @@ function scoreHit(hit, P) {
     if (!reasons.some((r) => r.text === text)) reasons.push({ points, text, ok });
   };
 
-  // Names: the hit's first word is the given name; any later word can be the surname
+  // Names: the first word is a given name; any later word can be a further given
+  // name or the surname
   const words = hit.name.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
-  const given = words[0] || '';
-  if (P.givens.length && given) {
-    if (P.givens.some((g) => fold(g) === fold(given))) add(2, given, true);
-    else add(1, given + ' (variant of ' + P.given + ')', null);
-  }
   const stems = P.surnames.map((s) => fold(surnameStem(s)).replace(/\*$/, '')).filter(Boolean);
-  const surname = words.slice(1).find((w) => stems.some((stem) => fold(w).startsWith(stem)));
+  const isSurname = (w) => stems.some((stem) => fold(w).startsWith(stem));
+  const surname = words.slice(1).find(isSurname);
   if (surname) add(2, surname, true);
+  const names = words.filter((w) => w !== surname);
+
+  // The first given name (of any FS name): the same 2, a spelling of it 2, otherwise
+  // a variant DA matched 1
+  const first = names.find((w) => P.givens.some((g) => fold(g) === fold(w)));
+  const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g)));
+  if (first) add(2, first, true);
+  else if (close) add(2, close + ' for ' + P.givens.find((g) => nameMatch(close, g)), null);
+  else if (names.length && P.givens.length) add(1, names[0] + ' (variant of ' + P.given + ')', null);
+  // Further given names (Magdalen for Magdaline)
+  const used = new Set([first || close]);
+  for (const name of P.givenNames.slice(1)) {
+    const word = names.find((w) => !used.has(w) && nameMatch(w, name));
+    if (word) { add(1, word, true); used.add(word); }
+  }
+  // A baptism names the child by given names only, and all of them: one FS doesn't
+  // have speaks against it, a little (Kristina Caspara for Maren Kristine)
+  if (hit.role === 'Child' && P.givenNames.length) {
+    for (const w of names) {
+      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, w + ' not in FS', false);
+    }
+  }
 
   // Sex: only a contradiction counts
   if (hit.gender && P.sex && hit.gender !== P.sex) add(-4, hit.gender.toLowerCase(), false);
