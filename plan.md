@@ -93,7 +93,7 @@ The search is `/en/search/persons/advanced` (GET).
 | **His baptism:** Jon, role barn, related first name Aslak, 1763–66 | 2 | top hit pd99000000000001, b. 1764-11-11, Hægebostad = FS christening |
 | **His burial:** Per Aslaksen, role avdød, 1821–23 | 1 | pg99000000000907, 1822-08-16 = FS burial |
 | **His son's baptism:** John, role barn, related Pehr Aslaksen, 1815–17 | 1 | pd99000000000011 |
-| **1801 census:** Per Aslaksen, `jt[]=13` | 3 | three men named Peer Aslaksen (b. 1764, 1766, 1779); needs a household check |
+| **1801 census:** Per Aslaksen, `jt[]=13` | 3 | three men named Peer Aslaksen (b. 1764, 1766, 1779); the household check settles it: the b. 1766 one at Nedre Lunde has his wife Gurj Tollefsdatter, the b. 1779 one is a son of Aslak Tjøstolvsen, the third is an unmarried head |
 
 **Conclusion:** one broad name search is noisy. A small set of targeted queries, one
 per expected life event, finds the right records with 1–3 hits each.
@@ -264,6 +264,8 @@ cope with FS entries others made with a farm in the name.
 - **Check the close calls:** for census candidates, fetch the person's page and look
   for the spouse or children in the household (reusing `extractCensusPeople` /
   `censusHousehold`). This settles cases like the three 1801 Peer Aslaksens.
+  Done in `da_verify.js` for every kind of record, not only censuses: the record
+  page's parents, spouse and children are compared with FS's (see milestone 8).
 
 ### Later
 
@@ -328,6 +330,24 @@ Each milestone is testable on its own.
    role from the person's own fields. Ages like "27 A." become "27 years", and town
    abbreviations (Fr.stad, Fr.hald, Chr.sand, Chr.sund) are place aliases.
 8. **Verification:** census household check; tune scoring against the test tree.
+   Done: Phase 3's extraction moved from background.js into `da_record.js`
+   (`extractRecord(document, pageUrl)`, which also returns the open person's
+   `fields`), so the search page can read record pages too. After the searches,
+   `da_verify.js` reads the record pages of the best few hits of each group (8
+   children's baptisms, 3 otherwise; at most 30) and compares the people in them
+   with the FS relatives: a parent, spouse or child named there ✓ (+3, +2 for each
+   child), another parent or spouse ✗ (-2; not for census parents), unmarried in a
+   census after FS's marriage ✗ -3, an emigrant's destination among the FS places ✓ +2.
+   Results for the test tree: the 1801 Peer Aslaksen at Nedre Lunde (✓ spouse Sirj
+   Tollefsdatter) now leads the Census group, and his marriage to Gury Tollefsd. and
+   the children's baptisms with Siri rank above namesakes with wives Else or Aase.
+   Anna's 1870 Arendal census has her mother Johanne and sister Selma (✓ mother),
+   and her emigration "✓ going to Denver Col.". Found on the way: in the 1801
+   census every resident has an H.no., so `censusHousehold()` took one person as a
+   household (now a household starts where the number changes, when all have one);
+   1801 family positions are free text ("Hosbonde", "Hans kone", "Deres børn"); an
+   old final j is i in names (Sirj = Siri). DA transcribed Anna's father as
+   "Johanne", so her baptism gets "✗ father Johanne, not Johannes" but still ranks first.
 9. **Docs:** update CLAUDE.md and the README.
 
 ## Decisions

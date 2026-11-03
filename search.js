@@ -268,6 +268,11 @@ function hitRow(hit) {
     class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : 'near',
     text: (r.ok === true ? '✓ ' : r.ok === false ? '✗ ' : '≈ ') + r.text
   })));
+  // The record page was read (da_verify.js): say so, or why it couldn't be
+  if (hit.checks) {
+    reasons.append(el('li', { class: 'checked muted', text: hit.checkError ? 'record not read: ' + hit.checkError
+      : hit.checks.length ? 'record checked' : 'record checked: no relatives to compare' }));
+  }
   return el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') }, [
     el('span', { class: 'hit-score', title: 'Score', text: String(hit.score) }),
     el('div', { class: 'hit-main' }, [
@@ -314,6 +319,37 @@ function hintFor(query, params, total, read) {
   return 'Nothing found: ' + text + '.';
 }
 
+// Read the record pages of the best hits in each group and score what they say
+// (da_verify.js), one at a time, re-rendering after each. A checked hit can drop
+// out of the top, so the best unchecked ones are picked again each time.
+async function checkHits(run, merged, person, container, status) {
+  const MAX_CHECKS = 30;
+  let checked = 0;
+  while (run === generation && checked < MAX_CHECKS) {
+    const hit = hitsToCheck(groupHits(merged, person)).find((h) => !merged.get(h.id || h.url).checks);
+    if (!hit) break;
+    status.textContent = 'Checking the records of the best hits (' + (checked + 1) + ')…';
+    const entry = merged.get(hit.id || hit.url);
+    try {
+      entry.checks = checkRecord(await fetchRecord(hit), person);
+    } catch (error) {
+      entry.checks = [];
+      entry.checkError = error.message;
+      if (/refusing/.test(error.message)) {
+        status.textContent = error.message;
+        status.classList.add('error');
+        return;
+      }
+    }
+    checked++;
+    if (run !== generation) return;
+    renderGroups(container, merged, person);
+  }
+  if (run === generation) {
+    status.textContent = checked ? 'Checked the records of the best ' + checked + ' hits against the FS relatives.' : '';
+  }
+}
+
 function renderGroups(container, merged, person) {
   const groups = groupHits(merged, person);
   container.replaceChildren(...groups.map((group) => el('section', { class: 'group-hits' }, [
@@ -338,13 +374,15 @@ async function renderResults(criteria) {
   const person = profile(criteria);
   const views = queries.map((query) => ({ query, ...queryRow(query) }));
   const groups = el('div', { class: 'groups' });
+  const checkStatus = el('p', { class: 'check-status muted' });
   results.replaceChildren(
-    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }), el('ul', { class: 'queries' }, views.map((v) => v.row))]),
+    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }), el('ul', { class: 'queries' }, views.map((v) => v.row)), checkStatus]),
     groups
   );
 
   // One query at a time: DA rate-limits automated traffic
   const merged = new Map();
+  let refused = false;
   for (const [i, view] of views.entries()) {
     if (run !== generation) return;
     if (view.query.skip) continue;
@@ -369,6 +407,7 @@ async function renderResults(criteria) {
       view.status.textContent = error.message;
       view.status.classList.add('error');
       if (/refusing/.test(error.message)) {
+        refused = true;
         for (const rest of views.slice(i + 1)) if (!rest.query.skip) rest.status.textContent = 'Not run';
         break;
       }
@@ -377,6 +416,7 @@ async function renderResults(criteria) {
   if (run === generation && merged.size === 0) {
     groups.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'No records found. Try removing details in the criteria, or a shorter surname.' })]));
   }
+  if (run === generation && merged.size && !refused) await checkHits(run, merged, person, groups, checkStatus);
 }
 
 // --- Page -----------------------------------------------------------------------------

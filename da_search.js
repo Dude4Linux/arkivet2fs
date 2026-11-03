@@ -447,8 +447,10 @@ function parseResults(html) {
 let lastRequest = 0;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Fetch one result page, spaced out from the last request and cached for the session
-async function fetchResultPage(url) {
+// Fetch one result page (or record page), spaced out from the last request and
+// cached for the session (unless `store` is false: da_verify.js keeps a record's
+// extract instead of its page)
+async function fetchResultPage(url, store = true) {
   try {
     const cached = sessionStorage.getItem('da:' + url);
     if (cached) return cached;
@@ -463,7 +465,7 @@ async function fetchResultPage(url) {
       : 'Digital Arkivet answered ' + response.status + '.');
   }
   const html = await response.text();
-  try { sessionStorage.setItem('da:' + url, html); } catch (e) { /* full or unavailable */ }
+  if (store) try { sessionStorage.setItem('da:' + url, html); } catch (e) { /* full or unavailable */ }
   return html;
 }
 

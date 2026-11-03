@@ -209,3 +209,6 @@ button.primary {
 .reasons li.ok { color: var(--ok); }
 .reasons li.bad { color: var(--bad); }
 .reasons li.near { color: var(--muted); }
+.reasons li.checked { font-style: italic; background: none; }
+.check-status { margin: 8px 0 0; font-size: 13px; }
+.check-status:empty { display: none; }

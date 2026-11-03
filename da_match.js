@@ -41,14 +41,16 @@ const yearIn = (s) => { const m = (s || '').match(/\b(\d{4})\b/); return m ? Num
 // How far a year is outside [from, to]; 0 inside it
 const distance = (y, from, to) => (y < from ? from - y : y > to ? y - to : 0);
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// `word` as a whole word (or words) in `text`
-const hasWord = (text, word) => new RegExp('(^|[^\\p{L}])' + escapeRegex(word) + '($|[^\\p{L}])', 'iu').test(text);
+// `word` as a whole word (or words) in `text` (a function: da_verify.js uses it)
+function hasWord(text, word) {
+  return new RegExp('(^|[^\\p{L}])' + escapeRegex(word) + '($|[^\\p{L}])', 'iu').test(text);
+}
 
 // A name's consonants, spelled one way (Christine, Kristina → krstn; John, Joen → jn):
 // spellings of a name mostly differ in their vowels, doubled letters, a silent h,
-// and ch/k, th/t, w/v
+// and ch/k, th/t, w/v, and an old final j for i (Sirj, Karj for Siri, Kari)
 function skeleton(name) {
-  return fold(name).replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's')
+  return fold(name).replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i').replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's')
     .replace(/[^\p{L}]/gu, '')
     .replace(/(?<=.)h(?![aeiouyæøåäöüé])/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
 }
@@ -171,6 +173,8 @@ function scoreHit(hit, P) {
 
   // What the queries themselves matched (a parent, a spouse)
   for (const query of hit.queries) for (const r of query.reasons || []) add(2, r, true);
+  // What the record page says (da_verify.js checkRecord)
+  for (const r of hit.checks || []) add(r.points, r.text, r.ok);
 
   return { score: reasons.reduce((sum, r) => sum + r.points, 0), reasons };
 }
