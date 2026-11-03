@@ -191,5 +191,10 @@
     ownItem = null;
   }
   observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  // An entry already there was added by a copy that a reload cut off (background.js
+  // injects this script again into open FS tabs then): replace it with this copy's,
+  // which can reach the extension. The old copy only removes its own entry.
+  for (const old of document.querySelectorAll(`[data-testid="${ENTRY_TESTID}"]`)) old.closest('li')?.remove();
   insertEntry();
 })();

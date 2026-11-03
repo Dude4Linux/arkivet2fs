@@ -82,6 +82,20 @@ chrome.action.onClicked.addListener((tab) => {
   });
 });
 
+// After the extension is installed, updated or reloaded, the fs_person.js already in
+// open FS tabs is cut off from it (it removes its own entry), and Chrome doesn't inject
+// the manifest's content scripts into open tabs: inject it again, so the "Digital
+// Arkivet" entry comes back without reloading the page.
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason !== 'install' && reason !== 'update') return;
+  chrome.tabs.query({ url: 'https://www.familysearch.org/*' }, (tabs) => {
+    for (const tab of tabs) {
+      chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fs_person.js'] })
+        .catch((error) => console.log('Could not inject fs_person.js into tab ' + tab.id + ':', error.message));
+    }
+  });
+});
+
 // Errors reported by content.js while filling the FamilySearch form
 chrome.runtime.onMessage.addListener((request) => {
   if (request && request.action === 'fillFormError') {
