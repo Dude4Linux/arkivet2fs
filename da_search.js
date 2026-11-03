@@ -72,6 +72,24 @@ function givenStem(name) {
 // Irregular patronymics: Ole → Olsen
 const PATRONYMIC_BASE = { ole: 'Ol', ola: 'Ol' };
 
+// Patronymic stems that are spellings of one name but that DA doesn't treat as
+// variants (Johans* and Johannes* find different records). DA itself handles ch/k
+// (Torchels* = Torkels*) and doubled letters (Ols* = Olss*).
+const PATRONYMIC_SPELLINGS = [
+  ['johannes', 'johans'], ['peders', 'pers'], ['christens', 'christians'],
+  ['anders', 'andres'], ['halvors', 'halvards'], ['gulbrands', 'gudbrands']
+];
+
+// A patronymic stem's other spellings (Johans* → Johannes*)
+function patronymicSpellings(stem) {
+  const s = stem.replace(/\*$/, '');
+  const group = PATRONYMIC_SPELLINGS.find((list) => list.some((p) => s.toLowerCase().startsWith(p)));
+  if (!group) return [];
+  const own = group.find((p) => s.toLowerCase().startsWith(p));
+  const rest = s.slice(own.length);
+  return group.filter((p) => p !== own).map((p) => s[0] + p.slice(1) + rest + '*');
+}
+
 // The patronymic a child of `father` has (Aslak → Aslaksen, Aslaksdatter; Johannes →
 // Johannesdatter). Used when FS has no surname, and as a surname to score with, since
 // FS's patronymics are sometimes someone's guess.
@@ -129,6 +147,8 @@ function profile(criteria) {
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };
   P.places = unique([P.birthPlace, P.marriagePlace, P.deathPlace, ...P.residences].filter(Boolean));
+  // FS's other names for the person (alternate names), as given name and surname
+  P.alternates = names.slice(1).map((n) => ({ given: firstWord(n.givenName) || firstWord(names[0].givenName), surname: (n.surname || '').trim() }));
   P.patronymic = patronymicOf(P.father.given, P.sex);
   if (P.patronymic) {
     if (!P.surname) P.surname = P.patronymic;
@@ -189,6 +209,32 @@ function buildQueries(criteria) {
     return q;
   };
   const named = { firstname: given, lastname: stem };
+
+  // Other names to try when a query on the name finds nothing, in order: the
+  // patronymic from the father (FS's patronymics are sometimes guesses), FS's
+  // alternate names, and other spellings of the patronymic stem; at most three
+  const variants = [];
+  {
+    const candidates = [
+      P.patronymic && { firstname: given, lastname: surnameStem(P.patronymic) },
+      ...P.alternates.map((a) => ({ firstname: givenStem(a.given), lastname: surnameStem(a.surname) || stem })),
+      ...[stem, ...P.alternates.map((a) => surnameStem(a.surname))].flatMap(patronymicSpellings).map((lastname) => ({ firstname: given, lastname }))
+    ];
+    const seen = new Set([given + ' ' + stem]);
+    for (const c of candidates) {
+      if (!c || !c.lastname) continue;
+      const text = c.firstname + ' ' + c.lastname;
+      if (seen.has(text) || variants.length >= 3) continue;
+      seen.add(text);
+      variants.push({ fields: c, text });
+    }
+  }
+  // Where to narrow a query that finds more hits than are read: the municipalities
+  // of all the FS places
+  const placeCodes = unique(P.places.flatMap(municipalityCodes));
+  const narrow = placeCodes.length
+    ? { fields: { 'm[]': placeCodes }, text: placeCodes.map(municipalityName).join(', ') }
+    : null;
   const years = (from, to) => ({ event_year_from: from, event_year_to: to });
 
   // Own baptism: the child is usually given without a surname, so search on the first
@@ -296,10 +342,24 @@ function buildQueries(criteria) {
     if (outsideNorway(P.deathPlace)) q.skip = 'Died outside Norway (' + P.deathPlace + ').';
   }
 
+  // Records at each farm (DA's domicile), under the given name: they find the person
+  // whatever the patronymic's spelling
+  P.farms.slice(0, 2).forEach((farm, k) => {
+    const q = query('farm' + (k ? '-' + k : ''), 'Records at ' + farm, { firstname: given, domicile: farm, ...years(lifeFrom, lifeTo) },
+      [given + ' at ' + farm, span(lifeFrom, lifeTo)]);
+    q.reasons.push('farm ' + farm);
+  });
+
   // Everything else under the name, over the person's lifetime
   query('other', 'All records under the name', { ...named, ...years(lifeFrom, lifeTo) },
     [nameText, span(lifeFrom, lifeTo)]);
 
+  // Queries on the name get the other names to fall back on; queries without a
+  // place filter get the FS places to narrow to
+  for (const q of queries) {
+    if (q.params.has('lastname')) q.variants = variants;
+    if (narrow && !q.params.has('m[]')) q.narrow = narrow;
+  }
   return queries;
 }
 
@@ -375,13 +435,54 @@ async function fetchResultPage(url) {
   return html;
 }
 
-// Run a query: up to MAX_PAGES result pages → { total, hits }
+// `params` with `fields` set (replacing what they had)
+function withFields(params, fields) {
+  const p = new URLSearchParams(params);
+  for (const [key, value] of Object.entries(fields)) {
+    p.delete(key);
+    for (const v of [].concat(value)) if (v) p.append(key, v);
+  }
+  return p;
+}
+
+const firstPage = async (params) => parseResults(await fetchResultPage(daSearchUrl(params)));
+
+// Run a query → { total, hits, params, notes }: up to MAX_PAGES result pages of the
+// search actually used. Finding nothing, it tries the query's variants (other
+// names) in turn; finding more hits than it reads, it narrows to the FS places,
+// unless that leaves none. `params` is the search used; `notes` say what changed.
 async function runQuery(query) {
-  const first = parseResults(await fetchResultPage(daSearchUrl(query.params)));
+  let params = query.params;
+  let first = await firstPage(params);
+  const notes = [];
+  if (first.total === 0 && query.variants && query.variants.length) {
+    const tried = [params.get('firstname') + ' ' + params.get('lastname')];
+    for (const variant of query.variants) {
+      const p = withFields(query.params, variant.fields);
+      const result = await firstPage(p);
+      if (result.total) {
+        notes.push('none as ' + tried.join(', ') + '; searched as ' + variant.text);
+        params = p;
+        first = result;
+        break;
+      }
+      tried.push(variant.text);
+    }
+    if (first.total === 0) notes.push('none as ' + tried.join(', '));
+  }
+  if (first.total > MAX_PAGES * RESULTS_PER_PAGE && query.narrow) {
+    const p = withFields(params, query.narrow.fields);
+    const result = await firstPage(p);
+    if (result.total) {
+      notes.push(first.total + ' hits, so only in ' + query.narrow.text);
+      params = p;
+      first = result;
+    }
+  }
   const hits = first.hits;
   const pages = Math.min(MAX_PAGES, Math.ceil(first.total / RESULTS_PER_PAGE));
   for (let page = 2; page <= pages; page++) {
-    hits.push(...parseResults(await fetchResultPage(daSearchUrl(query.params, page))).hits);
+    hits.push(...parseResults(await fetchResultPage(daSearchUrl(params, page))).hits);
   }
-  return { total: first.total, hits: hits };
+  return { total: first.total, hits, params, notes };
 }

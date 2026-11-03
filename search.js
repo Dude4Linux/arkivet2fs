@@ -166,13 +166,14 @@ function hitRow(hit) {
 // One line per query: what it searched for, how many hits, and the same search on DA
 function queryRow(query) {
   const status = el('span', { class: 'query-status muted', text: query.skip || 'Waiting…' });
+  const link = query.skip ? null : el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on DA' });
   const row = el('li', { class: 'query' + (query.skip ? ' skipped' : ''), 'data-query': query.id }, [
     el('span', { class: 'query-title', text: query.title }),
     el('span', { class: 'query-summary muted', text: query.summary }),
     status,
-    query.skip ? '' : el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on DA' })
+    link || ''
   ]);
-  return { row, status };
+  return { row, status, link };
 }
 
 function renderGroups(container, merged, person) {
@@ -211,11 +212,15 @@ async function renderResults(criteria) {
     if (view.query.skip) continue;
     view.status.textContent = 'Searching…';
     try {
-      const { total, hits } = await runQuery(view.query);
+      const { total, hits, params, notes } = await runQuery(view.query);
       if (run !== generation) return;
-      view.status.textContent = total === 0 ? 'No hits'
+      // The link opens the search that was used (another name, or narrowed to places)
+      view.link.href = daSearchUrl(params);
+      const count = total === 0 ? 'no hits'
         : total > hits.length ? `${total} hits, the first ${hits.length} used`
         : `${total} hit${total === 1 ? '' : 's'}`;
+      const text = [...notes, count].join('; ');
+      view.status.textContent = text[0].toUpperCase() + text.slice(1);
       mergeHits(merged, view.query, hits);
       renderGroups(groups, merged, person);
     } catch (error) {

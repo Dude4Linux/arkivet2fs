@@ -278,12 +278,18 @@ Each milestone is testable on its own.
 5. **Criteria panel:** editable criteria, reruns, "Open on DA" links.
 6. **Name and place rules:** patronymic spellings, farm names, municipality matching
    with the cached code list.
-   Started: given-name stems (`givenStem`, Anna → Ann*), consonant matching when
-   scoring, patronymics from the father, the municipality list (`da_places.js`,
-   generated from DA's form rather than fetched) and the baptism by birthplace. It
-   found Anna's baptism (pd99000000000903, parents mistranscribed) and her 1875
-   census (pf99000000000904). Still to do: patronymic spelling variants, farm names
-   from FS names, alternate names in queries.
+   Done: given-name stems (`givenStem`, Anna → Ann*), consonant matching when
+   scoring (names and farms: Hægbostad = Hægebostad), patronymics from the father,
+   the municipality list (`da_places.js`, generated from DA's form rather than
+   fetched) and the baptism by birthplace. A search with no hits is retried with
+   other names (the father's patronymic, FS alternate names, patronymic spellings
+   like Johans*/Johannes*), and one with over 100 hits is narrowed to the FS places'
+   municipalities; the status says which, and "Open on DA" opens the search used.
+   Farms (words after the patronymic in an FS name, or `q.farm`) get a "Records at
+   <farm>" query (DA's `domicile`). It found Anna's baptism (pd99000000000903,
+   parents mistranscribed) and her 1875 census (pf99000000000904); her confirmation
+   isn't among the 48 Anna Johannes* confirmed in Oslo and Aker, perhaps because she
+   was a foster daughter in Fredrikstad by 1875.
 7. **Emigration:** find how DA's emigration sources are searched (emigrant
    protocols, church-book departure lists: their `sc[]`/`lt[]` codes and roles), add
    the query, and make sure Phase 3 extracts those records.

@@ -85,22 +85,25 @@ function scoreHit(hit, P) {
   if (surname) add(2, surname, true);
   const names = words.filter((w) => w !== surname);
 
+  // Baptisms and confirmations give all the given names
+  const allGiven = hit.role === 'Child' || hit.role === 'Confirmand';
   // The first given name (of any FS name): the same 2, a spelling of it 2, otherwise
-  // a variant DA matched 1
+  // a variant DA matched 1 (0 where all given names are given: it isn't one of them)
   const first = names.find((w) => P.givens.some((g) => fold(g) === fold(w)));
   const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g)));
+  const variant = !first && !close && P.givens.length && names[0];
   if (first) add(2, first, true);
   else if (close) add(2, close + ' for ' + P.givens.find((g) => nameMatch(close, g)), null);
-  else if (names.length && P.givens.length) add(1, names[0] + ' (variant of ' + P.given + ')', null);
+  else if (variant) add(allGiven ? 0 : 1, variant + ' (variant of ' + P.given + ')', null);
   // Further given names (Magdalen for Magdaline)
-  const used = new Set([first || close]);
+  const used = new Set([first || close || variant]);
   for (const name of P.givenNames.slice(1)) {
     const word = names.find((w) => !used.has(w) && nameMatch(w, name));
     if (word) { add(1, word, true); used.add(word); }
   }
-  // A baptism names the child by given names only, and all of them: one FS doesn't
-  // have speaks against it, a little (Kristina Caspara for Maren Kristine)
-  if (hit.role === 'Child' && P.givenNames.length) {
+  // A given name FS doesn't have speaks against such a record, a little (Anna
+  // Kristina Caspara for Maren Kristine)
+  if (allGiven && P.givenNames.length) {
     for (const w of names) {
       if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, w + ' not in FS', false);
     }
@@ -154,9 +157,15 @@ function scoreHit(hit, P) {
       placeMatches++;
     }
   }
-  // Farms: in the residence, the birthplace, or the name itself
+  // Farms: in the residence, the birthplace, or the name itself, also spelled with the
+  // same consonants (Hægbostad, Hæggebostad for Hægebostad)
+  const farmText = [hit.name, hit.born, hit.domicile].join(' ');
+  const farmWords = farmText.split(/[^\p{L}]+/u).filter(Boolean);
   for (const farm of P.farms) {
-    if (hasWord([hit.name, hit.born, hit.domicile].join(' '), farm)) add(2, 'farm ' + farm, true);
+    const sk = skeleton(farm);
+    const spelling = !hasWord(farmText, farm) && sk.length >= 3 && farmWords.find((w) => skeleton(w) === sk);
+    if (spelling) add(2, 'farm ' + farm + ' = ' + spelling, true);
+    else if (hasWord(farmText, farm)) add(2, 'farm ' + farm, true);
   }
 
   // What the queries themselves matched (a parent, a spouse)
