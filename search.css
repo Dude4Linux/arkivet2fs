@@ -210,5 +210,15 @@ button.primary {
 .reasons li.bad { color: var(--bad); }
 .reasons li.near { color: var(--muted); }
 .reasons li.checked { font-style: italic; background: none; }
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.pager .add:disabled { color: var(--muted); cursor: default; }
 .check-status { margin: 8px 0 0; font-size: 13px; }
 .check-status:empty { display: none; }

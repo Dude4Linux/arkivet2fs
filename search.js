@@ -350,16 +350,52 @@ async function checkHits(run, merged, person, container, status) {
   }
 }
 
-function renderGroups(container, merged, person) {
-  const groups = groupHits(merged, person);
-  container.replaceChildren(...groups.map((group) => el('section', { class: 'group-hits' }, [
+// Hits shown per group; a pager below steps through the rest
+const PAGE_SIZE = 10;
+// The page shown in each group (by title), kept while hits come in and are
+// re-ranked, and cleared by a new search
+const groupPages = new Map();
+
+// One group's section: the page of hits it's on and, with more than PAGE_SIZE, a pager
+function groupSection(group) {
+  const pages = Math.ceil(group.hits.length / PAGE_SIZE);
+  const page = Math.min(groupPages.get(group.title) || 0, pages - 1);
+  const first = page * PAGE_SIZE;
+  const shown = group.hits.slice(first, first + PAGE_SIZE);
+  const section = el('section', { class: 'group-hits' }, [
     el('h3', {}, [group.title, el('span', { class: 'count muted', text: ' ' + group.hits.length })]),
-    el('ol', { class: 'hits' }, group.hits.map(hitRow))
-  ])));
+    el('ol', { class: 'hits' }, shown.map(hitRow))
+  ]);
+  if (pages > 1) {
+    const go = (to) => {
+      groupPages.set(group.title, to);
+      const next = groupSection(group);
+      section.replaceWith(next);
+      // Back to the group's top when it was scrolled past (a shorter last page)
+      if (next.getBoundingClientRect().top < 0) next.scrollIntoView({ block: 'start' });
+    };
+    const button = (text, label, to, enabled) => {
+      const b = el('button', { type: 'button', class: 'add', 'aria-label': label, text });
+      b.disabled = !enabled;
+      b.addEventListener('click', () => go(to));
+      return b;
+    };
+    section.append(el('nav', { class: 'pager', 'aria-label': group.title + ' pages' }, [
+      button('‹ Previous 10', 'Previous ' + PAGE_SIZE + ' ' + group.title, page - 1, page > 0),
+      el('span', { class: 'muted', text: (first + 1) + '–' + (first + shown.length) + ' of ' + group.hits.length }),
+      button('Next 10 ›', 'Next ' + PAGE_SIZE + ' ' + group.title, page + 1, page < pages - 1)
+    ]));
+  }
+  return section;
+}
+
+function renderGroups(container, merged, person) {
+  container.replaceChildren(...groupHits(merged, person).map(groupSection));
 }
 
 async function renderResults(criteria) {
   const run = ++generation;
+  groupPages.clear();
   const name = criteria.name[0] || {};
   const fullName = [name.givenName, name.surname].filter(Boolean).join(' ');
   document.getElementById('results-title').textContent = fullName ? 'Results for ' + fullName : 'Results';

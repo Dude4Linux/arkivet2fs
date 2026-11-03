@@ -349,6 +349,9 @@ Each milestone is testable on its own.
    old final j is i in names (Sirj = Siri). DA transcribed Anna's father as
    "Johanne", so her baptism gets "✗ father Johanne, not Johannes" but still ranks first.
 9. **Docs:** update CLAUDE.md and the README.
+   Done: `README.md` covers installing, the three steps (the FS entry, the search
+   page and its scores, the SourceBox), DA's request limits, transcription caveats,
+   which sites are contacted, and the files. CLAUDE.md describes every file.
 
 ## Decisions
 

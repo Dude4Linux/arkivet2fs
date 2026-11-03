@@ -112,21 +112,27 @@
 
   // --- The "Digital Arkivet" entry ----------------------------------------------
 
+  // Reloading or updating the extension cuts this script off from it: chrome.runtime
+  // loses its id and getURL()/sendMessage() throw "Extension context invalidated"
+  const extensionAlive = () => {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
+  };
+
   function activate(event) {
     event.preventDefault();
     event.stopPropagation();
+    if (!extensionAlive()) { shutDown(); return; }
     const person = gatherPerson();
     console.log('arkivet2fs: FS person', person);
-    try {
-      chrome.runtime.sendMessage({ action: 'searchDA', person: person });
-    } catch (e) {
-      // The extension was reloaded since this page was opened
-      console.error('arkivet2fs: extension unavailable, reload the page (' + e.message + ')');
-    }
+    chrome.runtime.sendMessage({ action: 'searchDA', person: person });
   }
+
+  // The entry this copy of the script added (a fresh copy after a reload adds its own)
+  let ownItem = null;
 
   function insertEntry() {
     if (!PERSON_PATH.test(location.pathname)) return;
+    if (!extensionAlive()) { shutDown(); return; }
     if (document.querySelector(`[data-testid="${ENTRY_TESTID}"]`)) return;
     const google = document.querySelector('[data-testid="search-google"]');
     const googleItem = google && google.closest('li');
@@ -135,7 +141,9 @@
     // A copy of Google's entry inherits FS's styling; it doesn't inherit React's
     // event handlers, so clicking it only runs ours.
     const item = googleItem.cloneNode(true);
-    const button = item.querySelector('[data-testid="search-google"]');
+    const googleTestid = '[data-testid="search-google"]';
+    const button = item.matches(googleTestid) ? item : item.querySelector(googleTestid);
+    if (!button) return;
     button.setAttribute('data-testid', ENTRY_TESTID);
     button.setAttribute('aria-label', 'Search ' + LABEL);
     button.title = 'Search DigitalArkivet for this person';
@@ -161,6 +169,7 @@
     });
 
     googleItem.after(item);
+    ownItem = item;
   }
 
   // Coalesce bursts of DOM changes into one check per frame
@@ -173,6 +182,14 @@
       insertEntry();
     });
   });
+
+  // Cut off from the extension: stop watching and take the entry away, since clicking
+  // it can't reach the extension any more (reloading the page brings it back)
+  function shutDown() {
+    observer.disconnect();
+    if (ownItem) ownItem.remove();
+    ownItem = null;
+  }
   observer.observe(document.documentElement, { childList: true, subtree: true });
   insertEntry();
 })();
