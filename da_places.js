@@ -183,6 +183,11 @@ const DA_MUNICIPALITIES = {
 const PLACE_ALIASES = [
   ['oslo', 'christiania', 'kristiania', 'chra', 'chria', 'chrania', 'kria'],
   ['trondheim', 'trondhjem', 'thjem', 'nidaros'],
+  // Towns as clerks abbreviated them (emigrant protocols, moving lists)
+  ['fredrikstad', 'frederikstad', 'fr.stad', 'frstad', 'fstad'],
+  ['halden', 'fredrikshald', 'frederikshald', 'fr.hald', 'frhald'],
+  ['kristiansand', 'christianssand', 'christiansand', 'chr.sand', 'kr.sand'],
+  ['kristiansund', 'christianssund', 'christiansund', 'chr.sund', 'kr.sund'],
   ['vest-agder', 'lister og mandal'],
   ['aust-agder', 'nedenes'],
   ['buskerud', 'buskeruds'],

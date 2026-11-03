@@ -48,7 +48,7 @@ const param = (field, k) => 'q.' + field.name + suffix(k);
 const KINDS = [
   ['baptism', 'Baptism'], ['confirmation', 'Confirmation'], ['marriage', 'Marriage'],
   ['children', "Children's baptisms"], ['census', 'Census'], ['emigration', 'Emigration'],
-  ['burial', 'Burial'], ['farm', 'Records at farms'], ['other', 'All records under the name']
+  ['moving', 'Moving away'], ['burial', 'Burial'], ['farm', 'Records at farms'], ['other', 'All records under the name']
 ];
 
 // The address's criteria as { groupId: [ {fieldName: value}, ... ], where: { m, c },

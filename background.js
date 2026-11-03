@@ -253,6 +253,8 @@ async function gatherData() {
         'pv': 'marriage',
         'pk': 'confirmation',
         'pe': 'emigration',
+        'pu': 'out_migration',
+        'pi': 'in_migration',
         'pt': 'tax',
         'pl': 'school',
         'pm': 'landed_property',
@@ -314,6 +316,8 @@ async function gatherData() {
         'bruras mor': "Bride's Mother",
         'forlovere': 'Witness/Sponsor', 'forløvere': 'Witness/Sponsor',
         'avdøde': 'Deceased', 'avdød': 'Deceased',
+        'utflytter': 'Out-migrant', 'utflyttar': 'Out-migrant',
+        'innflytter': 'In-migrant', 'innflyttar': 'In-migrant',
         'husfader': 'Head of Household',
         'husmoder': 'Wife of Head', 'hans kone': 'His Wife',
         'tjenestekarl': 'Male Servant', 'tjenestepige': 'Female Servant',
@@ -465,8 +469,11 @@ async function gatherData() {
     // Church records have event-specific details. Returns a lowercase-label map
     // of non-empty fields, e.g. 'page', 'year', 'baptism date', 'parish/church',
     // 'marriage date', 'death date', 'burial date', 'introduction', 'remarks'.
-    function extractRecordDetails() {
+    // Emigrant protocols keep their page and line under "More information"
+    // (#collapse-more-info), read with `more`.
+    function extractRecordDetails(more) {
       const map = fieldMap(readFields(document.querySelector("#collapse-section-1")));
+      if (more) Object.assign(map, fieldMap(readFields(document.querySelector("#collapse-more-info"))));
       const details = {};
       for (const [key, value] of Object.entries(map)) {
         if (value) details[key] = value;
@@ -555,10 +562,10 @@ async function gatherData() {
       if (key === 'role') return translateRole(value);
       if (key === 'family position') return translateCensusPosition(value);
       if (key === 'position' || key === 'occupation') return expandAbbreviations(value);
-      // Ages in years/months/weeks/days (år, måneder, uker, dager): "57 a", "3 m 2 u"
-      if (key === 'age' && /^(\d+\s*[amud]\b\s*)+$/i.test(value)) {
+      // Ages in years/months/weeks/days (år, måneder, uker, dager): "57 a", "3 m 2 u", "27 A."
+      if (key === 'age' && /^(\d+\s*[amud]\b\.?\s*)+$/i.test(value)) {
         const units = { 'a': 'year', 'm': 'month', 'u': 'week', 'd': 'day' };
-        return value.replace(/(\d+)\s*([amud])\b\s*/gi, function(_, n, u) {
+        return value.replace(/(\d+)\s*([amud])\b\.?\s*/gi, function(_, n, u) {
           return n + ' ' + units[u.toLowerCase()] + (n === '1' ? '' : 's') + ' ';
         }).trim();
       }
@@ -701,6 +708,10 @@ async function gatherData() {
         event = 'confirmation'; persons = [withRole(['konfirmant'])];
       } else if (type === 'census') {
         event = 'household'; persons = [people.find(function(p) { return p.name; })];
+      } else if (type === 'emigration' || type === 'out_migration' || type === 'in_migration') {
+        // Each emigrant and each person moving has an entry of their own
+        event = { emigration: 'emigration', out_migration: 'out-migration', in_migration: 'in-migration' }[type];
+        persons = [people.find(function(p) { return p.current && p.name; })];
       }
       persons = persons.filter(Boolean);
       return persons.length ? { event: event, persons: persons } : null;
@@ -755,7 +766,8 @@ async function gatherData() {
       }
       parts.push.apply(parts, c.censusLocation);
       if (details['protocol reference']) parts.push('protocol ' + details['protocol reference']);
-      if (details['page']) parts.push('p. ' + details['page']);
+      if (details['page'] || details['page number']) parts.push('p. ' + (details['page'] || details['page number']));
+      if (details['line number']) parts.push('line ' + details['line number']);
       if (details['serial no.']) parts.push('entry ' + details['serial no.']);
       parts.push(describeEntry(c.recordTypeInfo.type, c.people, c.pageName));
       if (c.date && !isCensus) parts.push(c.date);  // census year is already in the title
@@ -773,7 +785,7 @@ async function gatherData() {
 
     // Record detail fields already used in the citation (left out of the notes).
     // Partial event dates like "Baptism date: 01-03" are covered by the full date in the citation.
-    const citedDetailKeys = new Set(['page', 'serial no.', 'year', 'parish/church', 'protocol reference']);
+    const citedDetailKeys = new Set(['page', 'page number', 'line number', 'serial no.', 'year', 'parish/church', 'protocol reference']);
 
     // --- Helper: Build enriched notes with people and details not in the citation ---
     // Notes contain: permanent ID, the open person's own fields, remaining record
@@ -815,7 +827,7 @@ async function gatherData() {
 
       // Remaining record details, in page order
       for (const [key, value] of Object.entries(recordDetails || {})) {
-        if (citedDetailKeys.has(key) || / date$/.test(key)) continue;
+        if (citedDetailKeys.has(key) || / date$/.test(key) || /^date\b/.test(key)) continue;
         lines.push(key.charAt(0).toUpperCase() + key.slice(1) + ': ' + noteValue(key, value));
       }
 
@@ -870,6 +882,11 @@ async function gatherData() {
       } else if (parentPost) {
         recordType = parentPost.trim();
       }
+      // Emigrant protocols' header holds group, date and ship: "00115/1882-09-16/Kong Ring"
+      if (recordDate && !/^\d{4}(?!\d)/.test(recordDate)) {
+        const dated = recordDate.match(/(?:^|[^\d])(\d{4}(?:-\d{2}){0,2})(?![\d])/);
+        if (dated) recordDate = dated[1];
+      }
 
       // Census: date is the census year ("1891 census for ..." / Start year), and the
       // parent-post headings give the location, e.g. ["census district 01 Fjellsmarkas
@@ -896,6 +913,8 @@ async function gatherData() {
           'marriage': 'Marriages',
           'confirmation': 'Confirmations',
           'emigration': 'Emigration',
+          'out_migration': 'Out-migration',
+          'in_migration': 'In-migration',
           'probate': 'Probate',
           'tax': 'Tax records',
           'school': 'School records',
@@ -917,7 +936,7 @@ async function gatherData() {
       const people = isCensus ? censusHousehold(extractCensusPeople(permanentId)) : extractChurchPeople(permanentId);
 
       // Extract record details from #collapse-section-1 (church records)
-      const recordDetails = extractRecordDetails();
+      const recordDetails = extractRecordDetails(recordTypeInfo.type === 'emigration');
 
       // Extract primary person details from always-visible section
       const primaryDetails = extractPrimaryPersonDetails();
@@ -934,6 +953,16 @@ async function gatherData() {
       for (const field of primaryDetails.fields) ownFields[field.label.toLowerCase()] = field.value;
       const pageName = (primaryPerson && primaryPerson.current && primaryPerson.name) ||
                        [ownFields['given name'], ownFields['last name']].filter(Boolean).join(' ');
+      // Migration lists give the open person's role only in their own fields, and
+      // emigrant protocols give none
+      if (primaryPerson && primaryPerson.current && !primaryPerson.role) {
+        if (ownFields['role']) {
+          primaryPerson.role = ownFields['role'].toLowerCase();
+          primaryPerson.roleEnglish = translateRole(primaryPerson.role);
+        } else if (recordTypeInfo.type === 'emigration') {
+          primaryPerson.roleEnglish = 'Emigrant';
+        }
+      }
 
       const citation = buildCitation({
         recordTypeInfo: recordTypeInfo, recordType: recordType, date: date,
@@ -954,6 +983,7 @@ async function gatherData() {
         'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
         'confirmation': 'Confirmation',
         'census': 'Census', 'probate': 'Probate', 'emigration': 'Emigration',
+        'out_migration': 'Out-migration', 'in_migration': 'In-migration',
         'tax': 'Tax', 'school': 'School', 'landed_property': 'Property',
         'fire_insurance': 'Fire Insurance'
       };

@@ -21,6 +21,10 @@
 // - genders[] drops every record without a gender (many censuses): never use it.
 // - Census rows do give a birth year (from the age), so the census query filters on
 //   birth_year; jt[] picks the census years, sc[]=em the emigration sources.
+// - Emigrant protocols (sc[]=em, from 1867) give every emigrant's age, children's
+//   too, so that query also filters on birth_year. Church books' moving lists
+//   (lt[]=uf out-migrated, fl in- and out-migrated; role utflytter) cover moves
+//   within Norway as well as emigration, from about 1812, and often give no age.
 
 const DA_SEARCH_URL = 'https://www.digitalarkivet.no/en/search/persons/advanced';
 const RESULTS_PER_PAGE = 50;
@@ -32,7 +36,7 @@ const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|dtr\.?|dr\.?|d\.)$/i;
 
 const RECORD_TYPES = {
   pd: 'Baptism', pk: 'Confirmation', pv: 'Marriage', pg: 'Burial', pf: 'Census',
-  pe: 'Emigration', pa: 'Probate', pt: 'Tax', pl: 'School', pm: 'Property',
+  pe: 'Emigration', pu: 'Out-migration', pi: 'In-migration', pa: 'Probate', pt: 'Tax', pl: 'School', pm: 'Property',
   pb: 'Fire insurance', pc: 'Other'
 };
 
@@ -46,6 +50,7 @@ const ROLES = {
   'avdød': 'Deceased', 'avdøde': 'Deceased', 'ektemann': 'Husband', 'kone': 'Wife',
   'ektefelle': 'Spouse', 'dåpsvitne': 'Witness', 'forsørger': 'Provider', 'forsørgjar': 'Provider',
   'pårørende': 'Relative', 'innflytter': 'In-migrant', 'utflytter': 'Out-migrant',
+  'innflyttar': 'In-migrant', 'utflyttar': 'Out-migrant',
   'dødfødt': 'Stillborn', 'forelder': 'Parent', 'person': ''
 };
 
@@ -337,11 +342,21 @@ function buildQueries(criteria) {
     if (lifeFrom && !censuses.length) q.skip = 'No Norwegian census was taken in the person’s lifetime.';
   }
 
-  // Emigration: emigrant protocols and other emigration sources, from about age 10
+  // Emigration: emigrant protocols and other emigration sources, from birth (children
+  // emigrated with their parents, each with an entry), by birth year
   {
-    const from = P.birth ? P.birth.from + 10 : lifeFrom, to = lifeTo;
-    query('emigration', 'Emigration', { ...named, 'sc[]': 'em', ...years(from, to) },
-      [nameText, 'emigration sources', span(from, to)]);
+    const from = lifeFrom, to = lifeTo;
+    const born = P.birth ? { birth_year_from: P.birth.from - 3, birth_year_to: P.birth.to + 3 } : {};
+    query('emigration', 'Emigration', { ...named, 'sc[]': 'em', ...years(from, to), ...born },
+      [nameText, 'emigration sources', span(from, to), P.birth && 'born ' + span(born.birth_year_from, born.birth_year_to)]);
+  }
+
+  // Moving away: church books' lists of people moving out of the parish (within
+  // Norway too), from birth (children moved with their parents)
+  {
+    const from = lifeFrom, to = lifeTo;
+    query('moving', 'Moving away (church books)', { ...named, 'lt[]': ['uf', 'fl'], ...years(from, to) },
+      [nameText, 'moving out of a parish', span(from, to)]);
   }
 
   // Burial

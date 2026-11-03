@@ -187,7 +187,8 @@ Built from the FS person. Each query targets one life event.
 | Marriage | given + last name, role `brudgom`/`brud`, related = spouse's first name | marriage year ±1, else birth + 18…50 |
 | Children's baptisms | given + last name, role `far`/`mor` (one query; it also finds children FS doesn't have, and known children are matched by birth year when scoring) | birth + 16 … birth + 50 (mother) or 70 (father), up to death |
 | Census | given + last name, `jt[]` = census years within the lifespan, `birth_year` ±3 (census rows do record it) | census year |
-| Emigration | given + last name, emigration sources (`sc[]=em`); church-book departure lists are still to do (milestone 7) | from age 10 to death |
+| Emigration | given + last name, emigration sources (`sc[]=em`: emigrant protocols, passenger lists, passports), `birth_year` ±3 (protocols give the age) | birth to death |
+| Moving away | given + last name, church books' moving lists (`lt[]=uf`, `fl`: out-migrated, in- and out-migrated); no `birth_year`, since many give no age | birth to death |
 | Burial | given + last name, role `avdød`; skipped when FS has the death outside Norway | death/burial year … +1 |
 | Fallback | given + last name only | lifespan |
 
@@ -315,6 +316,17 @@ Each milestone is testable on its own.
 7. **Emigration:** find how DA's emigration sources are searched (emigrant
    protocols, church-book departure lists: their `sc[]`/`lt[]` codes and roles), add
    the query, and make sure Phase 3 extracts those records.
+   Done: emigration sources are `sc[]=em` (records `pe`); church books' moving lists
+   are `lt[]=uf`/`if`/`fl` (records `pu` out-migration, `pi` in-migration, roles
+   utflytter/innflytter). The Emigration query now runs from birth with
+   `birth_year` ±3, and a "Moving away" query (`lt[]=uf`, `fl`) adds a Moving group
+   and a "Moving away" record kind. Phase 3 extracts both: an emigrant protocol's
+   group of travellers (date from the group header), page and line go into the
+   citation, its travel group (unrelated people) isn't listed as a family, and the
+   emigrant is the principal ("1882, Anna Lindemann - Oslo police district, …
+   Emigrant protocols, no. 9: 1882-1883 - Emigration"); a moving record takes its
+   role from the person's own fields. Ages like "27 A." become "27 years", and town
+   abbreviations (Fr.stad, Fr.hald, Chr.sand, Chr.sund) are place aliases.
 8. **Verification:** census household check; tune scoring against the test tree.
 9. **Docs:** update CLAUDE.md and the README.
 

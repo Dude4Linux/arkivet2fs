@@ -4,7 +4,7 @@
 // placeAliases() from da_places.js.
 
 // The groups, in the order they're shown
-const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", 'Census', 'Emigration', 'Burial', 'Other'];
+const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", 'Census', 'Emigration', 'Moving', 'Burial', 'Other'];
 
 // The youngest a person can be in a role; younger means a namesake
 const MIN_AGE = { Groom: 16, Bride: 16, Father: 16, Mother: 15, Godparent: 12, Confirmand: 12, Witness: 16 };
@@ -20,6 +20,7 @@ function groupOf(hit) {
     case 'Burial': return hit.role === 'Deceased' ? 'Burial' : 'Other';
     case 'Census': return 'Census';
     case 'Emigration': return 'Emigration';
+    case 'Out-migration': case 'In-migration': return 'Moving';
     default: return 'Other';
   }
 }
