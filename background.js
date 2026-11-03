@@ -529,11 +529,30 @@ function gatherData() {
     const lines = [];
     if (permanentId) lines.push('Permanent ID: ' + permanentId);
 
-    // Primary person details from always-visible section — all non-empty fields
+    // Primary person details from always-visible section — all non-empty fields.
+    // DA splits some dates into "Date of death: 04-12" + "Year of death: 1854";
+    // those are combined into one line, "Date of death: 12 April 1854".
     if (primaryDetails && primaryDetails.fields) {
-      for (const field of primaryDetails.fields) {
-        lines.push(field.label + ': ' + field.value);
-      }
+      const fields = primaryDetails.fields;
+      const yearFor = {};  // event ("death", "birth") -> index of its year field
+      fields.forEach(function(field, i) {
+        const m = field.label.match(/^year of (.+)$/i) || field.label.match(/^(.+?) year$/i);
+        if (m) yearFor[m[1].toLowerCase()] = i;
+      });
+      const merged = new Set();
+      const values = fields.map(function(field) {
+        const m = field.label.match(/^date of (.+)$/i);
+        const yearIdx = m ? yearFor[m[1].toLowerCase()] : undefined;
+        const year = yearIdx !== undefined && fields[yearIdx].value.match(/^\d{4}$/);
+        if (year && /^\d{1,2}-\d{1,2}$/.test(field.value)) {
+          merged.add(yearIdx);
+          return formatDate(year[0] + '-' + field.value);
+        }
+        return field.value;
+      });
+      fields.forEach(function(field, i) {
+        if (!merged.has(i)) lines.push(field.label + ': ' + values[i]);
+      });
     }
 
     // Remaining record details, in page order
@@ -665,10 +684,32 @@ function gatherData() {
       permalink: url, accessDate: accessDate, scans: scans
     });
 
-    // FS title: "<open person> - <source title>" for every record type, e.g.
-    //   "Andreas Olsen - Church book from Garnisonsmenigheten parish 1828-1841 (0301M4)"
-    //   "Andreas Olsen - 1891 census for 0529 Vestre Toten"
-    const title = [pageName, sourceInfo.sourceTitle].filter(Boolean).join(' - ') ||
+    // FS title: "<year>, <open person> - <source title> - <record type>", following
+    // FamilySearch's usual year-first style, e.g.
+    //   "1836, Hans Peder - Garnisonsmenigheten parish 1828-1841 (0301M4) - Birth"
+    //   "1891, Andreas Olsen - 0529 Vestre Toten - Census"
+    // "Church book from" / "1891 census for" are dropped to keep titles short (the
+    // citation keeps the full source title), and the type is left off when the
+    // source title already names it (probate).
+    const titleTypes = {
+      'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
+      'census': 'Census', 'probate': 'Probate', 'emigration': 'Emigration',
+      'tax': 'Tax', 'school': 'School', 'landed_property': 'Property',
+      'fire_insurance': 'Fire Insurance'
+    };
+    // Unmapped types (e.g. confirmations): singular of DA's section header
+    const titleType = titleTypes[recordTypeInfo.type] || recordType.replace(/s$/, '');
+    const titleSource = sourceInfo.sourceTitle
+      .replace(/^church book from\s+/i, '')
+      .replace(/^\d{4} census for\s+/i, '');  // year is already at the front
+    const titleYear = (recordDate.match(/\d{4}/) || [''])[0];
+    // DA marks name variants with %...% (e.g. "Andreas Olsen %Anton Olsen%") — drop them
+    const titleName = pageName.replace(/%[^%]*%/g, ' ').replace(/\s+/g, ' ').trim();
+    const titleParts = [[titleYear, titleName].filter(Boolean).join(', '), titleSource];
+    if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {
+      titleParts.push(titleType);
+    }
+    const title = titleParts.filter(Boolean).join(' - ') ||
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
 
     // Build enriched notes with all people and details

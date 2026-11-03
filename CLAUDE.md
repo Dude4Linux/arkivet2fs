@@ -32,8 +32,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - `extractSourceInfo()` — extracts parish, county, source title from page title and detail sections
     - `extractScans()` — scanned-image link(s) from the `#scannedImageLink` toolbar button (`data-scans` holds image permanent IDs: `kb` church book, `ft` census); empty when the record has no scan
     - `buildCitation()` — Evidence Explained–style citation (see `citation.md`): place general→specific (Norway, county, parish/district/municipality from the source title, church), quoted source title, record section, census district/residence/household, protocol/page/entry, entry description (`describeEntry()`), date; then "database, National Archives of Norway, Digitalarkivet, Permanent ID <id> (<permanent link> : accessed <today>)" and "scanned image <id> (<link>)"
-    - FS title is "<open person> - <source title>" for every record type
-    - `buildNotes()` — permanent ID, the open person's own fields, record details not in the citation (banns, remarks, ...), and all persons with their roles
+    - FS title is "<year>, <open person> - <source title> - <record type>" (Birth, Marriage, Burial, ...), FamilySearch's year-first style; "Church book from" / "<year> census for" are dropped from the source title, DA name variants (`%...%`) are stripped from the name, and the type is omitted when the source title already names it (probate)
+    - `buildNotes()` — permanent ID, the open person's own fields (split dates like "Date of death: 04-12" + "Year of death: 1854" are merged), record details not in the citation (banns, remarks, ...), and all persons with their roles
   - **`showErrorMessage()`**: Chrome notification-based error display.
 - **content.js** — Content script injected into FamilySearch. Listens for `fillForm` message, checks it landed on the SourceBox (not a sign-in redirect), clicks the "Create Source" button, waits for form elements (with 10s timeout), and fills them using `dispatchEvent` to trigger React's synthetic event handling. Failures are sent back to `background.js` as `fillFormError`.
 
