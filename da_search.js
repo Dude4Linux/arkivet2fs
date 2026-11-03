@@ -128,7 +128,9 @@ function profile(criteria) {
   const first = (id) => criteria[id][0] || {};
   const names = criteria.name.filter((n) => n.givenName || n.surname);
   const b = first('birth'), m = first('marriage'), d = first('death');
-  const relative = (r, prefix) => ({ given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim() });
+  // A relative turned off in the sidebar (q.fatherSkip, ...) isn't used at all
+  const relative = (r, prefix) => (r[prefix + 'Skip'] ? { given: '', surname: '' }
+    : { given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim() });
   const P = {
     given: firstWord(names[0] && names[0].givenName),
     givenNames: ((names[0] && names[0].givenName) || '').trim().split(/\s+/).filter(Boolean),
@@ -142,7 +144,7 @@ function profile(criteria) {
     father: relative(first('father'), 'father'),
     mother: relative(first('mother'), 'mother'),
     spouses: criteria.spouse.map((s) => relative(s, 'spouse')).filter((s) => s.given),
-    children: criteria.child.map((c) => ({ ...relative(c, 'child'), year: year(c.childBirthYear) })).filter((c) => c.given || c.year),
+    children: criteria.child.filter((c) => !c.childSkip).map((c) => ({ ...relative(c, 'child'), year: year(c.childBirthYear) })).filter((c) => c.given || c.year),
     residences: criteria.residence.map((r) => (r.residencePlace || '').trim()).filter(Boolean),
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };
@@ -236,6 +238,13 @@ function buildQueries(criteria) {
     ? { fields: { 'm[]': placeCodes }, text: placeCodes.map(municipalityName).join(', ') }
     : null;
   const years = (from, to) => ({ event_year_from: from, event_year_to: to });
+  // Places chosen under Where to search: every query is limited to them (DA finds
+  // records in any of the chosen counties and municipalities)
+  const picked = criteria.where || { m: [], c: [] };
+  const chosen = picked.m.length || picked.c.length ? {
+    fields: { 'm[]': picked.m, 'c[]': picked.c },
+    text: [...picked.c.map(countyName), ...picked.m.map(municipalityName)].join(', ')
+  } : null;
 
   // Own baptism: the child is usually given without a surname, so search on the first
   // given name and a parent. The parent's surname is used only when it's a family
@@ -262,17 +271,18 @@ function buildQueries(criteria) {
   // Own baptism by name and birthplace, for when the parents are unknown or were
   // transcribed differently: up to two given names (all must match), the
   // municipalities the FS birthplace names, and the birth years
+  // (or the places chosen under Where to search)
   if (P.given) {
     const from = P.birth && P.birth.from, to = P.birth && P.birth.to + 1;
-    const codes = municipalityCodes(P.birthPlace);
+    const codes = chosen ? [] : municipalityCodes(P.birthPlace);
     const givens = P.givenNames.slice(0, 2).map(givenStem).join(' ');
-    const where = codes.map(municipalityName).join(', ');
-    const q = query('baptism-place', 'Baptism by birthplace',
+    const where = chosen ? chosen.text : codes.map(municipalityName).join(', ');
+    const q = query('baptism-place', chosen ? 'Baptism in the chosen places' : 'Baptism by birthplace',
       { firstname: givens, 'roles[]': 'barn', ...years(from, to), 'm[]': codes },
-      [givens + ' as child', where, span(from, to)]);
-    if (codes.length) q.reasons.push('baptised in ' + where.replace(/, ([^,]*)$/, ' or $1'));
+      [givens + ' as child', !chosen && where, span(from, to)]);
+    if (where) q.reasons.push('baptised in ' + where.replace(/, ([^,]*)$/, ' or $1'));
     if (!P.birth) q.skip = 'Add a birth year to search for the baptism by birthplace.';
-    else if (!codes.length) q.skip = P.birthPlace ? 'No DA municipality in the birthplace (' + P.birthPlace + ').' : 'Add a birthplace to search for the baptism by birthplace.';
+    else if (!where) q.skip = P.birthPlace ? 'No DA municipality in the birthplace (' + P.birthPlace + ').' : 'Add a birthplace to search for the baptism by birthplace.';
   }
 
   // Confirmation, usually at 14–16
@@ -355,10 +365,17 @@ function buildQueries(criteria) {
     [nameText, span(lifeFrom, lifeTo)]);
 
   // Queries on the name get the other names to fall back on; queries without a
-  // place filter get the FS places to narrow to
+  // place filter get the FS places to narrow to, or the chosen places instead.
+  // Record kinds turned off in the sidebar (criteria.off) aren't run.
+  const off = criteria.off || [];
   for (const q of queries) {
+    q.kind = q.id.replace(/-.*$/, '');
     if (q.params.has('lastname')) q.variants = variants;
-    if (narrow && !q.params.has('m[]')) q.narrow = narrow;
+    if (chosen) {
+      q.params = withFields(q.params, chosen.fields);
+      q.summary += ' · in ' + chosen.text;
+    } else if (narrow && !q.params.has('m[]')) q.narrow = narrow;
+    if (off.includes(q.kind) && !q.skip) q.skip = 'Turned off under Record kinds.';
   }
   return queries;
 }
@@ -448,37 +465,45 @@ function withFields(params, fields) {
 const firstPage = async (params) => parseResults(await fetchResultPage(daSearchUrl(params)));
 
 // Run a query → { total, hits, params, notes }: up to MAX_PAGES result pages of the
-// search actually used. Finding nothing, it tries the query's variants (other
-// names) in turn; finding more hits than it reads, it narrows to the FS places,
-// unless that leaves none. `params` is the search used; `notes` say what changed.
+// search actually used. Finding more hits than it reads, it narrows to the FS
+// places, unless that leaves none. Finding nothing, it tries the query's variants
+// (other names) in turn, but only uses one that finds no more hits than are read
+// (after narrowing): more are mostly other people. `params` is the search used;
+// `notes` say what changed.
 async function runQuery(query) {
-  let params = query.params;
-  let first = await firstPage(params);
-  const notes = [];
-  if (first.total === 0 && query.variants && query.variants.length) {
-    const tried = [params.get('firstname') + ' ' + params.get('lastname')];
-    for (const variant of query.variants) {
-      const p = withFields(query.params, variant.fields);
+  const limit = MAX_PAGES * RESULTS_PER_PAGE;
+  // A search, narrowed when it finds too many → { params, first, narrowed }
+  const search = async (params) => {
+    const first = await firstPage(params);
+    if (first.total > limit && query.narrow) {
+      const p = withFields(params, query.narrow.fields);
       const result = await firstPage(p);
-      if (result.total) {
-        notes.push('none as ' + tried.join(', ') + '; searched as ' + variant.text);
-        params = p;
-        first = result;
-        break;
-      }
-      tried.push(variant.text);
+      if (result.total) return { params: p, first: result, narrowed: first.total };
     }
-    if (first.total === 0) notes.push('none as ' + tried.join(', '));
-  }
-  if (first.total > MAX_PAGES * RESULTS_PER_PAGE && query.narrow) {
-    const p = withFields(params, query.narrow.fields);
-    const result = await firstPage(p);
-    if (result.total) {
-      notes.push(first.total + ' hits, so only in ' + query.narrow.text);
-      params = p;
-      first = result;
+    return { params, first, narrowed: 0 };
+  };
+  let used = await search(query.params);
+  const notes = [];
+  if (used.first.total === 0 && query.variants && query.variants.length) {
+    const tried = [query.params.get('firstname') + ' ' + query.params.get('lastname')];
+    const tooMany = [];
+    let found = null;
+    for (const variant of query.variants) {
+      const result = await search(withFields(query.params, variant.fields));
+      if (result.first.total > limit) tooMany.push(variant.text + ' (' + result.first.total + ')');
+      else if (result.first.total) { found = { ...result, text: variant.text }; break; }
+      else tried.push(variant.text);
     }
+    if (found) {
+      notes.push('none as ' + tried.join(', ') + '; searched as ' + found.text);
+      used = found;
+    } else {
+      notes.push('none as ' + tried.join(', '));
+    }
+    if (tooMany.length) notes.push('too many to use as ' + tooMany.join(', '));
   }
+  if (used.narrowed) notes.push(used.narrowed + ' hits, so only in ' + query.narrow.text);
+  const { params, first } = used;
   const hits = first.hits;
   const pages = Math.min(MAX_PAGES, Math.ceil(first.total / RESULTS_PER_PAGE));
   for (let page = 2; page <= pages; page++) {

@@ -11,7 +11,9 @@
   ],
   "host_permissions": [
     "https://*.familysearch.org/*",
-    "https://*.digitalarkivet.no/*"
+    "https://*.digitalarkivet.no/*",
+    "https://www.dokpro.uio.no/*",
+    "https://ws.geonorge.no/*"
   ],
   "background": {
     "service_worker": "background.js"

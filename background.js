@@ -1,3 +1,6 @@
+// Place tables and the farm check (personToQuery)
+importScripts('da_places.js', 'farms.js');
+
 chrome.action.onClicked.addListener((tab) => {
   console.log('Extension icon clicked');
 
@@ -85,27 +88,31 @@ chrome.runtime.onMessage.addListener((request) => {
 // the page opens next to the FS tab.
 chrome.runtime.onMessage.addListener((request, sender) => {
   if (request && request.action === 'searchDA') {
-    const url = chrome.runtime.getURL('search.html') + '?' + personToQuery(request.person).toString();
-    const opener = sender.tab;
-    chrome.tabs.create(opener ? { url: url, index: opener.index + 1, openerTabId: opener.id } : { url: url });
+    personToQuery(request.person).then((q) => {
+      const url = chrome.runtime.getURL('search.html') + '?' + q.toString();
+      const opener = sender.tab;
+      chrome.tabs.create(opener ? { url: url, index: opener.index + 1, openerTabId: opener.id } : { url: url });
+    });
   }
 });
 
 // Patronymic surnames: -sen/-søn/-son, -datter/-dotter and their abbreviations
 const PATRONYMIC = /(s[eøo]n|datter|dotter|dtr\.?|sdr?\.?)$/i;
 
-// Split an FS full name into given name(s), surname, and farm. Names in this tree are
-// patronymic, with the farm as an address: "Tollef Johansen Skofteland" → given "Tollef",
-// surname "Johansen", farm "Skofteland". Without a patronymic, the last word is the
+// Split an FS full name into given name(s), surname, and what follows the surname.
+// Names in this tree are patronymic, often with the farm as an address: "Tollef
+// Johansen Skofteland" → given "Tollef", surname "Johansen", rest "Skofteland". The
+// rest can also be a family or place-derived name (Lindeman), so personToQuery checks
+// it against the farm registers (farms.js). Without a patronymic, the last word is the
 // surname ("Anna Magdaline Lindeman").
 function splitName(full) {
   const words = (full || '').split(/\s+/).filter(Boolean);
-  if (words.length < 2) return { given: words.join(' '), surname: '', farm: '' };
+  if (words.length < 2) return { given: words.join(' '), surname: '', rest: '' };
   const i = words.findIndex((w, k) => k > 0 && PATRONYMIC.test(w));
   if (i > 0) {
-    return { given: words.slice(0, i).join(' '), surname: words[i], farm: words.slice(i + 1).join(' ') };
+    return { given: words.slice(0, i).join(' '), surname: words[i], rest: words.slice(i + 1).join(' ') };
   }
-  return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], farm: '' };
+  return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], rest: '' };
 }
 
 // The years in an FS date ("11 November 1764", "1764", "1726–Deceased")
@@ -116,7 +123,7 @@ function yearsOf(date) {
 // FS person (from fs_person.js) → search criteria, named like FS's record search
 // (q.givenName, q.surname.1, q.birthLikeDate.from, ...; repeats get .1, .2, ...).
 // Year ranges are ±2, as on FS.
-function personToQuery(person) {
+async function personToQuery(person) {
   const q = new URLSearchParams();
   const suffix = (k) => (k === 0 ? '' : '.' + k);
   const set = (name, value) => { if (value !== '' && value != null) q.set(name, String(value)); };
@@ -128,18 +135,45 @@ function personToQuery(person) {
 
   set('treeref', person.pid);
 
-  // Names: the primary name, then alternates (without repeats)
+  // The person's places, for telling farms from family names
+  const places = [person.birth, person.christening, person.death, person.burial, ...(person.residences || []),
+    ...(person.families || []).map((f) => f.marriage)].map((e) => e && e.place).filter(Boolean);
+
+  // Names: the primary name, then alternates (without repeats). A word after the
+  // patronymic is a farm only when a farm of that name lies in the person's
+  // municipality or county (any farm, when FS has no places); otherwise it's a family
+  // or place-derived name (Lindeman), searched as the surname, with the patronymic as
+  // another name. A last name without a patronymic stays the surname, and is a farm
+  // too when one lies in the person's places.
+  const names = [];
   const farms = [];
   const seen = new Set();
-  let k = 0;
   for (const full of [person.name, ...(person.altNames || [])]) {
     const key = (full || '').toLowerCase().replace(/\s+/g, ' ').trim();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const n = splitName(full);
-    set('q.givenName' + suffix(k), n.given);
-    set('q.surname' + suffix(k), n.surname);
-    if (n.farm && !farms.includes(n.farm)) farms.push(n.farm);
+    names.push(splitName(full));
+  }
+  const checks = await Promise.all(names.map((n) => {
+    if (n.rest) return farmNear(n.rest, places, true);
+    if (n.surname && !PATRONYMIC.test(n.surname)) return farmNear(n.surname, places);
+    return { farm: false };
+  }));
+  const entries = [];
+  names.forEach((n, i) => {
+    const farm = checks[i].farm && (n.rest || n.surname);
+    if (farm && !farms.includes(farm)) farms.push(farm);
+    if (n.rest && !checks[i].farm) entries.push({ given: n.given, surname: n.rest }, { given: n.given, surname: n.surname });
+    else entries.push({ given: n.given, surname: n.surname });
+  });
+  const named = new Set();
+  let k = 0;
+  for (const e of entries) {
+    const key = (e.given + ' ' + e.surname).toLowerCase();
+    if (named.has(key)) continue;
+    named.add(key);
+    set('q.givenName' + suffix(k), e.given);
+    set('q.surname' + suffix(k), e.surname);
     k++;
   }
   set('q.sex', person.gender);

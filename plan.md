@@ -202,10 +202,22 @@ cope with FS entries others made with a farm in the name.
   - The first word(s) up to the patronymic are the given name(s).
   - The patronymic (*-sen/-søn/-son, -datter/-dotter/-dtr./-sd.*) is the surname
     used in queries.
-  - Anything after the patronymic ("Ole Olsen **Forkerud**") is a farm. It goes to
-    the sidebar as a place (DA `domicile` and scoring), not into `lastname`.
+  - Anything after the patronymic ("Ole Olsen **Forkerud**") is usually a farm, but
+    it can be a family or place-derived name (Lindeman). So it's
+    checked against the farm registers (farms.js): Rygh's *Norske Gaardnavne*
+    (University of Oslo, the 1886 matrikkel's farms with their historical
+    municipality and amt) and, when Rygh has none nearby, Kartverket's place-name
+    register (today's farms and holdings, Gard/Bruk; "Nedre Lunde" is also tried
+    as "Lunde"). It's a farm only when a farm of that name lies in a municipality
+    or county of the person's FS places (any farm, when FS has no places): then it
+    goes to the sidebar as a farm (DA `domicile` and scoring), not into `lastname`.
+    Otherwise it's the surname, and the patronymic becomes another name, tried when
+    the surname finds nothing. Lindeman is a farm only in Bremsnes (Romsdal), so for
+    Anna's family near Oslo and Fredrikstad it's a surname. When neither register
+    answers (5 s each), it's taken as a surname.
   - A name with no patronymic (a fixed family name like Lindeman) is used whole as
-    the surname.
+    the surname; when a farm of that name lies in the person's places, it's also a
+    farm ("Tollef Skofteland" in Hægebostad).
 - **Generate patronymic spellings** when a query finds nothing, e.g. Tollefsdatter →
   Tollefsd., Tollefsdr.; Olsen → Olssen, Olsøn. A trailing `*` on the stem
   (Tollefs*, Ols*) covers the endings; spellings of the stem itself are separate
@@ -276,6 +288,15 @@ Each milestone is testable on its own.
    group. Per-child baptism queries were left out (one parent query finds them
    all, with fewer requests); a "too young for the role" check separates namesakes.
 5. **Criteria panel:** editable criteria, reruns, "Open on DA" links.
+   Done: each relative has a checkbox to use them or not (`q.fatherSkip=1`, ...);
+   "Where to search" picks DA counties and municipalities by type-ahead (`m=`,
+   `c=`; DA finds records in any of them), suggesting the FS places'
+   municipalities without choosing them, and limits every search to them;
+   "Record kinds" turns searches off (`off=census,other`). Checkboxes and places
+   search again at once, other fields on Search; result pages are cached, so only
+   the changed searches go to DA. A search that finds too many hits or none says
+   what to change, next to its count. Confirmation and emigration events aren't in
+   the sidebar: FS rarely has them, and their searches use the birth year.
 6. **Name and place rules:** patronymic spellings, farm names, municipality matching
    with the cached code list.
    Done: given-name stems (`givenStem`, Anna → Ann*), consonant matching when
@@ -285,6 +306,7 @@ Each milestone is testable on its own.
    other names (the father's patronymic, FS alternate names, patronymic spellings
    like Johans*/Johannes*), and one with over 100 hits is narrowed to the FS places'
    municipalities; the status says which, and "Open on DA" opens the search used.
+   A retry that still finds over 100 hits after narrowing isn't used.
    Farms (words after the patronymic in an FS name, or `q.farm`) get a "Records at
    <farm>" query (DA's `domicile`). It found Anna's baptism (pd99000000000903,
    parents mistranscribed) and her 1875 census (pf99000000000904); her confirmation

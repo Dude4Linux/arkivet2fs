@@ -195,7 +195,11 @@ const PLACE_ALIASES = [
   ['rogaland', 'stavanger amt'],
   ['hordaland', 'søndre bergenhus'],
   ['sogn og fjordane', 'nordre bergenhus'],
-  ['møre og romsdal', 'romsdal']
+  ['møre og romsdal', 'romsdal'],
+  ['sør-trøndelag', 'søndre trondhjem'],
+  ['nord-trøndelag', 'nordre trondhjem'],
+  ['troms', 'tromsø amt'],
+  ['finnmark', 'finmarken']
 ];
 
 // Municipalities searched along with another: Oslo's suburbs and several of its
@@ -210,6 +214,10 @@ function placeAliases(name) {
 }
 
 function municipalityName(code) { return DA_MUNICIPALITIES[code] || code; }
+function countyName(code) { return DA_COUNTIES[code] || code; }
+// Every municipality's or county's code (for the search page's place picker)
+function municipalityCodeList() { return Object.keys(DA_MUNICIPALITIES); }
+function countyCodeList() { return Object.keys(DA_COUNTIES); }
 
 // Folded name → codes, for municipalities and counties
 let placeIndex = null;

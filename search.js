@@ -20,10 +20,11 @@ const GROUPS = [
   { id: 'death', title: 'Death or burial', fields: eventFields('deathLike') },
   { id: 'farm', title: 'Farms', repeat: true, add: 'Add a farm',
     fields: [{ name: 'farm', label: 'Farm', wide: true }] },
-  { id: 'father', title: 'Father', fields: relativeFields('father') },
-  { id: 'mother', title: 'Mother', fields: relativeFields('mother') },
-  { id: 'spouse', title: 'Spouses', repeat: true, add: 'Add a spouse', fields: relativeFields('spouse') },
-  { id: 'child', title: 'Children', repeat: true, add: 'Add a child',
+  // Relatives have a checkbox to use them in the searches or not (`skip`)
+  { id: 'father', title: 'Father', skip: 'fatherSkip', fields: relativeFields('father') },
+  { id: 'mother', title: 'Mother', skip: 'motherSkip', fields: relativeFields('mother') },
+  { id: 'spouse', title: 'Spouses', repeat: true, add: 'Add a spouse', skip: 'spouseSkip', fields: relativeFields('spouse') },
+  { id: 'child', title: 'Children', repeat: true, add: 'Add a child', skip: 'childSkip',
     fields: [...relativeFields('child'), { name: 'childBirthYear', label: 'Born', type: 'year' }] }
 ];
 
@@ -42,7 +43,16 @@ const param = (field, k) => 'q.' + field.name + suffix(k);
 
 // --- Criteria <-> address -----------------------------------------------------------
 
-// The address's criteria as { groupId: [ {fieldName: value}, ... ] }
+// Record kinds that can be turned off (the `off` parameter); a query's kind is its
+// id up to the first '-' (baptism-place is a baptism)
+const KINDS = [
+  ['baptism', 'Baptism'], ['confirmation', 'Confirmation'], ['marriage', 'Marriage'],
+  ['children', "Children's baptisms"], ['census', 'Census'], ['emigration', 'Emigration'],
+  ['burial', 'Burial'], ['farm', 'Records at farms'], ['other', 'All records under the name']
+];
+
+// The address's criteria as { groupId: [ {fieldName: value}, ... ], where: { m, c },
+// off: [kind] }. A relative turned off has q.<prefix>Skip=1 (e.g. q.fatherSkip).
 function readCriteria(params) {
   const criteria = {};
   for (const group of GROUPS) {
@@ -54,10 +64,17 @@ function readCriteria(params) {
         // Repeated groups are numbered without gaps; stop at the first empty one
         if (group.repeat) break;
       }
+      if (group.skip) values[group.skip] = params.get('q.' + group.skip + suffix(k)) === '1';
       instances.push(values);
     }
     criteria[group.id] = instances;
   }
+  // Where to search: DA municipality (m) and county (c) codes
+  criteria.where = {
+    m: params.getAll('m').filter((code) => municipalityCodeList().includes(code)),
+    c: params.getAll('c').filter((code) => countyCodeList().includes(code))
+  };
+  criteria.off = (params.get('off') || '').split(',').filter((kind) => KINDS.some(([id]) => id === kind));
   return criteria;
 }
 
@@ -72,9 +89,14 @@ function formToParams(form, treeref) {
       const values = group.fields.map(field => [field, instance.querySelector(`[data-field="${field.name}"]`).value.trim()]);
       if (!values.some(([, v]) => v)) continue;
       for (const [field, v] of values) if (v) params.set(param(field, k), v);
+      const use = instance.querySelector('[data-use]');
+      if (use && !use.checked) params.set('q.' + group.skip + suffix(k), '1');
       k++;
     }
   }
+  for (const chip of form.querySelectorAll('[data-group="where"] .chip')) params.append(chip.dataset.type, chip.dataset.code);
+  const off = [...form.querySelectorAll('[data-group="kinds"] input[data-kind]')].filter((box) => !box.checked).map((box) => box.dataset.kind);
+  if (off.length) params.set('off', off.join(','));
   return params;
 }
 
@@ -91,9 +113,22 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+// Search again now (for checkboxes and places, which have no Search of their own)
+const searchNow = () => document.getElementById('criteria').requestSubmit();
+
 function instanceRow(group, values) {
-  const row = el('div', { class: 'instance' });
+  const row = el('div', { class: 'instance' + (group.skip ? ' has-use' : '') });
   row.style.setProperty('--cols', String(Math.max(2, group.fields.filter(f => !f.wide).length)));
+  if (group.skip) {
+    const use = el('input', { type: 'checkbox', 'data-use': '', title: 'Use in the searches', 'aria-label': 'Use this ' + group.title.toLowerCase().replace(/s$/, '') + ' in the searches' });
+    use.checked = !values[group.skip];
+    row.classList.toggle('off', !use.checked);
+    use.addEventListener('change', () => {
+      row.classList.toggle('off', !use.checked);
+      searchNow();
+    });
+    row.append(use);
+  }
   for (const field of group.fields) {
     let input;
     if (field.type === 'select') {
@@ -133,6 +168,87 @@ function renderSidebar(criteria) {
     }
     container.append(fieldset);
   }
+  container.append(whereGroup(criteria), kindsGroup(criteria));
+}
+
+// A municipality or county as the type-ahead shows it: "Vigmostad (Vest-Agder)",
+// "Vest-Agder (county)"; Oslo and Bergen are counties of one municipality
+function placeLabel(type, code) {
+  if (type === 'c') return countyName(code) + ' (county)';
+  const county = countyName(code.slice(0, 2));
+  const name = municipalityName(code);
+  return county !== name ? name + ' (' + county + ')' : name;
+}
+
+let placeOptions = null; // label → { type, code }, built on first use
+function placesByLabel() {
+  if (!placeOptions) {
+    placeOptions = new Map();
+    for (const code of municipalityCodeList()) placeOptions.set(placeLabel('m', code), { type: 'm', code });
+    for (const code of countyCodeList()) placeOptions.set(placeLabel('c', code), { type: 'c', code });
+  }
+  return placeOptions;
+}
+
+// Where to search: chosen counties and municipalities as chips, a type-ahead to add
+// one, and the municipalities of the FS places as suggestions. None chosen searches
+// all of Norway.
+function whereGroup(criteria) {
+  const fieldset = el('fieldset', { class: 'group', 'data-group': 'where' }, [el('legend', { text: 'Where to search' })]);
+  const chips = el('div', { class: 'chips' });
+  const chosen = [...criteria.where.c.map((code) => ['c', code]), ...criteria.where.m.map((code) => ['m', code])];
+  const has = (type, code) => !!chips.querySelector(`.chip[data-type="${type}"][data-code="${code}"]`);
+  const addChip = (type, code) => {
+    if (has(type, code)) return;
+    const remove = el('button', { type: 'button', class: 'remove', title: 'Remove', 'aria-label': 'Remove ' + placeLabel(type, code), text: '×' });
+    const chip = el('span', { class: 'chip', 'data-type': type, 'data-code': code }, [placeLabel(type, code), remove]);
+    remove.addEventListener('click', () => { chip.remove(); searchNow(); });
+    chips.append(chip);
+  };
+  for (const [type, code] of chosen) addChip(type, code);
+
+  const list = el('datalist', { id: 'da-places' }, [...placesByLabel().keys()].sort((a, b) => a.localeCompare(b, 'nb')).map((label) => el('option', { value: label })));
+  const input = el('input', { type: 'text', list: 'da-places', placeholder: 'County or municipality', 'aria-label': 'Add a county or municipality' });
+  // A complete label picked from the list (or typed) adds the place
+  const pick = () => {
+    const place = placesByLabel().get(input.value.trim());
+    if (!place) return false;
+    input.value = '';
+    addChip(place.type, place.code);
+    searchNow();
+    return true;
+  };
+  input.addEventListener('change', pick);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); pick(); }
+  });
+
+  fieldset.append(chips, el('div', { class: 'place-add' }, [input, list]));
+  // Suggestions: the municipalities the FS places name, not yet chosen
+  const suggested = [...new Set(profile(criteria).places.flatMap(municipalityCodes))].filter((code) => !criteria.where.m.includes(code));
+  if (suggested.length) {
+    fieldset.append(el('div', { class: 'suggest muted' }, ['From the FS places: ', ...suggested.map((code) => {
+      const button = el('button', { type: 'button', class: 'add', text: '+ ' + municipalityName(code) });
+      button.addEventListener('click', () => { addChip('m', code); searchNow(); });
+      return button;
+    })]));
+  }
+  fieldset.append(el('p', { class: 'help muted', text: chosen.length ? 'Every search is limited to these places.' : 'None chosen: all of Norway.' }));
+  return fieldset;
+}
+
+// Record kinds: which searches to run
+function kindsGroup(criteria) {
+  const fieldset = el('fieldset', { class: 'group', 'data-group': 'kinds' }, [el('legend', { text: 'Record kinds' })]);
+  const boxes = el('div', { class: 'kinds' });
+  for (const [kind, label] of KINDS) {
+    const box = el('input', { type: 'checkbox', 'data-kind': kind });
+    box.checked = !criteria.off.includes(kind);
+    box.addEventListener('change', searchNow);
+    boxes.append(el('label', {}, [box, ' ' + label]));
+  }
+  fieldset.append(boxes);
+  return fieldset;
 }
 
 // --- Results --------------------------------------------------------------------------
@@ -173,7 +289,29 @@ function queryRow(query) {
     status,
     link || ''
   ]);
-  return { row, status, link };
+  const hint = el('span', { class: 'query-hint muted', hidden: '' });
+  row.append(hint);
+  return { row, status, link, hint };
+}
+
+// What to change when a search finds too many hits or none, or '' when it's fine
+function hintFor(query, params, total, read) {
+  const placed = params.has('m[]') || params.has('c[]');
+  if (total > read) {
+    return placed ? 'Too many to read them all: narrow the years, or add a farm or a relative.'
+      : 'Too many to read them all: choose a county or municipality under Where to search, or narrow the years.';
+  }
+  if (total > 0) return '';
+  const tries = [];
+  if (params.has('related_first_name')) {
+    tries.push(query.id === 'baptism' ? 'untick the parent (DA’s transcriptions of parents can be far off)' : 'untick the spouse');
+  }
+  if (params.has('m[]') || params.has('c[]')) tries.push('remove places under Where to search');
+  if (params.has('domicile')) tries.push('spell the farm as DA does');
+  tries.push('widen the years');
+  if (params.has('lastname')) tries.push('try another spelling of the surname');
+  const text = tries.join('; ');
+  return 'Nothing found: ' + text + '.';
 }
 
 function renderGroups(container, merged, person) {
@@ -221,6 +359,9 @@ async function renderResults(criteria) {
         : `${total} hit${total === 1 ? '' : 's'}`;
       const text = [...notes, count].join('; ');
       view.status.textContent = text[0].toUpperCase() + text.slice(1);
+      const hint = hintFor(view.query, params, total, hits.length);
+      view.hint.textContent = hint;
+      view.hint.hidden = !hint;
       mergeHits(merged, view.query, hits);
       renderGroups(groups, merged, person);
     } catch (error) {
