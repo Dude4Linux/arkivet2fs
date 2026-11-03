@@ -125,3 +125,23 @@ button.primary {
 .results section { padding: 12px 16px; margin-bottom: 12px; }
 .results section h3 { font-size: 15px; margin: 0 0 6px; }
 .results .muted { color: var(--muted); }
+
+.query-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.query-head h3 { margin: 0; }
+.query-open { margin-left: auto; font-size: 13px; }
+.query-summary { font-size: 13px; margin: 2px 0 8px; }
+.query-status.error { color: #b3261e; }
+@media (prefers-color-scheme: dark) { .query-status.error { color: #f2b8b5; } }
+.hits { list-style: none; margin: 0; padding: 0; }
+.hit {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.hit-type { font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 2px; }
+.hit-name { font-weight: 600; text-decoration: none; }
+.hit-name:hover { text-decoration: underline; }
+.hit-details { font-size: 13px; }
+.hit-source { font-size: 12px; }

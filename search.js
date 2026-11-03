@@ -137,37 +137,80 @@ function renderSidebar(criteria) {
 
 // --- Results --------------------------------------------------------------------------
 
-// DA's advanced person search for the primary name, over the person's lifetime.
-// (Not a birth-year filter: most church records don't give one.)
-function daAdvancedSearchUrl(criteria) {
-  const url = new URL('https://www.digitalarkivet.no/en/search/persons/advanced');
-  const name = criteria.name[0] || {};
-  if (name.givenName) url.searchParams.set('firstname', name.givenName);
-  if (name.surname) url.searchParams.set('lastname', name.surname);
-  const sex = (criteria.sex[0] || {}).sex;
-  if (sex) url.searchParams.append('genders[]', sex === 'Female' ? 'k' : 'm');
-  const from = (criteria.birth[0] || {})['birthLikeDate.from'];
-  const to = (criteria.death[0] || {})['deathLikeDate.to'];
-  if (from) url.searchParams.set('event_year_from', from);
-  if (to) url.searchParams.set('event_year_to', to);
-  return url.toString();
+// Each search (render) gets a number; a newer search makes older ones stop updating
+let generation = 0;
+
+function hitRow(hit) {
+  const details = [
+    hit.role,
+    hit.date,
+    hit.born ? 'b. ' + hit.born : '',
+    hit.domicile,
+    hit.position
+  ].filter(Boolean).join(' · ');
+  return el('li', { class: 'hit' }, [
+    el('span', { class: 'hit-type', text: hit.type }),
+    el('div', { class: 'hit-main' }, [
+      el('a', { href: hit.url, target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
+      el('div', { class: 'hit-details', text: details }),
+      el('div', { class: 'hit-source muted', text: hit.source })
+    ])
+  ]);
 }
 
-function renderResults(criteria) {
+function querySection(query) {
+  const status = el('span', { class: 'query-status muted', text: 'Waiting…' });
+  const list = el('ol', { class: 'hits' });
+  const section = el('section', { class: 'query', 'data-query': query.id }, [
+    el('div', { class: 'query-head' }, [
+      el('h3', { text: query.title }),
+      status,
+      el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on Digital Arkivet' })
+    ]),
+    el('div', { class: 'query-summary muted', text: query.summary }),
+    list
+  ]);
+  return { section, status, list };
+}
+
+async function renderResults(criteria) {
+  const run = ++generation;
   const name = criteria.name[0] || {};
   const fullName = [name.givenName, name.surname].filter(Boolean).join(' ');
   document.getElementById('results-title').textContent = fullName ? 'Results for ' + fullName : 'Results';
   document.title = (fullName ? fullName + ' – ' : '') + 'Digital Arkivet search';
 
   const results = document.getElementById('results');
-  const link = el('a', { href: daAdvancedSearchUrl(criteria), target: '_blank', rel: 'noopener', text: 'Open this name search on Digital Arkivet' });
-  results.replaceChildren(
-    el('section', {}, [
-      el('h3', { text: 'Searching Digital Arkivet' }),
-      el('p', { class: 'muted', text: 'Automatic searches for this person\'s baptism, confirmation, marriage, children, censuses, emigration and burial will be listed here.' }),
-      el('p', {}, [link])
-    ])
-  );
+  const queries = buildQueries(criteria);
+  if (queries.length === 0) {
+    results.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'Enter a given name or surname to search.' })]));
+    return;
+  }
+  const views = queries.map((query) => ({ query, ...querySection(query) }));
+  results.replaceChildren(...views.map((v) => v.section));
+
+  // One query at a time: DA rate-limits automated traffic
+  for (const view of views) {
+    if (run !== generation) return;
+    if (view.query.skip) {
+      view.status.textContent = view.query.skip;
+      continue;
+    }
+    view.status.textContent = 'Searching…';
+    try {
+      const { total, hits } = await runQuery(view.query);
+      if (run !== generation) return;
+      view.status.textContent = total === 0 ? 'No hits'
+        : total > hits.length ? `${total} hits, showing the first ${hits.length}`
+        : `${total} hit${total === 1 ? '' : 's'}`;
+      view.list.replaceChildren(...hits.map(hitRow));
+    } catch (error) {
+      if (run !== generation) return;
+      view.status.textContent = error.message;
+      view.status.classList.add('error');
+      if (/refusing/.test(error.message)) break;
+    }
+  }
 }
 
 // --- Page -----------------------------------------------------------------------------

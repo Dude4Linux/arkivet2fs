@@ -67,7 +67,17 @@ The search is `/en/search/persons/advanced` (GET).
   - Each hit is a `.unit` with: a name link to the record (`/view/NNN/<permanent ID>`),
     "(b. 1764-11-11, Hægebostad)" when known, gender, domicile, event date, position,
     role, and the source title.
-- Wildcards aren't allowed: "special search characters will result in 0 hits".
+- **Wildcards:** DA's help says "special search characters will result in 0 hits",
+  but a **trailing `*`** works on first and last names, including the related
+  person's ("Per" + "Aslaks*" → 69 hits, and DA still adds Joen/John for the first
+  name; "Anna*" + "Lindem*" → 66). A `*` inside a word ("J*n", "Tol*fs*") or a `?`
+  finds nothing useful.
+- **Given names match word by word:** "Anna" matches "Anna Kristine", but
+  "Anna Magdaline" finds nothing when DA spells it "Magdalene". Search on the first
+  given name.
+- **`genders[]` drops records with no gender,** which many censuses are: with
+  `genders[]=k`, Anna's 1870 census (pf99000000000906) is missing. Don't filter on
+  gender; use it for scoring.
 
 ### Experiments (Per Aslaksen)
 
@@ -197,8 +207,9 @@ cope with FS entries others made with a farm in the name.
   - A name with no patronymic (a fixed family name like Lindeman) is used whole as
     the surname.
 - **Generate patronymic spellings** when a query finds nothing, e.g. Tollefsdatter →
-  Tollefsd., Tollefsdr.; Olsen → Olssen, Olsøn. Since there are no wildcards, each
-  spelling is a separate query, tried in order of likelihood.
+  Tollefsd., Tollefsdr.; Olsen → Olssen, Olsøn. A trailing `*` on the stem
+  (Tollefs*, Ols*) covers the endings; spellings of the stem itself are separate
+  queries, tried in order of likelihood.
 - **Farms in DA records:** DA's transcriptions usually give the farm as the
   residence, but sometimes as part of the name. Match the FS farms (from names and
   residence places) against both when scoring.
