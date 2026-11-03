@@ -79,6 +79,115 @@ chrome.runtime.onMessage.addListener((request) => {
   }
 });
 
+// Phase 1 → 2: the "Digital Arkivet" entry on a FamilySearch person page (fs_person.js)
+// sends that person's details. They become search criteria in the address of the
+// search page (search.html), the way FS's own record search keeps them in its URL, and
+// the page opens next to the FS tab.
+chrome.runtime.onMessage.addListener((request, sender) => {
+  if (request && request.action === 'searchDA') {
+    const url = chrome.runtime.getURL('search.html') + '?' + personToQuery(request.person).toString();
+    const opener = sender.tab;
+    chrome.tabs.create(opener ? { url: url, index: opener.index + 1, openerTabId: opener.id } : { url: url });
+  }
+});
+
+// Patronymic surnames: -sen/-søn/-son, -datter/-dotter and their abbreviations
+const PATRONYMIC = /(s[eøo]n|datter|dotter|dtr\.?|sdr?\.?)$/i;
+
+// Split an FS full name into given name(s), surname, and farm. Names in this tree are
+// patronymic, with the farm as an address: "Tollef Johansen Skofteland" → given "Tollef",
+// surname "Johansen", farm "Skofteland". Without a patronymic, the last word is the
+// surname ("Anna Magdaline Lindeman").
+function splitName(full) {
+  const words = (full || '').split(/\s+/).filter(Boolean);
+  if (words.length < 2) return { given: words.join(' '), surname: '', farm: '' };
+  const i = words.findIndex((w, k) => k > 0 && PATRONYMIC.test(w));
+  if (i > 0) {
+    return { given: words.slice(0, i).join(' '), surname: words[i], farm: words.slice(i + 1).join(' ') };
+  }
+  return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], farm: '' };
+}
+
+// The years in an FS date ("11 November 1764", "1764", "1726–Deceased")
+function yearsOf(date) {
+  return ((date || '').match(/\b\d{4}\b/g) || []).map(Number);
+}
+
+// FS person (from fs_person.js) → search criteria, named like FS's record search
+// (q.givenName, q.surname.1, q.birthLikeDate.from, ...; repeats get .1, .2, ...).
+// Year ranges are ±2, as on FS.
+function personToQuery(person) {
+  const q = new URLSearchParams();
+  const suffix = (k) => (k === 0 ? '' : '.' + k);
+  const set = (name, value) => { if (value !== '' && value != null) q.set(name, String(value)); };
+  const range = (name, years, k = 0) => {
+    if (years.length === 0) return;
+    set('q.' + name + 'Date.from' + suffix(k), Math.min(...years) - 2);
+    set('q.' + name + 'Date.to' + suffix(k), Math.max(...years) + 2);
+  };
+
+  set('treeref', person.pid);
+
+  // Names: the primary name, then alternates (without repeats)
+  const farms = [];
+  const seen = new Set();
+  let k = 0;
+  for (const full of [person.name, ...(person.altNames || [])]) {
+    const key = (full || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const n = splitName(full);
+    set('q.givenName' + suffix(k), n.given);
+    set('q.surname' + suffix(k), n.surname);
+    if (n.farm && !farms.includes(n.farm)) farms.push(n.farm);
+    k++;
+  }
+  set('q.sex', person.gender);
+
+  // Events: birth or christening, marriage, residence, death or burial
+  const birth = person.birth || {};
+  const christening = person.christening || {};
+  set('q.birthLikePlace', birth.place || christening.place);
+  range('birthLike', [...yearsOf(birth.date), ...yearsOf(christening.date)]);
+
+  const marriage = (person.families || []).map(f => f.marriage).find(m => m && (m.date || m.place));
+  if (marriage) {
+    set('q.marriageLikePlace', marriage.place);
+    range('marriageLike', yearsOf(marriage.date));
+  }
+
+  (person.residences || []).forEach((r, i) => {
+    set('q.residencePlace' + suffix(i), r.place);
+    range('residence', yearsOf(r.date), i);
+  });
+
+  const death = person.death || {};
+  const burial = person.burial || {};
+  set('q.deathLikePlace', death.place || burial.place);
+  range('deathLike', [...yearsOf(death.date), ...yearsOf(burial.date)]);
+
+  farms.forEach((farm, i) => set('q.farm' + suffix(i), farm));
+
+  // Family
+  const relative = (prefix, p, i = 0) => {
+    if (!p || !p.name) return;
+    const n = splitName(p.name);
+    set('q.' + prefix + 'GivenName' + suffix(i), n.given);
+    set('q.' + prefix + 'Surname' + suffix(i), n.surname);
+  };
+  relative('father', person.father);
+  relative('mother', person.mother);
+  const families = person.families || [];
+  families.filter(f => f.spouse).forEach((f, i) => relative('spouse', f.spouse, i));
+  families.flatMap(f => f.children || []).forEach((child, i) => {
+    relative('child', child, i);
+    // Lifespan "1796–Deceased"; "–1822" has no birth year
+    set('q.childBirthYear' + suffix(i), ((child.lifespan || '').match(/^\d{4}/) || [])[0]);
+  });
+
+  return q;
+}
+
 // Function to gather data from the current page
 // NOTE: This function is injected into the DA page context via chrome.scripting.executeScript.
 // All helper functions MUST be defined inside gatherData() — they cannot reference

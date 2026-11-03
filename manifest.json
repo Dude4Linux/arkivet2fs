@@ -28,8 +28,30 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.familysearch.org/*"
+      ],
+      "js": [
+        "fs_person.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/da16.png",
+        "icons/da32.png",
+        "icons/da48.png"
+      ],
+      "matches": [
+        "https://www.familysearch.org/*"
+      ]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
-

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digital Arkivet search</title>
+  <link rel="icon" href="icons/da32.png">
+  <link rel="stylesheet" href="search.css">
+</head>
+<body>
+  <header class="topbar">
+    <img src="icons/da32.png" alt="" width="28" height="28">
+    <h1>Digital Arkivet search</h1>
+    <a id="fs-person" class="fs-link" target="_blank" rel="noopener" hidden>Open person on FamilySearch</a>
+  </header>
+  <div class="layout">
+    <main class="results">
+      <h2 id="results-title">Results</h2>
+      <div id="results"></div>
+    </main>
+    <aside class="sidebar">
+      <form id="criteria" autocomplete="off">
+        <div class="sidebar-head">
+          <h2>Search criteria</h2>
+          <button type="submit" class="primary">Search</button>
+        </div>
+        <div id="groups"></div>
+        <div class="sidebar-foot">
+          <button type="submit" class="primary">Search</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+  <script src="search.js"></script>
+</body>
+</html>

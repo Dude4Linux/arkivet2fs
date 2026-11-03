@@ -97,7 +97,6 @@ per expected life event, finds the right records with 1–3 hits each.
     `fs_person.js`. Match all of FS, because a single-page navigation can reach a
     person page without a reload.
   - Add `web_accessible_resources` for the DA icon.
-  - Add `storage` to the permissions.
 - `icons/da16.png` and `icons/da32.png` — DA's favicon, downloaded once from
   digitalarkivet.no and bundled (not hot-linked).
 - `fs_person.js` (new):
@@ -118,8 +117,13 @@ per expected life event, finds the right records with 1–3 hits each.
      ```
      Then send `{action: 'searchDA', person}` to `background.js`.
 - `background.js`:
-  - On `searchDA`, store the person in `chrome.storage.session` under a fresh ID.
-  - Open `search.html?id=…` in a new tab next to the FS tab.
+  - On `searchDA`, turn the person into search criteria and open
+    `search.html?<criteria>` in a new tab next to the FS tab.
+  - Like FS's own record search
+    (`/search/record/results?treeref=…&q.givenName=…&q.surname.1=…&q.birthLikeDate.from=…`),
+    the criteria live in the address, using FS's parameter names where they exist,
+    with years ±2. Editing the sidebar updates the address, so Back/Forward and
+    bookmarks work, and nothing needs storing.
 
 ### Testing
 
