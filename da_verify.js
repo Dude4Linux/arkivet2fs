@@ -74,14 +74,17 @@ function relativesInRecord(record) {
   return found;
 }
 
-// A record person's birth year: "1866", or an age in the record's year ("57", "57 years")
+// A record person's birth year: "1866", an age in the record's year ("57", "57
+// years"), or for the child of a baptism the baptism's year (seldom a year later)
 function birthYearOf(person, record) {
   const text = person.birthYear || '';
   const year = text.match(/\b(1[5-9]\d\d)\b/);
   if (year) return Number(year[1]);
   const age = text.match(/^(\d{1,3})\b/);
   const recordYear = ((record.recordDate || '').match(/^\d{4}/) || [])[0];
-  return age && recordYear ? Number(recordYear) - Number(age[1]) : null;
+  if (age && recordYear) return Number(recordYear) - Number(age[1]);
+  const baptism = record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd';
+  return baptism && recordYear && /^(child|barn)$/i.test(person.roleEnglish || person.role || '') ? Number(recordYear) : null;
 }
 
 // Does a record person have an FS relative's given name (any of the FS given names
@@ -131,6 +134,7 @@ function checkRecord(record, P) {
     else add(-2, 'spouse ' + firstName(inRecord.spouse[0]) + ' in the record, not ' + P.spouses.map((s) => s.given.split(/\s+/)[0]).join(' or '), false);
   }
 
+  const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
   let children = 0;
   for (const child of P.children) {
     if (children >= 3) break;
@@ -144,10 +148,16 @@ function checkRecord(record, P) {
       children++;
     }
   }
+  // A child's baptism naming another child than the FS child born that year: that
+  // year's ✓ in the hit's score (scoreHit) was only the year
+  const baptism = record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd';
+  if (baptism && recordYear && !children && inRecord.child.length) {
+    const sameYear = P.children.find((c) => c.given && c.year && Math.abs(c.year - recordYear) <= 1);
+    if (sameYear) add(-2, 'child ' + firstName(inRecord.child[0]) + ' in the record, not ' + sameYear.given.split(/\s+/)[0], false);
+  }
 
   // A census's marital status: unmarried (ugift, ugivt) after FS's marriage
   const fields = record.fields || {};
-  const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
   if (census && P.marriage && recordYear && recordYear > P.marriage.to && /^(ug|unmarried)/i.test(fields['marital status'] || '')) {
     add(-3, 'unmarried in ' + recordYear + ', married by ' + P.marriage.to + ' in FS', false);
   }

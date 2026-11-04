@@ -89,8 +89,12 @@ function scoreHit(hit, P) {
   const words = hit.name.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
   const stems = P.surnames.map((s) => fold(surnameStem(s)).replace(/\*$/, '')).filter(Boolean);
   const isSurname = (w) => stems.some((stem) => fold(w).startsWith(stem));
-  const surname = words.slice(1).find(isSurname);
-  if (surname) add(2, surname, true);
+  // A patronymic from a spelling of the same father's name (Halvardsen for Halvorsen)
+  const fsPatronymics = P.surnames.filter(isPatronymic);
+  const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => nameMatch(patronymicBase(w), patronymicBase(s)));
+  const surname = words.slice(1).find(isSurname) || words.slice(1).find(spelled);
+  if (surname && isSurname(surname)) add(2, surname, true);
+  else if (surname) add(2, surname + ' for ' + spelled(surname), null);
   const names = words.filter((w) => w !== surname);
 
   // Baptisms and confirmations give all the given names

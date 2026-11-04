@@ -61,6 +61,8 @@ const ROLES = {
 function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, ''); }
 
 function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
+// The father's name in a patronymic (Halvorsen → Knud, Olsdr. → Ol)
+function patronymicBase(surname) { return (surname || '').replace(PATRONYMIC_ENDING, ''); }
 
 // Given name for a DA search: without its final vowel(s), with a trailing *, so
 // spellings DA doesn't treat as variants match too (Anna → Ann*, finding Anne;
@@ -389,8 +391,12 @@ function buildQueries(criteria) {
     }
   }
 
-  // Children's baptisms: the person as father or mother. Finds children FS doesn't
-  // know of too; the known ones are matched by birth year when scoring.
+  // Children's baptisms: the person as father or mother, and each FS spouse as the
+  // other parent (related person: the stem of the given name's forms and of the
+  // surname, Ing* Lars* for Ingrid Larsdr). The person's name alone finds
+  // thousands of fathers; the couple, a few dozen. With no spouse (or the spouse
+  // unticked), the person alone. Finds children FS doesn't know of too; the known
+  // ones are matched by birth year when scoring.
   {
     const roles = byRole('far', 'mor');
     const childYears = P.children.map((c) => c.year).filter(Boolean);
@@ -403,8 +409,21 @@ function buildQueries(criteria) {
       from = Math.min(...childYears) - 1;
       to = Math.max(...childYears) + 1;
     }
-    query('children', "Children's baptisms", { ...named, 'roles[]': roles, ...years(from, to) },
-      [nameText + ' as ' + roles.map((r) => roleText[r]).join(' or '), span(from, to)]);
+    const as = nameText + ' as ' + roles.map((r) => roleText[r]).join(' or ');
+    if (!P.spouses.length) query('children', "Children's baptisms", { ...named, 'roles[]': roles, ...years(from, to) }, [as, span(from, to)]);
+    // The spouse's role is the other parent's: mother for a man, father for a woman
+    const other = P.sex === 'Male' ? ['mor'] : P.sex === 'Female' ? ['far'] : ['far', 'mor'];
+    P.spouses.forEach((spouse, k) => {
+      const first = relatedStem(firstWord(spouse.given));
+      const last = spouse.surname ? surnameStem(spouse.surname) : '';
+      const related = [first, last].filter(Boolean).join(' ');
+      const fsName = [firstWord(spouse.given), spouse.surname].filter(Boolean).join(' ');
+      const kind = other.map((r) => roleText[r]).join(' or ');
+      const q = query('children' + (k ? '-' + k : ''), "Children's baptisms with " + spouse.given,
+        { ...named, 'roles[]': roles, related_first_name: first, related_last_name: last, 'related_roles[]': other, ...years(from, to) },
+        [as, kind + ' ' + related, span(from, to)]);
+      q.reasons.push(kind + ' ' + (foldName(related) === foldName(fsName) ? fsName : related + ' for ' + fsName));
+    });
   }
 
   // Children's marriages: church books name the couple's fathers (not mothers), so FS
