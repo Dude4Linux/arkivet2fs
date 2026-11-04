@@ -256,14 +256,30 @@ function kindsGroup(criteria) {
 // Each search (render) gets a number; a newer search makes older ones stop updating
 let generation = 0;
 
+// DA's dates as FS writes them: "1845-04-06" → "6 April 1845", "1779-05" → "May 1779",
+// also before a place ("1779-05-13, Hægebostad"); anything else ("1801", "20??.09")
+// as it is
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+  'September', 'October', 'November', 'December'];
+function displayDate(date) {
+  return String(date || '').replace(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?(?=$|[,\s])/, (all, y, mo, d) =>
+    MONTHS[mo - 1] ? [d ? String(Number(d)) : '', MONTHS[mo - 1], y].filter(Boolean).join(' ') : all);
+}
+
+// A labelled line in the Events column, as FS's "Christening 15 February 1778"
+const eventLine = (label, text) => el('div', {}, [el('strong', { text: label }), el('span', { text })]);
+
+// One hit in FS's columns: who (name, role, source), events, how it matches, score
 function hitRow(hit) {
-  const details = [
-    hit.role,
-    hit.date,
-    hit.born ? 'b. ' + hit.born : '',
-    hit.domicile,
-    hit.position
-  ].filter(Boolean).join(' · ');
+  const events = [];
+  const date = displayDate(hit.date);
+  if (date || hit.domicile) {
+    const line = date ? eventLine(hit.type, date) : el('div', {}, [el('strong', { text: hit.type })]);
+    events.push(line);
+    if (hit.domicile) events.push(el('div', { text: hit.domicile }));
+  }
+  if (hit.born) events.push(eventLine('Born', displayDate(hit.born)));
+  if (hit.position) events.push(eventLine('Position', hit.position));
   const reasons = el('ul', { class: 'reasons' }, hit.reasons.map((r) => el('li', {
     class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : 'near',
     text: (r.ok === true ? '✓ ' : r.ok === false ? '✗ ' : '≈ ') + r.text
@@ -273,16 +289,24 @@ function hitRow(hit) {
     reasons.append(el('li', { class: 'checked muted', text: hit.checkError ? 'record not read: ' + hit.checkError
       : hit.checks.length ? 'record checked' : 'record checked: no relatives to compare' }));
   }
+  const source = hit.sourceUrl
+    ? el('a', { href: hit.sourceUrl, target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
+    : el('span', { class: 'hit-source', text: hit.source || '' });
   return el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') }, [
-    el('span', { class: 'hit-score', title: 'Score', text: String(hit.score) }),
-    el('div', { class: 'hit-main' }, [
+    el('div', { class: 'hit-person' }, [
       el('a', { href: hit.url, target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
-      el('div', { class: 'hit-details', text: details }),
-      el('div', { class: 'hit-source muted', text: hit.source }),
-      reasons
-    ])
+      hit.role ? el('span', { class: 'hit-role', text: hit.role }) : '',
+      source
+    ]),
+    el('div', { class: 'hit-details' }, events),
+    reasons,
+    el('span', { class: 'hit-score', title: 'Score', text: String(hit.score) })
   ]);
 }
+
+// Column headings above the rows, as FS's table head
+const colHead = (labels) => el('div', { class: 'col-head', 'aria-hidden': 'true' },
+  labels.map(([text, cls]) => el('span', cls ? { class: cls, text } : { text })));
 
 // One line per query: what it searched for, how many hits, and the same search on DA
 function queryRow(query) {
@@ -363,7 +387,8 @@ function groupSection(group) {
   const first = page * PAGE_SIZE;
   const shown = group.hits.slice(first, first + PAGE_SIZE);
   const section = el('section', { class: 'group-hits' }, [
-    el('h3', {}, [group.title, el('span', { class: 'count muted', text: ' ' + group.hits.length })]),
+    el('h3', {}, [group.title, el('span', { class: 'count', text: ' (' + group.hits.length + ')' })]),
+    colHead([['Name'], ['Events'], ['How it matches'], ['Score', 'score']]),
     el('ol', { class: 'hits' }, shown.map(hitRow))
   ]);
   if (pages > 1) {
@@ -412,7 +437,8 @@ async function renderResults(criteria) {
   const groups = el('div', { class: 'groups' });
   const checkStatus = el('p', { class: 'check-status muted' });
   results.replaceChildren(
-    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }), el('ul', { class: 'queries' }, views.map((v) => v.row)), checkStatus]),
+    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }),
+      colHead([['Record kind'], ['Searched for'], ['Found'], ['']]), el('ul', { class: 'queries' }, views.map((v) => v.row)), checkStatus]),
     groups
   );
 

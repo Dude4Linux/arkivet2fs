@@ -1,28 +1,43 @@
+/* The look of FamilySearch's record search (search/record/results): Noto Sans
+   at 16 px, near-black text, teal links and buttons, results as rows with
+   column headings and thin rules, the criteria in a white panel on the right
+   with each event in a grey box. FS's own stylesheets are generated per build,
+   so the values are copied, not linked. */
 :root {
-  --bg: #f2f3f4;
-  --card: #ffffff;
-  --text: #22262a;
-  --muted: #61686f;
-  --border: #d9dcdf;
-  --accent: #1d3f5e;
-  --accent-text: #ffffff;
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --text: #202121;
+  --muted: #5d6262;
+  --line: rgba(0, 14, 14, 0.21);
+  --link: #005c82;
+  --accent: #057091;
+  --accent-text: #fefefe;
+  --box: #eaecec;
+  --chip: rgba(0, 24, 24, 0.082);
   --input-bg: #ffffff;
+  --input-line: #8c9191;
   --ok: #1e7a3c;
   --bad: #b3261e;
+  --shadow: 0 0 6px rgba(0, 0, 0, 0.18);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17191b;
-    --card: #222528;
-    --text: #e6e8ea;
-    --muted: #a3a9af;
-    --border: #3a3f44;
-    --accent: #9cc0e4;
-    --accent-text: #0d1216;
-    --input-bg: #1b1e21;
+    --bg: #161818;
+    --panel: #1f2222;
+    --text: #e6e8e8;
+    --muted: #a6acac;
+    --line: rgba(255, 255, 255, 0.16);
+    --link: #7cc4e0;
+    --accent: #5fb3d3;
+    --accent-text: #0b1416;
+    --box: #2a2e2e;
+    --chip: rgba(255, 255, 255, 0.1);
+    --input-bg: #161818;
+    --input-line: #6c7272;
     --ok: #7fd49a;
     --bad: #f2b8b5;
+    --shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
 }
@@ -32,193 +47,242 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 16px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif;
 }
-a { color: var(--accent); }
+a { color: var(--link); }
+button, input, select { font: inherit; }
 
+/* --- Header, as FS's top bar ------------------------------------------------------ */
 .topbar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
+  height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  /* Stays at the top, so the criteria panel below it can be the rest of the window */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
-.topbar h1 { font-size: 18px; margin: 0; font-weight: 600; }
+.topbar h1 { font-size: 18px; margin: 0; font-weight: 600; white-space: nowrap; }
 .topbar .fs-link { margin-left: auto; }
 
 .layout {
   display: grid;
   /* Results on the left, criteria on the right, as on FS */
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   align-items: start;
 }
-@media (max-width: 760px) {
+
+/* --- Criteria panel --------------------------------------------------------------- */
+.sidebar {
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  overflow: auto;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.sidebar form { min-height: 100%; display: flex; flex-direction: column; }
+#groups { padding: 0 14px; flex: 1; }
+.sidebar-head { padding: 14px 14px 4px; }
+.sidebar h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.sidebar-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding: 12px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+
+/* One column on narrow windows: the criteria first, then the results (after the
+   panel's own rules, which these replace) */
+@media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }
-  .sidebar { order: -1; position: static; max-height: none; }
+  .topbar { position: static; height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px 16px; }
+  .topbar .fs-link { font-size: 14px; }
+  .sidebar { order: -1; position: static; height: auto; box-shadow: none; border-bottom: 1px solid var(--line); }
+  .layout .results { padding: 16px; }
+  .sidebar-foot { position: static; }
 }
 
-.sidebar, .results section {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.sidebar { padding: 12px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
-.sidebar-head, .sidebar-foot { display: flex; align-items: center; justify-content: space-between; }
-.sidebar-foot { margin-top: 12px; justify-content: flex-end; }
-.sidebar h2 { font-size: 16px; margin: 0; }
-
-fieldset.group {
-  border: 0;
-  border-top: 1px solid var(--border);
-  margin: 12px 0 0;
-  padding: 10px 0 0;
-}
+/* A margin, not padding: a fieldset's padding goes below its legend */
+fieldset.group { border: 0; margin: 18px 0 0; padding: 0; min-width: 0; }
+fieldset.group:first-child { margin-top: 8px; }
 fieldset.group legend { font-weight: 600; padding: 0; margin-bottom: 6px; }
 .instance {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)) 24px;
-  gap: 6px;
-  margin-bottom: 6px;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 8px 10px;
+  margin-bottom: 8px;
+  padding: 10px 30px 10px 10px;
+  border-radius: 4px;
+  background: var(--box);
   align-items: end;
 }
-.instance label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); min-width: 0; }
-.instance label.wide { grid-column: 1 / -2; }
+.instance label { display: flex; flex-direction: column; gap: 2px; font-size: 12.3px; min-width: 0; }
+.instance label.wide { grid-column: 1 / -1; }
 /* Relatives: a checkbox first, to use them in the searches or not */
-.instance.has-use { grid-template-columns: 18px repeat(var(--cols, 2), minmax(0, 1fr)) 24px; }
-.instance.has-use > input[type="checkbox"] { margin: 0 0 8px; }
+.instance.has-use { grid-template-columns: 18px repeat(var(--cols, 2), minmax(0, 1fr)); }
+.instance.has-use > input[type="checkbox"] { margin: 0 0 11px; accent-color: var(--accent); }
 .instance.off label { opacity: 0.5; }
-.instance input, .instance select {
-  font: inherit;
+.instance input, .instance select, .place-add input {
+  height: 36px;
   color: var(--text);
   background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 6px;
+  border: 1px solid var(--input-line);
+  border-radius: 2px;
+  padding: 0 8px;
   min-width: 0;
   width: 100%;
 }
+.instance input:focus, .instance select:focus, .place-add input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* FS's × at the top right of each box */
+.instance > .remove { position: absolute; top: 4px; right: 6px; }
 .remove {
   border: 0;
   background: none;
-  color: var(--muted);
-  font-size: 18px;
+  color: var(--accent);
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 2px 4px;
 }
 .remove:hover { color: var(--text); }
 
-.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chips:empty { display: none; }
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 13px;
-  padding: 0 2px 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg);
+  font-size: 12.3px;
+  padding: 4px 4px 4px 11px;
+  border-radius: 50px;
+  background: var(--chip);
 }
-.chip .remove { font-size: 15px; padding: 0 4px; }
-.place-add input {
-  font: inherit;
-  color: var(--text);
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 6px;
-  width: 100%;
-}
-.suggest { font-size: 12px; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 2px 8px; }
-.suggest .add { font-size: 12px; }
+.chip .remove { font-size: 16px; padding: 0 4px; }
+.suggest { font-size: 12.3px; margin-top: 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .sidebar .muted { color: var(--muted); }
-.sidebar .help { font-size: 12px; margin: 6px 0 0; }
-.kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 13px; }
+.sidebar .help { font-size: 12.3px; margin: 6px 0 0; }
+.kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 14px; }
+.kinds input { accent-color: var(--accent); }
+/* FS's small upper-case text buttons ("ALTERNATE NAME", "SPOUSE") */
 .add {
   border: 0;
   background: none;
   color: var(--accent);
   cursor: pointer;
   padding: 0;
-  font: inherit;
+  font-size: 12.3px;
+  text-transform: uppercase;
 }
+fieldset.group > .add { margin-top: 2px; }
+.add:hover { text-decoration: underline; }
 button.primary {
-  font: inherit;
-  font-weight: 600;
-  background: var(--accent);
-  color: var(--accent-text);
+  min-width: 120px;
+  height: 40px;
+  padding: 0 16px;
   border: 0;
   border-radius: 4px;
-  padding: 6px 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  text-transform: uppercase;
   cursor: pointer;
 }
+button.primary:hover { filter: brightness(0.92); }
 
-.results h2 { font-size: 18px; margin: 0 0 12px; }
-.results section { padding: 12px 16px; margin-bottom: 12px; }
-.results section h3 { font-size: 15px; margin: 0 0 6px; }
+/* --- Results ---------------------------------------------------------------------- */
+.results { padding: 16px 20px 40px; min-width: 0; }
+.results h2 { font-size: 20.8px; font-weight: 600; margin: 4px 0 16px; }
+.results section { margin-bottom: 28px; }
+.results section h3 { font-size: 20.8px; font-weight: 600; margin: 0 0 8px; }
+.results section h3 .count { font-weight: 600; }
 .results .muted { color: var(--muted); }
 
-.queries { list-style: none; margin: 0; padding: 0; }
-.query {
+/* Column headings above the rows, as FS's table head */
+.col-head {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto auto;
-  gap: 4px 10px;
-  align-items: baseline;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
+  gap: 4px 16px;
+  padding: 8px 0;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
 }
-.query-title { font-weight: 600; }
+
+.queries { list-style: none; margin: 0; padding: 0; }
+.query, .searches .col-head {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) auto auto;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+.query { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.query-title { font-weight: 700; }
 .query.skipped .query-title { color: var(--muted); font-weight: 400; }
 .query.skipped .query-status { grid-column: 3 / -1; }
 .query-status.error { color: var(--bad); }
-.query-hint { grid-column: 2 / -1; font-size: 12px; }
+.query-hint { grid-column: 2 / -1; font-size: 12.3px; }
 @media (max-width: 760px) {
   .query { grid-template-columns: minmax(0, 1fr) auto; }
   .query-summary { grid-column: 1 / -1; grid-row: 2; }
-  .query-hint { grid-column: 1 / -1; }
+  .query-hint, .query.skipped .query-status { grid-column: 1 / -1; }
+  .searches .col-head { display: none; }
 }
-.results section h3 .count { font-weight: 400; }
+
 .hits { list-style: none; margin: 0; padding: 0; }
-.hit {
+.hit, .group-hits .col-head {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 10px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.2fr) 52px;
+  gap: 4px 16px;
 }
+.hit { padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
 .hit.unlikely { opacity: 0.6; }
+.hit-name { font-weight: 700; }
+.hit-role, .hit-source { display: block; }
+.hit-source { font-size: 14px; margin-top: 2px; }
+.hit-details > div + div { margin-top: 2px; }
+.hit-details strong + span::before { content: " "; }
 .hit-score {
-  font-weight: 600;
+  justify-self: end;
+  min-width: 36px;
+  font-weight: 700;
   text-align: center;
-  border-radius: 4px;
-  padding: 2px 0;
-  background: var(--bg);
-  height: fit-content;
+  border-radius: 50px;
+  padding: 2px 8px;
+  background: var(--chip);
 }
-.hit-name { font-weight: 600; text-decoration: none; }
-.hit-name:hover { text-decoration: underline; }
-.hit-details { font-size: 13px; }
-.hit-source { font-size: 12px; }
-.reasons { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
-.reasons li { font-size: 12px; padding: 0 6px; border-radius: 10px; background: var(--bg); }
+.col-head .score { text-align: right; }
+@media (max-width: 760px) {
+  .hit { grid-template-columns: minmax(0, 1fr) auto; }
+  .hit-details, .reasons { grid-column: 1 / -1; }
+  .hit-score { grid-column: 2; grid-row: 1; }
+  .group-hits .col-head { display: none; }
+}
+
+.reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; align-content: start; }
+.reasons li { font-size: 12.3px; padding: 2px 8px; border-radius: 50px; background: var(--chip); }
 .reasons li.ok { color: var(--ok); }
 .reasons li.bad { color: var(--bad); }
 .reasons li.near { color: var(--muted); }
-.reasons li.checked { font-style: italic; background: none; }
+.reasons li.checked { font-style: italic; background: none; padding-left: 2px; }
+
 .pager {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding-top: 12px;
+  font-size: 14px;
 }
-.pager .add:disabled { color: var(--muted); cursor: default; }
-.check-status { margin: 8px 0 0; font-size: 13px; }
+.pager .add { font-size: 14px; }
+.pager .add:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.check-status { margin: 10px 0 0; font-size: 14px; }
 .check-status:empty { display: none; }
