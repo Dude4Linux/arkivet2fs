@@ -8,11 +8,11 @@
 
 // How many hits of each group are checked, best first (more of the children's
 // baptisms, each a different child), and the lowest score checked
-const CHECK_PER_GROUP = { "Children's baptisms": 8 };
+const CHECK_PER_GROUP = { "Children's baptisms": 8, "Children's marriages": 6 };
 const CHECK_DEFAULT = 3;
 const CHECK_MIN_SCORE = 0;
 // Groups whose records name the person's relatives (or, emigration, the destination)
-const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", 'Census', 'Emigration', 'Moving', 'Burial'];
+const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial'];
 
 // Kinds of role, from DA's role or census family position, in Norwegian or English
 const ROLE_KINDS = {
@@ -23,7 +23,9 @@ const ROLE_KINDS = {
   spouse: /^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|ægtefælle|ektefelle|mand|mann|ektemann))\b/i,
   groom: /^(groom|brudgom)$/i,
   bride: /^(bride|brud|brur)$/i,
-  deceased: /^(deceased|avdød|avdøde)$/i
+  deceased: /^(deceased|avdød|avdøde)$/i,
+  groomFather: /^(groom's father|brudgommens far)$/i,
+  brideFather: /^(bride's father|bruras far|brudens far)$/i
 };
 
 // The kind of a record person's role ('' for godparents, servants, lodgers, ...).
@@ -62,6 +64,9 @@ function relativesInRecord(record) {
       if (theirs === 'child') found.child.push(other);
     } else if (mine === 'groom' || mine === 'bride') {
       if (theirs === 'groom' || theirs === 'bride') found.spouse.push(other);
+    } else if (mine === 'groomFather' || mine === 'brideFather') {
+      // A child's marriage: the groom or bride is the person's child
+      if (theirs === (mine === 'groomFather' ? 'groom' : 'bride')) found.child.push(other);
     } else if (mine === 'deceased') {
       if (theirs === 'spouse') found.spouse.push(other);
     }
@@ -103,11 +108,16 @@ function checkRecord(record, P) {
   // A parent: in a census household, the head or the head's spouse, and no ✗ there
   // (foster children, step-parents, and which one is which isn't known)
   const census = record.recordTypeInfo && record.recordTypeInfo.type === 'census';
+  // In a census, a parent may head (or be married to the head of) another household
+  // at the residence: the old parents on their føderaad, a grown child's family
+  const elsewhere = census ? (record.others || []).flatMap((h) => h.filter((p) => ['head', 'spouse'].includes(roleKind(p)))) : [];
   const parent = (relation, relative) => {
     if (!relative || !relative.given) return;
     const candidates = inRecord[relation];
     const match = candidates.find((p) => hasGivenName(p, relative.given));
+    const near = !match && elsewhere.find((p) => hasGivenName(p, relative.given));
     if (match) add(3, relation + ' ' + match.name + ' in the record', true);
+    else if (near) add(2, relation + ' ' + near.name + ' at the same residence', true);
     else if (candidates.length && !census) {
       add(-2, relation + ' ' + firstName(candidates[0]) + ' in the record, not ' + relative.given.split(/\s+/)[0], false);
     }
@@ -162,7 +172,7 @@ async function fetchRecord(hit) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const full = extractRecord(doc, hit.url);
   if (full.error) throw new Error(full.error);
-  const record = { people: full.people, fields: full.fields, recordTypeInfo: full.recordTypeInfo, recordDate: full.recordDate };
+  const record = { people: full.people, others: full.others || [], fields: full.fields, recordTypeInfo: full.recordTypeInfo, recordDate: full.recordDate };
   try { sessionStorage.setItem(key, JSON.stringify(record)); } catch (e) { /* full or unavailable */ }
   return record;
 }

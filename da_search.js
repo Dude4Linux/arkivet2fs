@@ -74,6 +74,49 @@ function givenStem(name) {
   return cut !== s && cut.length >= 3 ? cut + '*' : s;
 }
 
+// Forms of one given name that DA doesn't treat as variants and whose consonants
+// differ too (so skeleton() in da_match.js doesn't match them): FS has Ingeborg
+// where the church book writes Ingbjør. Lowercase; each group's shared start is its
+// stem for DA's related_first_name (relatedStem()), when at least 3 letters.
+const GIVEN_NAME_FORMS = [
+  ['ingeborg', 'ingebjørg', 'ingebjør', 'ingbjør', 'ingbjørg', 'ingebor', 'ingbør'],
+  ['ingrid', 'ingri', 'ingerid', 'ingerd'],
+  ['margit', 'marit', 'margjit', 'margith'],
+  ['sigrid', 'siri', 'sigri'],
+  ['kirsti', 'kirsten', 'kjersti', 'kjerstin', 'kristin', 'kerstin'],
+  ['kari', 'karen', 'karin'],
+  ['guri', 'gudrid', 'gurid'],
+  ['gudbrand', 'gulbrand', 'gubrand'],
+  ['knud', 'knut'],
+  ['ole', 'ola', 'olav', 'olaf', 'oluf'],
+  ['iver', 'ivar'],
+  ['halvor', 'halvard', 'halvar'],
+  ['torkel', 'torkjel', 'thorkel', 'torkild', 'thorkild'],
+  ['torstein', 'thorstein', 'tosten', 'torsten', 'thosten'],
+  ['gjertrud', 'gjertru', 'gertrud'],
+  ['ragnhild', 'ragnild', 'rangdi', 'ragni'],
+  ['engebret', 'engebrigt', 'ingebret', 'ingebrigt'],
+  ['eli', 'elin']
+];
+
+// The forms of a given name (its group, or just the name), lowercase
+function nameForms(name) {
+  const n = (name || '').toLowerCase().replace(/[.,*]/g, '').trim();
+  return GIVEN_NAME_FORMS.find((group) => group.includes(n)) || (n ? [n] : []);
+}
+
+// A relative's given name for related_first_name: the shared start of its forms
+// (Ingeborg → Ing*, finding Ingbjør), otherwise givenStem()
+function relatedStem(name) {
+  const forms = nameForms(name);
+  if (forms.length > 1) {
+    let start = forms[0];
+    for (const f of forms) while (!f.startsWith(start)) start = start.slice(0, -1);
+    if (start.length >= 3) return name.trim()[0] + start.slice(1) + '*';
+  }
+  return givenStem(name);
+}
+
 // Irregular patronymics: Ole → Olsen
 const PATRONYMIC_BASE = { ole: 'Ol', ola: 'Ol' };
 
@@ -127,6 +170,7 @@ function range(from, to) {
 }
 
 const unique = (list) => [...new Set(list)];
+const foldName = (s) => (s || '').toLowerCase().trim();
 
 // The search page's criteria (readCriteria in search.js) as one person
 function profile(criteria) {
@@ -154,6 +198,7 @@ function profile(criteria) {
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };
   P.places = unique([P.birthPlace, P.marriagePlace, P.deathPlace, ...P.residences].filter(Boolean));
+  P.estBirth = estimatedBirth(P);
   // FS's other names for the person (alternate names), as given name and surname
   P.alternates = names.slice(1).map((n) => ({ given: firstWord(n.givenName) || firstWord(names[0].givenName), surname: (n.surname || '').trim() }));
   P.patronymic = patronymicOf(P.father.given, P.sex);
@@ -164,9 +209,26 @@ function profile(criteria) {
   return P;
 }
 
-// The person's lifetime: birth range start to death range end (a century if one is missing)
+// When FS has no birth: the birth years the marriage and children leave (married
+// at 16–50; a mother 18–50 and a father 18–65 at the children's births; at most 100
+// at death), or null. Used for the years of the searches, never for scoring.
+function estimatedBirth(P) {
+  if (P.birth) return null;
+  const bounds = [];
+  if (P.marriage) bounds.push([P.marriage.from - 50, P.marriage.to - 16]);
+  const childYears = P.children.map((c) => c.year).filter(Boolean);
+  if (childYears.length) bounds.push([Math.max(...childYears) - (P.sex === 'Female' ? 50 : 65), Math.min(...childYears) - 18]);
+  if (!bounds.length) return null;
+  if (P.death) bounds.push([P.death.from - 100, P.death.to]);
+  const from = Math.max(...bounds.map((b) => b[0])), to = Math.min(...bounds.map((b) => b[1]));
+  return from <= to ? { from, to } : { from: to, to: from };
+}
+
+// The person's lifetime: birth range start to death range end (a century if one is
+// missing), from the estimated birth when FS has none
 function lifetime(P) {
-  const from = P.birth && P.birth.from;
+  const birth = P.birth || P.estBirth;
+  const from = birth && birth.from;
   const to = P.death && P.death.to;
   if (from && to) return [from, to];
   if (from) return [from, from + 100];
@@ -203,7 +265,11 @@ function buildQueries(criteria) {
   const given = givenStem(P.given);
   const nameText = [given, stem].filter(Boolean).join(' ');
   const byRole = (male, female) => (P.sex === 'Male' ? [male] : P.sex === 'Female' ? [female] : [male, female]);
-  const roleText = { brudgom: 'groom', brud: 'bride', far: 'father', mor: 'mother', barn: 'child', konfirmant: 'confirmand', 'avdød': 'deceased' };
+  const roleText = { brudgom: 'groom', brud: 'bride', far: 'father', mor: 'mother', barn: 'child', konfirmant: 'confirmand', 'avdød': 'deceased',
+    brudgommensfar: "groom's father", brudensfar: "bride's father" };
+  // FS's birth, or the one estimated from the marriage and children (shown as "about")
+  const birth = P.birth || P.estBirth;
+  const bornText = (from, to) => (P.birth ? 'born ' : 'born about ') + span(from, to);
 
   // A query from its DA fields; arrays are repeated fields, empty values are left out
   const query = (id, title, fields, summary, extra = {}) => {
@@ -260,7 +326,7 @@ function buildQueries(criteria) {
     const fields = { firstname: given, 'roles[]': 'barn', ...years(from, to) };
     let relative = '';
     if (parent) {
-      fields.related_first_name = relative = givenStem(firstWord(parent.given));
+      fields.related_first_name = relative = relatedStem(firstWord(parent.given));
       if (parent.surname && !isPatronymic(parent.surname)) {
         fields.related_last_name = surnameStem(parent.surname);
         relative += ' ' + fields.related_last_name;
@@ -292,25 +358,35 @@ function buildQueries(criteria) {
 
   // Confirmation, usually at 14–16
   {
-    const from = P.birth && P.birth.from + 13, to = P.birth && P.birth.to + 20;
+    const from = birth && birth.from + 13, to = birth && birth.to + 20;
     const q = query('confirmation', 'Confirmation', { ...named, 'roles[]': 'konfirmant', ...years(from, to) },
       [nameText + ' as confirmand', span(from, to)]);
-    if (!P.birth) q.skip = 'Add a birth year to search for the confirmation.';
+    if (!birth) q.skip = 'Add a birth year to search for the confirmation.';
   }
 
-  // Marriage: one query per spouse, with the spouse's first name as related person
+  // Marriage: one query per spouse, with the spouse's first name (the stem of its
+  // forms: Ing* for Ingeborg) as related person, and one in the FS marriage place
+  // without the spouse, for a spouse's name transcribed beyond that
   {
     const [from, to] = P.marriage ? [P.marriage.from - 1, P.marriage.to + 1]
-      : P.birth ? [P.birth.from + 16, Math.min(P.birth.to + 60, lifeTo)] : [lifeFrom, lifeTo];
+      : birth ? [birth.from + 16, Math.min(birth.to + 60, lifeTo)] : [lifeFrom, lifeTo];
     const roles = byRole('brudgom', 'brud');
     const spouses = P.spouses.length ? P.spouses : [null];
     spouses.forEach((spouse, k) => {
-      const related = spouse ? firstWord(spouse.given) : '';
+      const related = spouse ? relatedStem(firstWord(spouse.given)) : '';
       const q = query('marriage' + (k ? '-' + k : ''), spouse ? 'Marriage to ' + spouse.given : 'Marriage',
         { ...named, 'roles[]': roles, related_first_name: related, ...years(from, to) },
         [nameText + ' as ' + roles.map((r) => roleText[r]).join(' or '), related && 'spouse ' + related, span(from, to)]);
-      if (related) q.reasons.push('spouse ' + related);
+      // The reason names FS's spouse, with the stem when it's wider (Ing* for Ingeborg)
+      const spouseName = spouse && firstWord(spouse.given);
+      if (related) q.reasons.push('spouse ' + (foldName(related) === foldName(spouseName) ? spouseName : related + ' for ' + spouseName));
     });
+    const codes = chosen ? [] : municipalityCodes(P.marriagePlace);
+    if (P.spouses.length && P.marriage && codes.length) {
+      const where = codes.map(municipalityName).join(', ');
+      query('marriage-place', 'Marriage in ' + where, { ...named, 'roles[]': roles, ...years(from, to), 'm[]': codes },
+        [nameText + ' as ' + roles.map((r) => roleText[r]).join(' or '), 'any spouse', span(from, to)]);
+    }
   }
 
   // Children's baptisms: the person as father or mother. Finds children FS doesn't
@@ -331,14 +407,27 @@ function buildQueries(criteria) {
       [nameText + ' as ' + roles.map((r) => roleText[r]).join(' or '), span(from, to)]);
   }
 
+  // Children's marriages: church books name the couple's fathers (not mothers), so FS
+  // often has a man's sources as groom's or bride's father. From the eldest known
+  // child's 16th year (or the person's 36th) to 45 years after the youngest's birth.
+  {
+    const roles = ['brudgommensfar', 'brudensfar'];
+    const childYears = P.children.map((c) => c.year).filter(Boolean);
+    const from = childYears.length ? Math.min(...childYears) + 16 : birth ? birth.from + 36 : lifeFrom;
+    const to = childYears.length ? Math.max(...childYears) + 45 : lifeTo;
+    const q = query('childmarriage', "Children's marriages", { ...named, 'roles[]': roles, ...years(from, to) },
+      [nameText + ' as ' + roles.map((r) => roleText[r]).join(' or '), span(from, to)]);
+    if (P.sex === 'Female') q.skip = 'Church books name only the fathers of a couple.';
+  }
+
   // Censuses taken in the person's lifetime. Census rows give a birth year (worked
   // out from the age), so filter on it: a census lists everyone.
   {
     const censuses = lifeFrom ? Object.keys(CENSUS_YEARS).map(Number).filter((y) => y >= lifeFrom && y <= lifeTo) : [];
-    const born = P.birth ? { birth_year_from: P.birth.from - 3, birth_year_to: P.birth.to + 3 } : {};
+    const born = birth ? { birth_year_from: birth.from - 3, birth_year_to: birth.to + 3 } : {};
     const q = query('census', 'Census',
       { ...named, ...(lifeFrom ? { 'jt[]': censuses.map((y) => CENSUS_YEARS[y]) } : { 'sc[]': 'ft' }), ...born },
-      [nameText, censuses.length ? censuses.join(', ') : 'all censuses', P.birth && 'born ' + span(born.birth_year_from, born.birth_year_to)]);
+      [nameText, censuses.length ? censuses.join(', ') : 'all censuses', birth && bornText(born.birth_year_from, born.birth_year_to)]);
     if (lifeFrom && !censuses.length) q.skip = 'No Norwegian census was taken in the person’s lifetime.';
   }
 
@@ -346,9 +435,9 @@ function buildQueries(criteria) {
   // emigrated with their parents, each with an entry), by birth year
   {
     const from = lifeFrom, to = lifeTo;
-    const born = P.birth ? { birth_year_from: P.birth.from - 3, birth_year_to: P.birth.to + 3 } : {};
+    const born = birth ? { birth_year_from: birth.from - 3, birth_year_to: birth.to + 3 } : {};
     query('emigration', 'Emigration', { ...named, 'sc[]': 'em', ...years(from, to), ...born },
-      [nameText, 'emigration sources', span(from, to), P.birth && 'born ' + span(born.birth_year_from, born.birth_year_to)]);
+      [nameText, 'emigration sources', span(from, to), birth && bornText(born.birth_year_from, born.birth_year_to)]);
   }
 
   // Moving away: church books' lists of people moving out of the parish (within

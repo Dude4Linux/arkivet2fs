@@ -4,10 +4,10 @@
 // placeAliases() from da_places.js.
 
 // The groups, in the order they're shown
-const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", 'Census', 'Emigration', 'Moving', 'Burial', 'Other'];
+const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial', 'Other'];
 
 // The youngest a person can be in a role; younger means a namesake
-const MIN_AGE = { Groom: 16, Bride: 16, Father: 16, Mother: 15, Godparent: 12, Confirmand: 12, Witness: 16 };
+const MIN_AGE = { Groom: 16, Bride: 16, Father: 16, Mother: 15, Godparent: 12, Confirmand: 12, Witness: 16, "Groom's father": 34, "Bride's father": 34 };
 // Parts of FS places that say nothing about where in Norway
 const PLACE_IGNORE = /^(norway|norge|noreg|kingdom of norway)$/i;
 
@@ -16,7 +16,8 @@ function groupOf(hit) {
   switch (hit.type) {
     case 'Baptism': return hit.role === 'Child' ? 'Baptism' : hit.role === 'Father' || hit.role === 'Mother' ? "Children's baptisms" : 'Other';
     case 'Confirmation': return hit.role === 'Confirmand' ? 'Confirmation' : 'Other';
-    case 'Marriage': return hit.role === 'Groom' || hit.role === 'Bride' ? 'Marriage' : 'Other';
+    case 'Marriage': return hit.role === 'Groom' || hit.role === 'Bride' ? 'Marriage'
+      : hit.role === "Groom's father" || hit.role === "Bride's father" ? "Children's marriages" : 'Other';
     case 'Burial': return hit.role === 'Deceased' ? 'Burial' : 'Other';
     case 'Census': return 'Census';
     case 'Emigration': return 'Emigration';
@@ -47,18 +48,22 @@ function hasWord(text, word) {
 }
 
 // A name's consonants, spelled one way (Christine, Kristina → krstn; John, Joen → jn):
-// spellings of a name mostly differ in their vowels, doubled letters, a silent h,
-// and ch/k, th/t, w/v, and an old final j for i (Sirj, Karj for Siri, Kari)
+// spellings of a name mostly differ in their vowels, doubled letters, a silent h
+// (before a consonant or after one: Ragnhild, Ragnild, Ragnihld → rgnld), and ch/k,
+// th/t, w/v, and an old final j for i (Sirj, Karj for Siri, Kari)
 function skeleton(name) {
   return fold(name).replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i').replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's')
     .replace(/[^\p{L}]/gu, '')
-    .replace(/(?<=.)h(?![aeiouyæøåäöüé])/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
+    .replace(/(?<=.)h(?![aeiouyæøåäöüé])|(?<=[^aeiouyæøåäöüé])h/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
 }
 
-// A word of a hit's name is the FS name, starts with its stem (Anne for Anna), or has
-// its consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole)
+// A word of a hit's name is the FS name, one of its forms (Ingbjør for Ingeborg:
+// nameForms() in da_search.js), starts with its stem (Anne for Anna), or has its
+// consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole)
 function nameMatch(word, name) {
   if (fold(word) === fold(name)) return true;
+  const forms = nameForms(name);
+  if (forms.length > 1 && forms.includes(fold(word).replace(/[.,*]/g, ''))) return true;
   const stem = givenStem(name);
   if (stem.endsWith('*') && fold(word).startsWith(fold(stem.slice(0, -1)))) return true;
   const sk = skeleton(name);

@@ -294,7 +294,12 @@ function extractRecord(document, pageUrl) {
       'fl': 'Lodger', 'el': 'Single Lodger', 'l': 'Lodger', 'b': 'Visitor'
     },
     'residential status': { 'b': 'Resident', 'mt': 'Temporarily Resident', 'f': 'Absent' },
-    'marital status': { 'ug': 'Unmarried', 'g': 'Married', 'e': 'Widowed', 's': 'Separated', 'f': 'Divorced' },
+    // Codes, and the words some censuses write out (1870: "Ugift", "Enke")
+    'marital status': {
+      'ug': 'Unmarried', 'g': 'Married', 'e': 'Widowed', 's': 'Separated', 'f': 'Divorced',
+      'ugift': 'Unmarried', 'ugivt': 'Unmarried', 'gift': 'Married', 'givt': 'Married',
+      'enke': 'Widow', 'enkemand': 'Widower', 'enkemann': 'Widower', 'skilt': 'Divorced', 'separert': 'Separated'
+    },
     'gender': { 'm': 'Male', 'k': 'Female', '!!': 'Unspecified' },
     // Church books: ekte / uekte
     'legitimate/illegitimate born': { 'e': 'Legitimate', 'u': 'Illegitimate' }
@@ -446,8 +451,11 @@ function extractRecord(document, pageUrl) {
     const section = document.querySelector("#collapse-persons");
     if (!section) return people;
 
+    // DA shows the residents as cards (an h4 link, then label/value fields) or, as
+    // its table view, as rows under column headings (H.no., Age/born, ...)
     for (const item of section.querySelectorAll(".data-item")) {
-      const link = item.querySelector("h4 a[href]");
+      const isRow = item.tagName === 'TR';
+      const link = item.querySelector(isRow ? "td a[href]" : "h4 a[href]");
       const personId = idFromLink(link);
       if (!personId || !personId.startsWith('p')) continue;
 
@@ -455,7 +463,7 @@ function extractRecord(document, pageUrl) {
       const nameEl = link.cloneNode(true);
       nameEl.querySelectorAll(".de-emphasized").forEach(function(el) { el.remove(); });
 
-      const f = fieldMap(readFields(item));
+      const f = isRow ? rowFields(item) : fieldMap(readFields(item));
       const familyPosition = f['family position'] || '';
       people.push({
         id: personId,
@@ -474,14 +482,42 @@ function extractRecord(document, pageUrl) {
     return people;
   }
 
-  // --- Helper: The open person's household among a census residence's residents ---
+  // --- Helper: A table row's cells as a lowercase-heading → value map ---
+  // (fieldMap()'s shape), the headings from the th cells. On the open page DA's
+  // floatThead script moves the heading texts into a copy of the table (for the
+  // sticky header) and leaves the table's own th cells empty, so then the copy's
+  // are used; a fetched page has them in place.
+  function rowFields(row) {
+    function headings(table) {
+      return Array.from(table.querySelectorAll('th')).map(function(th) {
+        return cleanText(th.textContent).replace(/:$/, '').toLowerCase();
+      });
+    }
+    const table = row.closest('table');
+    let heads = table ? headings(table) : [];
+    if (!heads.some(Boolean)) {
+      const section = row.closest('#collapse-persons') || document;
+      for (const other of section.querySelectorAll('table')) {
+        const h = headings(other);
+        if (h.some(Boolean)) { heads = h; break; }
+      }
+    }
+    const map = {};
+    Array.from(row.cells).forEach(function(cell, i) {
+      if (heads[i] && !(heads[i] in map)) map[heads[i]] = cleanValue(cell.textContent);
+    });
+    return map;
+  }
+
+  // --- Helper: A census residence's residents as households ---
   // DA lists everyone at the residence, which may hold several households (a family,
-  // lodgers, ...). In most censuses each household starts at a resident with "H.no."
-  // set (usually, but not always, the "hp"; lodger households have "1" too). In 1801
-  // every resident has one (01, 01, 02, ...), and a household starts where it
-  // changes. When no resident has an H.no., each "hp" starts one. Returns all
-  // residents if the open person isn't among them.
-  function censusHousehold(people) {
+  // lodgers, the old parents, ...). In most censuses each household starts at a
+  // resident with "H.no." set (usually, but not always, the "hp"; lodger households
+  // have "1" too). In 1801 and 1865 every resident has one (01, 01, 02, ...), and a
+  // household starts where it changes. When no resident has an H.no., each "hp"
+  // starts one. A household's first resident with no family position (1865 leaves
+  // the head's empty) is its head.
+  function censusHouseholds(people) {
     const hasHouseholdNo = people.some(function(p) { return p.householdNo; });
     const allHaveNo = people.every(function(p) { return p.householdNo; });
     let lastNo = '';
@@ -491,16 +527,22 @@ function extractRecord(document, pageUrl) {
       lastNo = p.householdNo;
       return starts;
     };
-    let household = [], found = false;
+    const households = [];
     for (const p of people) {
-      if (startsHousehold(p) && household.length) {
-        if (found) break;
-        household = [];
-      }
-      household.push(p);
-      if (p.current) found = true;
+      if (startsHousehold(p) || !households.length) households.push([]);
+      households[households.length - 1].push(p);
     }
-    return found ? household : people;
+    for (const household of households) {
+      const head = household[0];
+      if (hasHouseholdNo && !head.role) head.roleEnglish = 'Head of Household';
+    }
+    return households;
+  }
+
+  // The open person's household, or all residents if the open person isn't among them
+  function censusHousehold(households) {
+    const own = households.find(function(h) { return h.some(function(p) { return p.current; }); });
+    return own || [].concat.apply([], households);
   }
 
   // --- Helper: Extract source information ---
@@ -680,7 +722,7 @@ function extractRecord(document, pageUrl) {
     return out;
   }
 
-  function buildNotes(permanentId, people, recordDetails, primaryDetails) {
+  function buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate) {
     // Full dates like "1812-10-11" read as "11 October 1812"; codes and
     // abbreviations get their English (see translateFieldValue)
     const noteValue = function(label, v) {
@@ -692,6 +734,16 @@ function extractRecord(document, pageUrl) {
     // Primary person details from always-visible section — all non-empty fields.
     // DA splits some dates into "Date of death: 04-12" + "Year of death: 1854";
     // those are combined into one line, "Date of death: 12 April 1854".
+    // Without a year field (a baptism's "Date of birth: 04-02", "Birth year: -")
+    // the year is the record's, or the year before when the day comes after the
+    // record's own (born in December, baptised or buried in January).
+    const recDate = (recordDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const fromRecord = function(md) {
+      if (!recDate) return null;
+      const p = md.split('-').map(Number);
+      const after = p[0] * 100 + p[1] > Number(recDate[2]) * 100 + Number(recDate[3]);
+      return formatDate((Number(recDate[1]) - (after ? 1 : 0)) + '-' + md);
+    };
     if (primaryDetails && primaryDetails.fields) {
       const fields = primaryDetails.fields;
       const yearFor = {};  // event ("death", "birth") -> index of its year field
@@ -710,6 +762,12 @@ function extractRecord(document, pageUrl) {
           merged.add(yearIdx);
           return formatDate(year[0] + '-' + field.value);
         }
+        // Only the event the record is about: a burial's date of birth is decades earlier
+        const near = { pd: /^birth$/i, pg: /^death$/i }[(permanentId || '').slice(0, 2)];
+        if (m && near && near.test(m[1]) && /^\d{1,2}-\d{1,2}$/.test(field.value)) {
+          const full = fromRecord(field.value);
+          if (full) return full;
+        }
         return noteValue(field.label, field.value);
       });
       fields.forEach(function(field, i) {
@@ -727,24 +785,35 @@ function extractRecord(document, pageUrl) {
     if (people.length > 0) {
       if (lines.length > 0) lines.push('');
       lines.push('--- Persons ---');
-      for (const person of people) {
-        const role = person.roleEnglish || person.role || 'Unknown';
-        const primary = person.primary ? ' *' : '';
-        let line = role + ': ' + person.name + primary;
-        // Add detail fields on same line in parentheses
-        const details = [];
-        if (person.position) details.push(expandAbbreviations(person.position));
-        if (person.birthYear) details.push('b. ' + person.birthYear);
-        if (person.birthPlace) details.push(person.birthPlace);
-        if (person.residence) details.push('res. ' + person.residence);
-        if (details.length > 0) {
-          line += ' (' + details.join(', ') + ')';
-        }
-        lines.push(line);
-      }
+      people.forEach(function(person) { lines.push(personLine(person)); });
     }
+    // A census residence's other households, each under its number
+    (others || []).forEach(function(household) {
+      if (!household.length) return;
+      const no = household[0].householdNo;
+      lines.push('');
+      lines.push('--- Also at the residence' + (no ? ', household no. ' + no : '') + ' ---');
+      household.forEach(function(person) { lines.push(personLine(person)); });
+    });
 
     return lines.join('\n');
+
+    // "Role: Name (position, b. 1841 or age 35, birthplace, res. ...)"
+    function personLine(person) {
+      const role = person.roleEnglish || person.role || 'Unknown';
+      let line = role + ': ' + person.name + (person.primary ? ' *' : '');
+      const details = [];
+      if (person.position) details.push(expandAbbreviations(person.position));
+      // Censuses give a birth year or an age ("35", "3 m"), church books a year
+      if (person.birthYear) {
+        details.push(/^\d{4}/.test(person.birthYear) ? 'b. ' + person.birthYear
+          : 'age ' + translateFieldValue('Age', person.birthYear));
+      }
+      if (person.birthPlace) details.push(person.birthPlace);
+      if (person.residence) details.push('res. ' + person.residence);
+      if (details.length > 0) line += ' (' + details.join(', ') + ')';
+      return line;
+    }
   }
 
   // --- Main extraction logic (wrapped in try/catch) ---
@@ -823,9 +892,12 @@ function extractRecord(document, pageUrl) {
     const now = new Date();
     const accessDate = formatDate(now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate());
 
-    // Extract people from collapsible section
-    // (census: only the open person's household, not everyone at the residence)
-    const people = isCensus ? censusHousehold(extractCensusPeople(permanentId)) : extractChurchPeople(permanentId);
+    // Extract people from collapsible section (census: the open person's household;
+    // the residence's other households, often the old parents or a married child,
+    // are kept apart in `others`)
+    const households = isCensus ? censusHouseholds(extractCensusPeople(permanentId)) : [];
+    const people = isCensus ? censusHousehold(households) : extractChurchPeople(permanentId);
+    const others = households.filter(function(h) { return h.indexOf(people[0]) < 0; });
 
     // Extract record details from #collapse-section-1 (church records)
     const recordDetails = extractRecordDetails(recordTypeInfo.type === 'emigration');
@@ -915,7 +987,7 @@ function extractRecord(document, pageUrl) {
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
 
     // Build enriched notes with all people and details
-    const notes = buildNotes(permanentId, people, recordDetails, primaryDetails);
+    const notes = buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate);
 
     return {
       date: date,
@@ -930,6 +1002,7 @@ function extractRecord(document, pageUrl) {
       recordDate: recordDate,
       primaryPersonId: primaryPersonId,
       people: people,
+      others: others,
       fields: ownFields,
       principalUrl: principalUrl,
       error: idValidation.valid ? null : idValidation.error

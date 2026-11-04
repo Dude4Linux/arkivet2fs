@@ -47,7 +47,7 @@ const param = (field, k) => 'q.' + field.name + suffix(k);
 // id up to the first '-' (baptism-place is a baptism)
 const KINDS = [
   ['baptism', 'Baptism'], ['confirmation', 'Confirmation'], ['marriage', 'Marriage'],
-  ['children', "Children's baptisms"], ['census', 'Census'], ['emigration', 'Emigration'],
+  ['children', "Children's baptisms"], ['childmarriage', "Children's marriages"], ['census', 'Census'], ['emigration', 'Emigration'],
   ['moving', 'Moving away'], ['burial', 'Burial'], ['farm', 'Records at farms'], ['other', 'All records under the name']
 ];
 
@@ -347,7 +347,7 @@ function hintFor(query, params, total, read) {
 // (da_verify.js), one at a time, re-rendering after each. A checked hit can drop
 // out of the top, so the best unchecked ones are picked again each time.
 async function checkHits(run, merged, person, container, status) {
-  const MAX_CHECKS = 30;
+  const MAX_CHECKS = 40;
   let checked = 0;
   while (run === generation && checked < MAX_CHECKS) {
     const hit = hitsToCheck(groupHits(merged, person)).find((h) => !merged.get(h.id || h.url).checks);
