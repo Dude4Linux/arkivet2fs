@@ -3,7 +3,7 @@
 Phase 3 (DA record → FS SourceBox) is done. This plan covers the two phases before it:
 
 1. **Phase 1** — on a FS person details page, add a "Digital Arkivet" entry to the
-   *Search Records* panel, below Google, with DA's favicon. Clicking it collects the
+   *Search Records* panel, below Google, with the extension's icon. Clicking it collects the
    person's details and starts Phase 2.
 2. **Phase 2** — search DA with a set of targeted queries built from those details,
    and show a ranked list of possible matches, each linking to the DA record.
@@ -108,7 +108,8 @@ per expected life event, finds the right records with 1–3 hits each.
     person page without a reload.
   - Add `web_accessible_resources` for the DA icon.
 - `icons/da16.png` and `icons/da32.png` — DA's favicon, downloaded once from
-  digitalarkivet.no and bundled (not hot-linked).
+  digitalarkivet.no and bundled (not hot-linked); later replaced by the
+  extension's own icon, `icons/icon32.svg`.
 - `fs_person.js` (new):
   1. **Watch:** detect `/tree/person/details/<PID>` on load and on URL changes, and
      observe the DOM (`MutationObserver`) until `[data-testid=search-google]` appears.

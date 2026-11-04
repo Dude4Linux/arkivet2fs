@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 128 128">
+  <title>arkivet2fs</title>
+  <!-- Heavier lines and dots for 24–32 px (search page header, favicon, toolbar at 2x) -->
+  <rect width="128" height="128" rx="28" fill="#1d3f5e"/>
+  <path d="M64 84 V52 M38 52 H90 M38 52 V44 M90 52 V44" fill="none" stroke="#f4ecdc" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 86 C30 79 48 79 61 86 V108 C48 101 30 101 16 108 Z M67 86 C80 79 98 79 112 86 V108 C98 101 80 101 67 108 Z" fill="#f4ecdc"/>
+  <circle cx="38" cy="34" r="12" fill="#f4ecdc"/>
+  <circle cx="90" cy="34" r="12" fill="#f4ecdc"/>
+  <circle cx="64" cy="68" r="11" fill="#d0843f"/>
+</svg>

@@ -247,7 +247,7 @@ async function personToQuery(person) {
 function showErrorMessage(errorMessage) {
   chrome.notifications.create({
     type: "basic",
-    iconUrl: chrome.runtime.getURL("icon.png"),
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
     title: "Error",
     message: errorMessage,
     buttons: [

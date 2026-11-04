@@ -1,5 +1,7 @@
 # arkivet2fs
 
+<img src="icons/banner.png" alt="arkivet2fs: find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch" width="100%">
+
 A Chrome/Brave extension that connects FamilySearch (FS) with Norway's Digitalarkivet
 (DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
@@ -130,6 +132,7 @@ protocols, moving lists (out- and in-migration) and probate.
 | `da_record.js` | Reading a DA record: citation, title, notes, people |
 | `da_verify.js` | Checking hits' records against the FS relatives |
 | `content.js` | Filling in the FamilySearch Create Source form |
+| `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |
 

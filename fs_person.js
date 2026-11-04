@@ -151,7 +151,7 @@
     const iconBox = button.querySelector('span[class^="shapeCss"]') || button.querySelector('svg')?.parentElement;
     if (iconBox) {
       const img = document.createElement('img');
-      img.src = chrome.runtime.getURL('icons/da32.png');
+      img.src = chrome.runtime.getURL('icons/icon32.svg');
       img.alt = '';
       img.width = 24;
       img.height = 24;
