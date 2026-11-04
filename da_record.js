@@ -661,6 +661,25 @@ function extractRecord(document, pageUrl) {
   // --- Helper: Build enriched notes with people and details not in the citation ---
   // Notes contain: permanent ID, the open person's own fields, remaining record
   // details (introduction, banns, remarks, ...), and the persons section.
+  // DA puts everything after the first given name in "Last name" ("Hans" +
+  // "Sørensen Lindemann"); the tradition is that only the last word is the
+  // surname ("Hans Sørensen" + "Lindemann"). A word telling parts of a farm
+  // apart stays with it ("Nedre Lunde"). Returns {index: value} for the
+  // two fields, or null when nothing moves.
+  function noteNames(fields) {
+    const find = function(re) { return fields.findIndex(function(f) { return re.test(f.label); }); };
+    const gi = find(/^given names?$/i), li = find(/^(last name|surname)$/i);
+    if (gi < 0 || li < 0) return null;
+    const words = fields[li].value.trim().split(/\s+/);
+    let keep = 1;
+    if (words.length > 2 && /^(nedre|øvre|ovre|søndre|nordre|vestre|østre|store|lille|indre|ytre|mellom|mellem)$/i.test(words[words.length - 2])) keep = 2;
+    if (words.length <= keep) return null;
+    const out = {};
+    out[gi] = [fields[gi].value.trim()].concat(words.slice(0, -keep)).filter(Boolean).join(' ');
+    out[li] = words.slice(-keep).join(' ');
+    return out;
+  }
+
   function buildNotes(permanentId, people, recordDetails, primaryDetails) {
     // Full dates like "1812-10-11" read as "11 October 1812"; codes and
     // abbreviations get their English (see translateFieldValue)
@@ -681,7 +700,9 @@ function extractRecord(document, pageUrl) {
         if (m) yearFor[m[1].toLowerCase()] = i;
       });
       const merged = new Set();
-      const values = fields.map(function(field) {
+      const names = noteNames(fields);
+      const values = fields.map(function(field, i) {
+        if (names && i in names) return names[i];
         const m = field.label.match(/^date of (.+)$/i);
         const yearIdx = m ? yearFor[m[1].toLowerCase()] : undefined;
         const year = yearIdx !== undefined && fields[yearIdx].value.match(/^\d{4}$/);
