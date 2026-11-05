@@ -273,7 +273,7 @@ cope with FS entries others made with a farm in the name.
 - **"Create source" button:** a button on each match could run Phase 3 directly
   (fetch + `extractRecord(doc)`, which already works on fetched pages), skipping the
   visit to the DA page.
-- **Attaching to the FS tree:** done as the DA Linker (milestone 10).
+- **Attaching to the FS tree:** done as the DA Linker (milestone 10). A census pairs everyone at the residence (all households) through the relatives' FS families, read in a background tab.
 
 ## Milestones
 

@@ -110,6 +110,32 @@
     };
   }
 
+  // The linker asks for a tree person's family ({action: 'readPerson'}, in a tab it
+  // opened on the person's details page): answered once FS shows the name and the
+  // family cards (a person without family: a few seconds after the name)
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  async function readWhenShown() {
+    const start = Date.now();
+    let named = 0;
+    while (Date.now() - start < 20000) {
+      if (PERSON_PATH.test(location.pathname) && document.querySelector('[data-testid="conclusionDisplay:NAME"]')) {
+        named = named || Date.now();
+        if (document.querySelector('[data-testid="section-card-family"] [data-testid^="family-"]') || Date.now() - named > 5000) {
+          await sleep(600);  // the cards fill in
+          return { person: gatherPerson() };
+        }
+      }
+      await sleep(250);
+    }
+    return { error: PERSON_PATH.test(location.pathname) ? 'FamilySearch did not show the person in time.'
+      : 'FamilySearch did not open the person (are you signed in?).' };
+  }
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (!request || request.action !== 'readPerson') return false;
+    readWhenShown().then(sendResponse);
+    return true;
+  });
+
   // --- The "Digital Arkivet" entry ----------------------------------------------
 
   // Reloading or updating the extension cuts this script off from it: chrome.runtime

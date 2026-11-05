@@ -93,8 +93,9 @@ on FamilySearch until you click **Create source and attach**.
 
 The source's fields can be edited:
 
-- **Title:** "<year>, <principal> - <source title> - <record type>", for example "1870,
-  Johanne Lindemann household - 0903 Arendal - Census"
+- **Title:** "<year>, <principal> - <source title> - <record type>", for example "1865,
+  Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census" (a census names the
+  residence and census district when DA gives them; the notes have both lines too)
 - **Date** and **Web page** (the record's permanent link)
 - **Citation:** place (general to specific), source, page or entry, date, permanent ID,
   link and scanned image
@@ -119,6 +120,15 @@ Below the source, each person in the record has a row:
 - **Tags** (Name, Sex, Birth, Christening, Death, Burial, Residence) and the
   **reason** for attaching. Both are filled in by role; for example, a baptized child
   gets Name, Sex, Birth and Christening.
+
+In a census, everyone at the residence gets a row, by household: the old parents,
+a married son's family, a brother's family lodging there. The linker pairs them
+through the tree, starting from the FS person: their relatives first, wherever they
+live at the residence, then each paired relative's own family. To do that it opens
+those relatives' FamilySearch pages in a background tab, reads their families (it
+only reads), and closes the tab; a line above the rows says how many it paired. For
+example, from Halvor Larsen in 1865, it pairs his wife and children, his parents in
+household 02, and through his father, his brother Iver's family in household 03.
 
 The family comes from the FS person you started the search from. From the toolbar
 icon, the linker uses the last person you searched for when their name is in the

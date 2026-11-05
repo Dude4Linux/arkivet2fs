@@ -722,7 +722,7 @@ function extractRecord(document, pageUrl) {
     return out;
   }
 
-  function buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate) {
+  function buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate, censusLines) {
     // Full dates like "1812-10-11" read as "11 October 1812"; codes and
     // abbreviations get their English (see translateFieldValue)
     const noteValue = function(label, v) {
@@ -730,6 +730,8 @@ function extractRecord(document, pageUrl) {
     };
     const lines = [];
     if (permanentId) lines.push('Permanent ID: ' + permanentId);
+    // A census's district and residence ("Census district: 005 Nordlien")
+    lines.push.apply(lines, censusLines || []);
 
     // Primary person details from always-visible section — all non-empty fields.
     // DA splits some dates into "Date of death: 04-12" + "Year of death: 1854";
@@ -853,6 +855,8 @@ function extractRecord(document, pageUrl) {
     // parent-post headings give the location, e.g. ["census district 01 Fjellsmarkas
     // skolekrets", "rural residence 009 Hager af Drager"]
     const censusLocation = [];
+    const censusLines = [];  // as DA writes them, for the notes
+    const census = { district: '', residence: '' };  // names without their numbers
     if (isCensus) {
       const yearMatch = sourceInfo.sourceTitle.match(/\b(\d{4})\b/);
       recordDate = sourceInfo.startYear || (yearMatch ? yearMatch[1] : '');
@@ -860,7 +864,15 @@ function extractRecord(document, pageUrl) {
         const text = cleanText(h4.textContent);
         const colonIdx = text.indexOf(':');
         if (colonIdx > 0) {
-          censusLocation.push(text.substring(0, colonIdx).toLowerCase() + ' ' + text.substring(colonIdx + 1).trim());
+          const label = text.substring(0, colonIdx).trim();
+          const value = text.substring(colonIdx + 1).trim();
+          censusLocation.push(label.toLowerCase() + ' ' + value);
+          censusLines.push(label + ': ' + value);
+          // The name after the number ("005 Nordlien"); none in "001*" or "082 B"
+          const rest = value.replace(/^\d+\S*\s*/, '');
+          const name = rest.length >= 2 ? rest : '';
+          if (/district/i.test(label)) census.district = name;
+          else if (/residence/i.test(label)) census.residence = name;
         }
       }
     }
@@ -966,7 +978,10 @@ function extractRecord(document, pageUrl) {
     const principalUrl = principal && !principal.persons.some(function(p) { return p.current; }) &&
                          principal.persons[0].id ? new URL(pageUrl).origin + '/en/' + principal.persons[0].id : '';
     let titleName = principal ? principalNames(principal) : stripNameVariants(pageName);
-    if (principal && principal.event === 'household') titleName += ' household';
+    // A census household with where it lived: "Halvor Larsen household, Bakken nedre, Nordlien"
+    if (principal && principal.event === 'household') {
+      titleName = [titleName + ' household', census.residence, census.district].filter(Boolean).join(', ');
+    }
     if (principal && principal.event === 'baptism') {
       const child = principal.persons[0];
       // A surname is known only from the child's own page (its "Last name" field)
@@ -987,7 +1002,7 @@ function extractRecord(document, pageUrl) {
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
 
     // Build enriched notes with all people and details
-    const notes = buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate);
+    const notes = buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate, censusLines);
 
     return {
       date: date,
@@ -1003,6 +1018,7 @@ function extractRecord(document, pageUrl) {
       primaryPersonId: primaryPersonId,
       people: people,
       others: others,
+      census: isCensus ? census : null,
       fields: ownFields,
       principalUrl: principalUrl,
       error: idValidation.valid ? null : idValidation.error

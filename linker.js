@@ -66,9 +66,12 @@ const dropChildOf = (title) => title.replace(/, (son|daughter|child) of [^-]+?(?
 // The record's people for pairing: the record's family (extractRecord's people), and
 // the open person when the principal's page left them out (a godparent). Each gets a
 // `key`, and `current` marks the anchor (whose relatives relativesInRecord() finds).
+// In a census, the residence's other households follow (`household`: 0 the record's
+// own, 1, 2, ... the others, as DA lists them).
 function recordPeople(record, anchorId, openPerson) {
-  const people = (record.people || []).map((p) => ({ ...p }));
-  if (openPerson && openPerson.id && !people.some((p) => p.id === openPerson.id)) people.push({ ...openPerson, primary: false });
+  const people = (record.people || []).map((p) => ({ ...p, household: 0 }));
+  (record.others || []).forEach((h, i) => { for (const p of h) people.push({ ...p, household: i + 1, primary: false }); });
+  if (openPerson && openPerson.id && !people.some((p) => p.id === openPerson.id)) people.push({ ...openPerson, primary: false, household: 0 });
   people.forEach((p, i) => {
     p.key = p.id || 'person' + i;
     p.current = anchorId ? p.id === anchorId : !!p.current;
@@ -155,6 +158,198 @@ function suggestPairs(record, people, self, fs) {
   return { pairs, why };
 }
 
+// --- A census residence ---------------------------------------------------------------
+// A residence often holds related households (the old parents on føderaad, a married
+// son's family, a lodger who is a brother). Its residents are paired outward from the
+// FS person through the tree: the FS person's relatives, then each paired relative's
+// own relatives (their tree families, read from FS: `trees`), wherever they live at the
+// residence. A relative is paired with a resident of the same given name (one of its
+// forms) whose age fits: the FS birth year ±3, and where FS has none, older or younger
+// than the relative by 15 years for a parent or child. In the relative's own household
+// the roles must fit too (the head's wife isn't paired with an FS daughter); a close
+// given name (Mari for Marit) is paired only with a fitting year and household role.
+
+const treeYear = (t) => Number(((t && (t.lifespan || (t.birth || t.christening || {}).date)) || '').match(/\b1[5-9]\d\d\b/)?.[0]) || null;
+
+// The tree person's relatives: [{tree, rel}] (rel: father, mother, spouse, child)
+function treeRelatives(tree) {
+  const out = [];
+  if (tree.father && tree.father.pid) out.push({ tree: tree.father, rel: 'father' });
+  if (tree.mother && tree.mother.pid) out.push({ tree: tree.mother, rel: 'mother' });
+  for (const f of tree.families || []) if (f.spouse && f.spouse.pid) out.push({ tree: f.spouse, rel: 'spouse' });
+  for (const f of tree.families || []) for (const c of f.children || []) if (c.pid) out.push({ tree: c, rel: 'child' });
+  return out.filter((r, i) => out.findIndex((o) => o.tree.pid === r.tree.pid) === i);
+}
+
+// 2: a record person has the tree person's given name (or a form of it); 1: a close
+// one (the record's name is a stem of FS's: Mari for Marit); 0: another name
+function givenNameFit(person, tree) {
+  const given = givenOf(stripVariants(tree.name));
+  if (hasGivenName(person, given)) return 2;
+  const first = stripVariants(person.name).split(/\s+/)[0] || '';
+  return first && given.split(/\s+/).some((g) => nameMatch(g, first)) ? 1 : 0;
+}
+
+// A resident's sex where the record tells it: a patronymic (Olsdatter, Halvorsen) or a
+// family position (hans Kone, deres Søn; the census codes d and s) → 'Male', 'Female' or ''
+const FEMALE_ROLE = /\b(kone|hustru|hustroe|datter|dotter|daughter|wife|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|d)\b/i;
+const MALE_ROLE = /\b(søn|son|fader|far|father|mand|husband|husbond|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)\b/i;
+function recordSex(person) {
+  const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
+  if (/(datter|dotter|dtr\.?|sd\.?)(\s|$)/i.test(last)) return 'Female';
+  if (/(sen|søn|son)(\s|$)/i.test(last) && !FEMALE_ROLE.test(person.role || '')) return 'Male';
+  const role = (person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, '');
+  if (FEMALE_ROLE.test(role) && !MALE_ROLE.test(role)) return 'Female';
+  if (MALE_ROLE.test(role) && !FEMALE_ROLE.test(role)) return 'Male';
+  return '';
+}
+
+// The household of a record person as relativesInRecord() sees it: the household's
+// first resident is its head when no family position says otherwise (1865's "hans
+// Fader" heading the old parents' household)
+function householdRelatives(record, people, me) {
+  const members = people.filter((p) => p.household === me.household);
+  const view = { ...record, people: members.map((p, i) => ({ ...p, current: p === me,
+    roleEnglish: i === 0 && !['head', 'spouse', 'child'].includes(roleKind(p)) ? 'Head of household' : p.roleEnglish })) };
+  const found = relativesInRecord(view);
+  const back = (list) => list.map((v) => members[view.people.indexOf(v)]);
+  return { father: back(found.father), mother: back(found.mother), spouse: back(found.spouse), child: back(found.child) };
+}
+
+const REL_WORDS = { father: 'father', mother: 'mother', spouse: 'spouse', child: 'child' };
+function relWord(rel, gender) {
+  if (rel === 'spouse') return /^m/i.test(gender || '') ? 'husband' : /^f/i.test(gender || '') ? 'wife' : 'spouse';
+  if (rel === 'child') return /^m/i.test(gender || '') ? 'son' : /^f/i.test(gender || '') ? 'daughter' : 'child';
+  return REL_WORDS[rel];
+}
+
+// How well a resident fits as the tree relative of a paired resident → {score, why} or null
+function residentFit(record, people, from, fromTree, candidate, rel, tree) {
+  const name = givenNameFit(candidate, tree);
+  if (!name) return null;
+  // The sex, where both tell it; a close given name needs it (Johanne isn't Johannes)
+  const sex = recordSex(candidate), fsSex = /^(male|female)$/i.test(tree.gender || '') ? tree.gender : '';
+  if (sex && fsSex && sex.toLowerCase() !== fsSex.toLowerCase()) return null;
+  if (name === 1 && !(sex && fsSex)) return null;
+  const yc = birthYearOf(candidate, record), yt = treeYear(tree), yf = birthYearOf(from, record);
+  let score = name === 2 ? 3 : 1;
+  const why = [relWord(rel, tree.gender) + ' of ' + stripVariants(fromTree.name) + ' in FS', name === 2 ? 'same given name' : 'close given name (FS: ' + tree.name + ')'];
+  const yearFits = !!(yc && yt);
+  if (yearFits) {
+    const d = Math.abs(yc - yt);
+    if (d > 3) return null;
+    score += [3, 3, 2, 1][d];
+    why.push('birth year ' + yt);
+  }
+  // The roles in the paired resident's own household
+  let roleFits = false;
+  if (candidate.household === from.household) {
+    const rels = householdRelatives(record, people, from);
+    const kinds = Object.keys(rels).filter((k) => rels[k].includes(candidate));
+    const wanted = rel === 'father' || rel === 'mother' ? ['father', 'mother'] : [rel];
+    if (kinds.some((k) => wanted.includes(k))) roleFits = true;
+    else if (kinds.length) return null;  // another relation in the household
+  } else {
+    why.push('household no. ' + (candidate.householdNo || '?'));
+  }
+  if (roleFits) score += 2;
+  // Ages: a parent 15 years older, a child 15 younger, a spouse within 25
+  if (yc && yf) {
+    if ((rel === 'father' || rel === 'mother') && yc > yf - 15) return null;
+    if (rel === 'child' && yc < yf + 15) return null;
+    if (rel === 'spouse' && Math.abs(yc - yf) > 25) return null;
+  }
+  if (name === 1 && !(yearFits && roleFits)) return null;
+  if (!yearFits && !roleFits && !(yc && yf)) return null;  // only the name
+  return { score, why: why.join(', ') };
+}
+
+// Pairs for a census residence {pairs, why, need}: `people` are all the residents
+// (with `household`), `trees` the known tree persons by PID (the FS person's and
+// relatives' families). `need` are paired relatives whose families aren't known yet,
+// while residents are left unpaired.
+function suggestResidencePairs(record, people, fs, trees, trusted) {
+  const pairs = {}, why = {}, need = [];
+  if (!fs) return { pairs, why, need };
+  const known = (pid) => (pid === fs.pid ? fs : trees[pid]) || null;
+  const used = new Set();
+  const paired = new Set();
+  const take = (person, tree, reason) => {
+    pairs[person.key] = tree.pid;
+    why[person.key] = reason;
+    used.add(tree.pid);
+    paired.add(person);
+  };
+  // The relatives of one paired resident, best fits first
+  const pairAround = (from, fromTree, dry) => {
+    const options = [];
+    for (const { tree, rel } of treeRelatives(fromTree)) {
+      if (used.has(tree.pid)) continue;
+      for (const candidate of people) {
+        if (paired.has(candidate) || candidate === from) continue;
+        const fit = residentFit(record, people, from, fromTree, candidate, rel, tree);
+        if (fit) options.push({ candidate, tree, ...fit });
+      }
+    }
+    options.sort((a, b) => b.score - a.score);
+    const got = [];
+    const takenHere = new Set(), treesHere = new Set();
+    for (const o of options) {
+      if (takenHere.has(o.candidate) || treesHere.has(o.tree.pid)) continue;
+      takenHere.add(o.candidate);
+      treesHere.add(o.tree.pid);
+      got.push(o);
+    }
+    if (!dry) for (const o of got) take(o.candidate, o.tree, o.why);
+    return got;
+  };
+
+  // The FS person: the anchor when it is theirs (a search hit), else the resident with
+  // their given name (and birth year) around whom most of their family lives
+  const year = treeYear(fs);
+  const candidates = trusted ? people.filter((p) => p.current) : people.filter((p) => {
+    if (givenNameFit(p, fs) !== 2) return false;
+    const y = birthYearOf(p, record);
+    return !year || !y || Math.abs(y - year) <= 3;
+  });
+  let self = null, best = -1;
+  for (const c of candidates) {
+    paired.add(c);
+    const n = pairAround(c, fs, true).length + (c.current ? 0.5 : 0);
+    paired.delete(c);
+    if (n > best) { best = n; self = c; }
+  }
+  if (!self) return { pairs, why, need };
+  take(self, fs, 'the FS person');
+
+  // Outward through the tree: each paired resident's relatives, while their tree
+  // families are known
+  const queue = [{ person: self, tree: fs }];
+  while (queue.length) {
+    const { person, tree } = queue.shift();
+    for (const o of pairAround(person, tree, false)) {
+      const theirs = known(o.tree.pid);
+      if (theirs) queue.push({ person: o.candidate, tree: theirs });
+      else need.push(o.tree.pid);
+    }
+  }
+  const left = people.some((p) => !paired.has(p) && p.name);
+  return { pairs, why, need: left ? need : [] };
+}
+
+// The tree persons to choose from: the FS person's family, then each read relative's
+// (labelled by whose they are: "wife of Halvor Larsen")
+function treePool(fs, trees) {
+  const out = treeFamily(fs);
+  for (const tree of Object.values(trees || {})) {
+    if (!tree || !tree.pid || (fs && tree.pid === fs.pid)) continue;
+    for (const { tree: t, rel } of treeRelatives(tree)) {
+      if (!out.some((o) => o.pid === t.pid)) out.push({ pid: t.pid, name: t.name, relation: relWord(rel, t.gender) + ' of ' + tree.name, gender: t.gender, year: treeYear(t) });
+    }
+  }
+  return out;
+}
+
 // The tags a record gives a person (they can be changed before attaching)
 function defaultTags(type, kind) {
   if (type === 'birth_baptism') return kind === 'child' ? ['Name', 'Gender', 'Birth', 'Christening'] : ['Name'];
@@ -174,7 +369,12 @@ function defaultReason(record, person) {
   const role = person.roleEnglish || person.role || 'Named';
   const what = RECORD_WORDS[record.recordTypeInfo && record.recordTypeInfo.type] || 'record';
   const year = ((record.recordDate || '').match(/^\d{4}/) || [])[0];
-  return role + ' in this ' + what + (year ? ' (' + year + ')' : '') + ' on Digitalarkivet, ' + (record.permanentId || record.url) + '.';
+  // A census: where ("at Bakken nedre, Nordlien"), and which household when not the record's own
+  const census = record.census || {};
+  const where = [census.residence, census.district].filter(Boolean).join(', ');
+  const household = person.household && person.householdNo ? ', household no. ' + person.householdNo : '';
+  return role + ' in this ' + what + (year ? ' (' + year + ')' : '') + (where ? ' at ' + where : '') + household +
+    ' on Digitalarkivet, ' + (record.permanentId || record.url) + '.';
 }
 
 // Surnames to offer for a person recorded by given name only: the father's
@@ -253,7 +453,7 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-const state = { record: null, people: [], fs: null, rows: [], running: false, trusted: false };
+const state = { record: null, people: [], fs: null, trees: {}, rows: [], running: false, trusted: false };
 const $ = (id) => document.getElementById(id);
 
 function relationLabel(t) {
@@ -269,13 +469,19 @@ function personRow(person, family, suggestion, why) {
   const nameInput = el('input', { type: 'text', class: 'name', value: row.name, 'aria-label': 'Name in the source' });
   const suggest = el('div', { class: 'suggest' });
   const select = el('select', { 'aria-label': 'Tree person for ' + row.name });
-  select.append(el('option', { value: '', text: '— don\'t attach —' }));
-  for (const t of family) select.append(el('option', { value: t.pid, text: relationLabel(t) }));
-  select.append(el('option', { value: 'other', text: 'Another person (PID)…' }));
   const otherPid = el('input', { type: 'text', class: 'pid', placeholder: 'PID, e.g. XXXX-XXX', hidden: true, 'aria-label': 'FamilySearch ID' });
-  if (suggestion && family.some((t) => t.pid === suggestion)) select.value = suggestion;
-  else if (suggestion) { select.value = 'other'; otherPid.value = suggestion; otherPid.hidden = false; }
   const hint = el('div', { class: 'why muted', text: why || '' });
+  // The tree persons to choose from, and the suggested one
+  const fill = (suggested) => {
+    select.replaceChildren(el('option', { value: '', text: '— don\'t attach —' }),
+      ...family.map((t) => el('option', { value: t.pid, text: relationLabel(t) })),
+      el('option', { value: 'other', text: 'Another person (PID)…' }));
+    if (suggested && family.some((t) => t.pid === suggested)) select.value = suggested;
+    else if (suggested) { select.value = 'other'; otherPid.value = suggested; }
+    else select.value = '';
+  };
+  fill(suggestion);
+  let touched = false;  // the user chose: later suggestions leave the row as it is
 
   const kind = roleKind(person);
   const tagBoxes = {};
@@ -316,9 +522,23 @@ function personRow(person, family, suggestion, why) {
       });
     }
   };
-  select.addEventListener('change', () => { hint.textContent = ''; refresh(); });
-  otherPid.addEventListener('input', refresh);
+  select.addEventListener('change', () => { touched = true; hint.textContent = ''; refresh(); });
+  otherPid.addEventListener('input', () => { touched = true; refresh(); });
   nameInput.addEventListener('change', () => { rename(row, nameInput.value.trim()); refresh(); });
+  // New tree persons to choose from (relatives' families read from FS), and a new
+  // suggestion unless the user has chosen
+  row.update = (newFamily, newSuggestion, newWhy) => {
+    const keep = touched ? { value: select.value, other: otherPid.value } : null;
+    family = newFamily;
+    if (keep) {
+      fill(keep.value === 'other' ? keep.other : keep.value);
+      if (keep.value === '') select.value = '';
+    } else {
+      fill(newSuggestion);
+      hint.textContent = newWhy || '';
+    }
+    refresh();
+  };
   row.node = node;
   refresh();
   return row;
@@ -340,21 +560,159 @@ function rename(row, newName) {
   row.noteName = newName;
 }
 
+const isCensus = () => !!(state.record && state.record.recordTypeInfo && state.record.recordTypeInfo.type === 'census');
+
+// The suggested pairs: in a census across the residence's households, through the
+// relatives' families read so far (state.trees); else from the record's family
+function suggestions() {
+  if (isCensus()) return suggestResidencePairs(state.record, state.people, state.fs, state.trees, state.trusted);
+  const self = findSelf(state.people, state.fs, state.trusted);
+  return { ...suggestPairs(state.record, state.people, self, state.fs), need: [] };
+}
+
+// A census residence's households: a heading before each other household
+function householdHeading(person) {
+  const census = state.record.census || {};
+  const no = person.householdNo ? 'Household no. ' + person.householdNo : 'Another household';
+  const where = census.residence ? ' at ' + census.residence : '';
+  return el('li', { class: 'household muted', text: (person.household ? no + ', also' + where : no + where) });
+}
+
 async function showPeople() {
   const list = $('people');
-  const family = treeFamily(state.fs);
-  const self = findSelf(state.people, state.fs, state.trusted);
-  const { pairs, why } = suggestPairs(state.record, state.people, self, state.fs);
+  state.trees = {};
+  const pool = treePool(state.fs, state.trees);
+  const { pairs, why, need } = suggestions();
   // Without a stored FS person, a PID typed above still pairs the anchor
   const pid = $('fs-pid').value.trim().toUpperCase();
   if (!state.fs && pid) {
     const anchor = state.people.find((p) => p.current);
     if (anchor) { pairs[anchor.key] = pid; why[anchor.key] = 'the PID above'; }
   }
-  state.rows = state.people.map((p) => personRow(p, family, pairs[p.key], why[p.key]));
-  list.replaceChildren(...state.rows.map((r) => r.node));
+  state.rows = state.people.map((p) => personRow(p, pool, pairs[p.key], why[p.key]));
+  const items = [];
+  const several = state.people.some((p) => p.household);
+  state.rows.forEach((r, i) => {
+    if (several && (i === 0 || r.person.household !== state.rows[i - 1].person.household)) items.push(householdHeading(r.person));
+    items.push(r.node);
+  });
+  list.replaceChildren(...items);
+  const family = treeFamily(state.fs);
   $('fs-name').textContent = state.fs ? state.fs.name + (family.length > 1 ? ' and ' + (family.length - 1) + ' relatives' : '')
     : pid ? 'family not known here (open the search from this person\'s FS page to have it)' : '';
+  $('tree-status').hidden = true;
+  state.generation = (state.generation || 0) + 1;
+  if (need.length) readResidence(need, state.generation);  // the rows are there meanwhile
+}
+
+// --- Relatives' families from FS (a census residence) ---------------------------------
+// The residents the FS person's family doesn't reach (Lars Halvorsen's other son's family
+// as lodgers) are paired through the paired relatives' own families: read from their FS
+// details pages in a background tab (fs_person.js answers {action: 'readPerson'}),
+// kept in chrome.storage.session (`tree:<PID>`), at most MAX_TREE_READS for a record.
+
+const MAX_TREE_READS = 8;
+const MAX_TREE_ROUNDS = 3;
+
+async function readResidence(need, generation) {
+  const status = $('tree-status');
+  status.classList.remove('near');
+  const asked = new Set();
+  const failed = [];
+  for (let round = 0; round < MAX_TREE_ROUNDS && need.length && asked.size < MAX_TREE_READS; round++) {
+    const pids = treesToRead(need, asked).slice(0, MAX_TREE_READS - asked.size);
+    if (!pids.length) break;
+    for (const p of pids) asked.add(p);
+    const names = pids.map((p) => (treePool(state.fs, state.trees).find((t) => t.pid === p) || { name: p }).name);
+    status.hidden = false;
+    status.textContent = 'Reading the FS families of ' + names.join(', ') + ' to pair the others at the residence…';
+    const read = await readTreePersons(pids);
+    for (const p of pids) if (!read[p]) failed.push(p);
+    if (generation !== state.generation) return;  // another FS person was chosen meanwhile
+    Object.assign(state.trees, read);
+    const next = suggestions();
+    const pool = treePool(state.fs, state.trees);
+    for (const row of state.rows) row.update(pool, next.pairs[row.person.key], next.why[row.person.key]);
+    need = next.need.filter((p) => !state.trees[p]);
+  }
+  const paired = state.rows.filter((r) => r.pid()).length;
+  status.textContent = paired + ' of ' + state.rows.length + ' at the residence paired' +
+    (failed.length ? '; could not read ' + failed.join(', ') + ' from FamilySearch (are you signed in?)' : '') + '.';
+  status.classList.toggle('near', failed.length > 0);
+}
+
+// Whose families to read: paired relatives in a household with residents still
+// unpaired; when there are none, the two eldest (a parent's family reaches furthest)
+function treesToRead(need, asked) {
+  const rows = state.rows;
+  const open = new Set(rows.filter((r) => !r.pid() && r.person.name).map((r) => r.person.household));
+  const who = need.filter((p) => !asked.has(p) && !state.trees[p]).map((pid) => {
+    const row = rows.find((r) => r.pid() === pid);
+    return { pid, near: row && open.has(row.person.household), year: row ? birthYearOf(row.person, state.record) || 9999 : 9999 };
+  });
+  const near = who.filter((w) => w.near);
+  return (near.length ? near : who.sort((a, b) => a.year - b.year).slice(0, 2)).map((w) => w.pid);
+}
+
+const personDetailsUrl = (pid) => 'https://www.familysearch.org/en/tree/person/details/' + encodeURIComponent(pid);
+
+// The FS persons (gatherPerson()'s shape) by PID: stored, or read in one background tab
+async function readTreePersons(pids) {
+  const out = {};
+  const toRead = [];
+  for (const pid of pids) {
+    const kept = await storedPerson(pid) || await sessionTree(pid);
+    if (kept) out[pid] = kept;
+    else toRead.push(pid);
+  }
+  if (!toRead.length) return out;
+  let tab = null;
+  try {
+    const here = await chrome.tabs.getCurrent();
+    tab = await chrome.tabs.create({ url: 'about:blank', active: false, index: here ? here.index + 1 : undefined });
+    for (const pid of toRead) {
+      let answer = await readInTab(tab.id, pid);
+      // A background tab FS hasn't drawn: show it for a moment
+      if (!answer.person) {
+        await chrome.tabs.update(tab.id, { active: true });
+        answer = await readInTab(tab.id, pid);
+        if (here) await chrome.tabs.update(here.id, { active: true });
+      }
+      if (answer.person && answer.person.pid === pid) {
+        out[pid] = answer.person;
+        try { await chrome.storage.session.set({ ['tree:' + pid]: answer.person }); } catch (e) { /* only a cache */ }
+      } else {
+        console.warn('arkivet2fs: could not read ' + pid, answer.error);
+      }
+    }
+  } catch (e) {
+    console.warn('arkivet2fs: reading FS persons', e);
+  } finally {
+    if (tab) chrome.tabs.remove(tab.id).catch(() => {});
+  }
+  return out;
+}
+
+async function sessionTree(pid) {
+  try { return (await chrome.storage.session.get('tree:' + pid))['tree:' + pid] || null; } catch (e) { return null; }
+}
+
+// Open the person's details page in the tab and ask fs_person.js for the person
+async function readInTab(tabId, pid) {
+  const loaded = waitForLoad(tabId);
+  await chrome.tabs.update(tabId, { url: personDetailsUrl(pid) });
+  await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 30000))]);
+  for (let tries = 0; tries < 10; tries++) {
+    try {
+      const answer = await Promise.race([
+        chrome.tabs.sendMessage(tabId, { action: 'readPerson' }),
+        new Promise((resolve) => setTimeout(() => resolve({ error: 'no answer' }), 30000))
+      ]);
+      if (answer) return answer;
+    } catch (e) { /* the content script isn't there yet */ }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return { error: 'FamilySearch did not answer.' };
 }
 
 function fillSource(record) {

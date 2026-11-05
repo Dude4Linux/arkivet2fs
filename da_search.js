@@ -103,16 +103,25 @@ const GIVEN_NAME_FORMS = [
   ['eli', 'elin']
 ];
 
-// The forms of a given name (its group, or just the name), lowercase
+// Dialect forms that start differently (Imbjør for Ingebjørg, as in Gudbrandsdalen):
+// matched as forms of their group's name, but left out of the group's shared stem
+// (relatedStem()), which they would cut to one letter
+const GIVEN_NAME_DIALECT = { imbjør: 'ingeborg', imbjor: 'ingeborg', imbjørg: 'ingeborg' };
+
+// The forms of a given name (its group and the group's dialect forms, or just the
+// name), lowercase
 function nameForms(name) {
   const n = (name || '').toLowerCase().replace(/[.,*]/g, '').trim();
-  return GIVEN_NAME_FORMS.find((group) => group.includes(n)) || (n ? [n] : []);
+  const group = GIVEN_NAME_FORMS.find((g) => g.includes(n) || g[0] === GIVEN_NAME_DIALECT[n]);
+  if (!group) return n ? [n] : [];
+  return group.concat(Object.keys(GIVEN_NAME_DIALECT).filter((d) => GIVEN_NAME_DIALECT[d] === group[0]));
 }
 
 // A relative's given name for related_first_name: the shared start of its forms
 // (Ingeborg → Ing*, finding Ingbjør), otherwise givenStem()
 function relatedStem(name) {
-  const forms = nameForms(name);
+  const n = (name || '').toLowerCase().replace(/[.,*]/g, '').trim();
+  const forms = GIVEN_NAME_FORMS.find((g) => g.includes(n)) || [];
   if (forms.length > 1) {
     let start = forms[0];
     for (const f of forms) while (!f.startsWith(start)) start = start.slice(0, -1);
