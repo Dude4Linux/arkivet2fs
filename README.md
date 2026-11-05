@@ -5,14 +5,15 @@
 A Chrome/Brave extension that connects FamilySearch (FS) with Norway's Digitalarkivet
 (DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
-citation.
+citation, and attaches it to the tree persons the record names.
 
 ```
 FS person page ──(1: "Digital Arkivet" in Search Records)──▶ search page
      ▲                                                          │ 2: searches DA,
      │                                                          │ ranks the hits
      │                                                          ▼
-FS SourceBox ◀──(3: toolbar icon)── DA record page (you check the record)
+FS source, attached ◀── linker (3: you review) ◀── "Review & Attach" on a hit,
+  to the tree persons                                or the toolbar icon on a DA record
 ```
 
 ## Install
@@ -86,12 +87,15 @@ dimmed.
 
 ### 3. From a DA record to a FamilySearch source
 
-Open a hit, check the record, and click the extension's toolbar icon. The extension
-reads the record and opens the FamilySearch SourceBox. It clicks **Create Source** and
-fills in:
+Click **Review & Attach** on a hit, or open a DA record and click the extension's
+toolbar icon. The linker page opens with the source, ready to review. Nothing is saved
+on FamilySearch until you click **Create source and attach**.
+
+The source's fields can be edited:
 
 - **Title:** "<year>, <principal> - <source title> - <record type>", for example "1870,
   Johanne Lindemann household - 0903 Arendal - Census"
+- **Date** and **Web page** (the record's permanent link)
 - **Citation:** place (general to specific), source, page or entry, date, permanent ID,
   link and scanned image
 - **Notes:** the person's own fields and everyone in the record with their roles,
@@ -99,6 +103,37 @@ fills in:
 
 It doesn't matter whose page in the record is open. If you open the father's page on a
 baptism, the source still describes the child.
+
+Below the source, each person in the record has a row:
+
+- **Name.** You can edit it, and the new name goes into the title, citation and
+  notes. A child baptized by given name only ("Ole, son of Lars Halvorsen") gets
+  suggestions: the father's patronymic (Ole Olsen), or the name of the tree person
+  you pair the child with. Click one to use it.
+- **Tree person.** Choose who in the tree the record is about: the FS person, or
+  their father, mother, spouses or children, or another person by FS ID. The linker
+  suggests pairs: the FS person for the hit, and relatives whose given names match,
+  with children also matched by birth year. A relative with another name in the
+  record is mentioned, not chosen, so a second wife or a namesake isn't attached by
+  mistake.
+- **Tags** (Name, Sex, Birth, Christening, Death, Burial, Residence) and the
+  **reason** for attaching. Both are filled in by role; for example, a baptized child
+  gets Name, Sex, Birth and Christening.
+
+The family comes from the FS person you started the search from. From the toolbar
+icon, the linker uses the last person you searched for when their name is in the
+record. Otherwise, type the FS ID at the top.
+
+**Create source and attach** opens a FamilySearch tab and works in it step by step.
+The page lists each step as it goes:
+
+1. It creates the source in your SourceBox. If a source with the same title is
+   already there, it uses that one instead.
+2. It attaches the source to each chosen person by ID, with your reason.
+3. It adds the ticked tags. Tags already there are kept. A residence is tagged only
+   when the person has exactly one.
+
+**Create source only** puts the source in your SourceBox without attaching it.
 
 Supported records: baptisms, confirmations, marriages, burials, censuses, emigrant
 protocols, moving lists (out- and in-migration) and probate.
@@ -115,7 +150,9 @@ protocols, moving lists (out- and in-migration) and probate.
 - **Data stays between the sites.** The extension sends requests only to
   digitalarkivet.no and familysearch.org. To check farm names, it also queries Rygh's
   *Norske Gaardnavne* (dokpro.uio.no) and Kartverket's place names (ws.geonorge.no).
-  Nothing is stored beyond the browser session.
+  Search results are kept only for the browser session. The extension also keeps the
+  last 30 FS persons you searched for (name, events and family), so the linker can
+  pair a record with them. They stay in the browser's extension storage.
 
 ## Files
 
@@ -123,7 +160,7 @@ protocols, moving lists (out- and in-migration) and probate.
 |------|---------|
 | `manifest.json` | Extension configuration (Manifest V3) |
 | `fs_person.js` | The "Digital Arkivet" entry on FS person pages |
-| `background.js` | Toolbar icon, opening the search page and the SourceBox |
+| `background.js` | Toolbar icon, opening the search page and the linker, keeping the FS persons |
 | `farms.js` | Farm or family name? (Rygh, Kartverket) |
 | `search.html`, `search.js`, `search.css` | The search page |
 | `da_places.js` | DA's counties and municipalities, old place names |
@@ -131,7 +168,8 @@ protocols, moving lists (out- and in-migration) and probate.
 | `da_match.js` | Merging, scoring and grouping the hits |
 | `da_record.js` | Reading a DA record: citation, title, notes, people |
 | `da_verify.js` | Checking hits' records against the FS relatives |
-| `content.js` | Filling in the FamilySearch Create Source form |
+| `linker.html`, `linker.js`, `linker.css` | The linker: reviewing the source and pairing the record's people with tree persons |
+| `fs_attach.js` | The linker's steps on FamilySearch: create the source, attach it, add tags |
 | `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |

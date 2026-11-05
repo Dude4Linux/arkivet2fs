@@ -1025,13 +1025,18 @@ function extractRecord(document, pageUrl) {
 // from that instead. On any failure, keep the open page's result.
 async function gatherData() {
   const result = extractRecord(document, location.href);
+  // The person whose page is open (the linker pairs the record's people from them)
+  result.openPerson = result.people.find(function(p) { return p.current; }) || null;
   if (!result.error && result.principalUrl) {
     try {
       const response = await fetch(result.principalUrl, { credentials: 'same-origin' });
       if (response.ok) {
         const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
         const principalResult = extractRecord(doc, result.principalUrl);
-        if (!principalResult.error) return principalResult;
+        if (!principalResult.error) {
+          principalResult.openPerson = result.openPerson;
+          return principalResult;
+        }
       }
       console.warn('arkivet2fs: could not use principal page ' + result.principalUrl);
     } catch (err) {

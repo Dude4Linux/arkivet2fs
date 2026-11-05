@@ -42,43 +42,12 @@ chrome.action.onClicked.addListener((tab) => {
       return;
     }
 
-    // Open a new FamilySearch tab without stealing focus
-    chrome.tabs.create({
-      url: 'https://www.familysearch.org/en/tree/sources/sourceBox',
-      active: false
-    }, (newTab) => {
-      console.log('FamilySearch tab opened:', newTab);
-
-      // Wait for the new tab to load completely
-      chrome.tabs.onUpdated.addListener(function tabUpdateListener(tabId, changeInfo) {
-        if (tabId === newTab.id && changeInfo.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(tabUpdateListener);
-
-          // Inject content.js into the new tab
-          chrome.scripting.executeScript({
-            target: { tabId: newTab.id },
-            files: ['content.js']
-          }, () => {
-            console.log('content.js injected');
-
-            // Ensure content script is ready to receive the message
-            setTimeout(() => {
-              // Send the data to the content script
-              chrome.tabs.sendMessage(newTab.id, { action: 'fillForm', data }, (response) => {
-                if (chrome.runtime.lastError) {
-                  console.error('Error sending message to content script:', chrome.runtime.lastError);
-                  showErrorMessage(chrome.runtime.lastError.message || 'Failed to send message to content script');
-                } else {
-                  console.log('Message sent to content script');
-                  // Activate the new tab
-                  chrome.tabs.update(newTab.id, { active: true, highlighted: true });
-                }
-              });
-            }, 500); // Wait for 1 second to ensure content script is ready
-          });
-        }
-      });
-    });
+    // The linker (linker.html) shows the record for review before anything goes to
+    // FamilySearch; it reads the record from session storage
+    const key = 'draft:' + Date.now();
+    chrome.storage.session.set({ [key]: data }).then(() => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('linker.html') + '?draft=' + encodeURIComponent(key), index: tab.index + 1, openerTabId: tab.id });
+    }).catch((error) => showErrorMessage('Could not open the linker: ' + error.message));
   });
 });
 
@@ -96,19 +65,13 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   });
 });
 
-// Errors reported by content.js while filling the FamilySearch form
-chrome.runtime.onMessage.addListener((request) => {
-  if (request && request.action === 'fillFormError') {
-    showErrorMessage(request.message);
-  }
-});
-
 // Phase 1 → 2: the "Digital Arkivet" entry on a FamilySearch person page (fs_person.js)
 // sends that person's details. They become search criteria in the address of the
 // search page (search.html), the way FS's own record search keeps them in its URL, and
 // the page opens next to the FS tab.
 chrome.runtime.onMessage.addListener((request, sender) => {
   if (request && request.action === 'searchDA') {
+    rememberPerson(request.person);
     personToQuery(request.person).then((q) => {
       const url = chrome.runtime.getURL('search.html') + '?' + q.toString();
       const opener = sender.tab;
@@ -116,6 +79,23 @@ chrome.runtime.onMessage.addListener((request, sender) => {
     });
   }
 });
+
+// The FS person and family the search was opened for, kept for the linker
+// (linker.html pairs the record's people with them): `person:<PID>`, and `persons`,
+// the most recent first ({pid, name}), at most MAX_PERSONS
+const MAX_PERSONS = 30;
+async function rememberPerson(person) {
+  if (!person || !person.pid) return;
+  try {
+    const { persons = [] } = await chrome.storage.local.get('persons');
+    const list = [{ pid: person.pid, name: person.name }, ...persons.filter((p) => p.pid !== person.pid)];
+    await chrome.storage.local.set({ ['person:' + person.pid]: person, persons: list.slice(0, MAX_PERSONS) });
+    const old = list.slice(MAX_PERSONS).map((p) => 'person:' + p.pid);
+    if (old.length) await chrome.storage.local.remove(old);
+  } catch (error) {
+    console.warn('Could not keep the FS person:', error);
+  }
+}
 
 // Patronymic surnames: -sen/-søn/-son, -datter/-dotter and their abbreviations
 const PATRONYMIC = /(s[eøo]n|datter|dotter|dtr\.?|sdr?\.?)$/i;

@@ -1,6 +1,6 @@
 # Plan: Phases 1 and 2 — from a FamilySearch person to DigitalArkivet records
 
-Phase 3 (DA record → FS SourceBox) is done. This plan covers the two phases before it:
+Phase 3 (DA record → FS source, now the DA Linker: milestone 10) is done. This plan covers the two phases before it:
 
 1. **Phase 1** — on a FS person details page, add a "Digital Arkivet" entry to the
    *Search Records* panel, below Google, with the extension's icon. Clicking it collects the
@@ -273,8 +273,7 @@ cope with FS entries others made with a farm in the name.
 - **"Create source" button:** a button on each match could run Phase 3 directly
   (fetch + `extractRecord(doc)`, which already works on fetched pages), skipping the
   visit to the DA page.
-- **Attaching to the FS tree:** attaching records to persons directly needs
-  investigation (FS API or UI automation).
+- **Attaching to the FS tree:** done as the DA Linker (milestone 10).
 
 ## Milestones
 
@@ -353,6 +352,19 @@ Each milestone is testable on its own.
    Done: `README.md` covers installing, the three steps (the FS entry, the search
    page and its scores, the SourceBox), DA's request limits, transcription caveats,
    which sites are contacted, and the files. CLAUDE.md describes every file.
+
+10. **DA Linker:** review a record as a source and attach it to the tree, as FS's
+   Source Linker does for its own records. FS's `/platform/` API answers 401 without
+   a session token, so the linker automates FS's own UI instead: the SourceBox's
+   Create Source and Attach (Find by ID, then the reason), and the person's Sources
+   tab for tags (the chips' `data-selected`). `linker.html` is the pause: the user
+   edits the source (a child baptized as "Ole" can become "Ole Olsen" from the
+   father's patronymic, and the title, citation and notes follow), pairs the
+   record's people with the FS person and family (suggested by role, given name and
+   birth year), and chooses tags and reasons. Only then does `fs_attach.js` run the
+   steps in an FS tab. The FS family is the one `fs_person.js` read for the search,
+   kept in extension storage. Tags are only added, never removed, and a source with
+   the same title already in the SourceBox is reused.
 
 ## Decisions
 

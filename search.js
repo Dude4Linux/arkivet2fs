@@ -289,6 +289,11 @@ function hitRow(hit) {
     reasons.append(el('li', { class: 'checked muted', text: hit.checkError ? 'record not read: ' + hit.checkError
       : hit.checks.length ? 'record checked' : 'record checked: no relatives to compare' }));
   }
+  // The record in the linker (linker.html), to review it as a source and attach it to
+  // the FS person (the hit is their entry) and the relatives it names
+  const treeref = new URLSearchParams(location.search).get('treeref');
+  const link = hit.url ? el('a', { href: 'linker.html?' + new URLSearchParams(treeref ? { rec: hit.url, pid: treeref } : { rec: hit.url }),
+    target: '_blank', class: 'hit-attach', text: 'Review & Attach' }) : '';
   const source = hit.sourceUrl
     ? el('a', { href: hit.sourceUrl, target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
     : el('span', { class: 'hit-source', text: hit.source || '' });
@@ -296,7 +301,8 @@ function hitRow(hit) {
     el('div', { class: 'hit-person' }, [
       el('a', { href: hit.url, target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
       hit.role ? el('span', { class: 'hit-role', text: hit.role }) : '',
-      source
+      source,
+      link
     ]),
     el('div', { class: 'hit-details' }, events),
     reasons,
