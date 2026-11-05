@@ -253,3 +253,11 @@ function municipalityCodes(place) {
   }
   return [...new Set(codes.flatMap((code) => [code, ...(MUNICIPALITY_NEIGHBOURS[code] || [])]))];
 }
+
+// An FS place → the DA county codes it lies in: the counties it names and those of
+// the municipalities it names (a municipality's code starts with its county's)
+function countyCodes(place) {
+  const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
+  const named = parts.flatMap((part) => placeCodes(part).counties);
+  return [...new Set([...named, ...municipalityCodes(place).map((code) => code.slice(0, 2))])].filter((code) => code in DA_COUNTIES);
+}

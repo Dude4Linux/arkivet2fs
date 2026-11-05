@@ -308,7 +308,8 @@ function hitRow(hit) {
 const colHead = (labels) => el('div', { class: 'col-head', 'aria-hidden': 'true' },
   labels.map(([text, cls]) => el('span', cls ? { class: cls, text } : { text })));
 
-// One line per query: what it searched for, how many hits, and the same search on DA
+// One line per query: what it searched for, how many hits, the search on DA, and
+// (filled in when it has run) the list of its searches
 function queryRow(query) {
   const status = el('span', { class: 'query-status muted', text: query.skip || 'Waiting…' });
   const link = query.skip ? null : el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on DA' });
@@ -319,28 +320,42 @@ function queryRow(query) {
     link || ''
   ]);
   const hint = el('span', { class: 'query-hint muted', hidden: '' });
-  row.append(hint);
-  return { row, status, link, hint };
+  const steps = el('details', { class: 'query-steps', hidden: '' });
+  row.append(hint, steps);
+  return { row, status, link, hint, steps };
 }
 
-// What to change when a search finds too many hits or none, or '' when it's fine
-function hintFor(query, params, total, read) {
-  const placed = params.has('m[]') || params.has('c[]');
-  if (total > read) {
-    return placed ? 'Too many to read them all: narrow the years, or add a farm or a relative.'
-      : 'Too many to read them all: choose a county or municipality under Where to search, or narrow the years.';
+// A query's searches, one line each: names, place, hits (or too many), on DA
+function stepList(details, searches) {
+  const count = (s) => (s.total === 0 ? 'none' : s.read ? s.total + ' hit' + (s.total === 1 ? '' : 's')
+    : s.total + ' hits, too many to read');
+  details.replaceChildren(
+    el('summary', { text: searches.length + ' search' + (searches.length === 1 ? '' : 'es') }),
+    el('ol', {}, searches.map((s) => el('li', { class: s.read ? 'used' : '' }, [
+      el('a', { href: daSearchUrl(s.params), target: '_blank', rel: 'noopener', text: s.step + ' · ' + s.place }),
+      el('span', { class: 'muted', text: ': ' + count(s) })
+    ])))
+  );
+  details.hidden = !searches.length;
+}
+
+// What to change when a query finds nothing, finds only too many, or misses some of
+// what it looks for (known children, census years); '' when it's fine
+function hintFor(query, result, hits) {
+  const tooMany = result.searches.some((s) => s.total && !s.read);
+  if (hits && result.missing.length) return 'Not found: ' + result.missing.join(', ') + '.';
+  if (hits) return '';
+  if (tooMany) {
+    return 'Too many hits to read (over ' + readLimit() + ' in each search): add a birth year, a relative or a farm, ' +
+      'or choose a municipality under Where to search.';
   }
-  if (total > 0) return '';
   const tries = [];
-  if (params.has('related_first_name')) {
-    tries.push(query.id === 'baptism' ? 'untick the parent (DA’s transcriptions of parents can be far off)' : 'untick the spouse');
-  }
-  if (params.has('m[]') || params.has('c[]')) tries.push('remove places under Where to search');
-  if (params.has('domicile')) tries.push('spell the farm as DA does');
+  if (result.searches.some((s) => s.params.has('related_first_name'))) tries.push('check the relatives’ names, or untick them');
+  if (result.searches.some((s) => s.params.has('m[]') || s.params.has('c[]'))) tries.push('check the places (or those under Where to search)');
+  if (query.base.has('domicile') || result.searches.some((s) => s.params.has('domicile'))) tries.push('spell the farm as DA does');
   tries.push('widen the years');
-  if (params.has('lastname')) tries.push('try another spelling of the surname');
-  const text = tries.join('; ');
-  return 'Nothing found: ' + text + '.';
+  if (result.searches.some((s) => s.params.has('lastname'))) tries.push('try another spelling of the surname');
+  return 'Nothing found: ' + tries.join('; ') + '.';
 }
 
 // Read the record pages of the best hits in each group and score what they say
@@ -350,7 +365,7 @@ async function checkHits(run, merged, person, container, status) {
   const MAX_CHECKS = 40;
   let checked = 0;
   while (run === generation && checked < MAX_CHECKS) {
-    const hit = hitsToCheck(groupHits(merged, person)).find((h) => !merged.get(h.id || h.url).checks);
+    const hit = hitsToCheck(groupHits(merged, person), person).find((h) => !merged.get(h.id || h.url).checks);
     if (!hit) break;
     status.textContent = 'Checking the records of the best hits (' + (checked + 1) + ')…';
     const entry = merged.get(hit.id || hit.url);
@@ -450,19 +465,23 @@ async function renderResults(criteria) {
     if (view.query.skip) continue;
     view.status.textContent = 'Searching…';
     try {
-      const { total, hits, params, notes } = await runQuery(view.query);
+      const result = await runQuery(view.query);
       if (run !== generation) return;
-      // The link opens the search that was used (another name, or narrowed to places)
-      view.link.href = daSearchUrl(params);
-      const count = total === 0 ? 'no hits'
-        : total > hits.length ? `${total} hits, the first ${hits.length} used`
-        : `${total} hit${total === 1 ? '' : 's'}`;
-      const text = [...notes, count].join('; ');
-      view.status.textContent = text[0].toUpperCase() + text.slice(1);
-      const hint = hintFor(view.query, params, total, hits.length);
+      // The link opens the first search that found hits (or the first one)
+      const used = result.searches.find((x) => x.read) || result.searches[0];
+      if (used) view.link.href = daSearchUrl(used.params);
+      const ids = new Set(result.found.flatMap((f) => f.hits.map((h) => h.id || h.url)));
+      const withHits = result.searches.filter((x) => x.read).length;
+      const of = result.searches.length;
+      view.status.textContent = ids.size
+        ? ids.size + ' hit' + (ids.size === 1 ? '' : 's') + (of > 1 ? ' from ' + withHits + ' of ' + of + ' searches' : '')
+        : (result.searches.some((x) => x.total) ? 'Too many hits' : 'No hits') + (of > 1 ? ' in ' + of + ' searches' : '');
+      stepList(view.steps, result.searches);
+      const hint = hintFor(view.query, result, ids.size);
       view.hint.textContent = hint;
       view.hint.hidden = !hint;
-      mergeHits(merged, view.query, hits);
+      // Each search's hits, with what that search matched (its step's reasons)
+      for (const { step, hits } of result.found) mergeHits(merged, step, hits);
       renderGroups(groups, merged, person);
     } catch (error) {
       if (run !== generation) return;

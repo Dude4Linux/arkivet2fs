@@ -230,10 +230,15 @@ button.primary:hover { filter: brightness(0.92); }
 .query.skipped .query-status { grid-column: 3 / -1; }
 .query-status.error { color: var(--bad); }
 .query-hint { grid-column: 2 / -1; font-size: 12.3px; }
+.query-steps { grid-column: 2 / -1; font-size: 12.3px; }
+.query-steps summary { cursor: pointer; color: var(--muted); }
+.query-steps ol { margin: 4px 0 0; padding-left: 20px; }
+.query-steps li { margin: 2px 0; }
+.query-steps li.used a { font-weight: 600; }
 @media (max-width: 760px) {
   .query { grid-template-columns: minmax(0, 1fr) auto; }
   .query-summary { grid-column: 1 / -1; grid-row: 2; }
-  .query-hint, .query.skipped .query-status { grid-column: 1 / -1; }
+  .query-hint, .query-steps, .query.skipped .query-status { grid-column: 1 / -1; }
   .searches .col-head { display: none; }
 }
 

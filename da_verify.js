@@ -8,7 +8,7 @@
 
 // How many hits of each group are checked, best first (more of the children's
 // baptisms, each a different child), and the lowest score checked
-const CHECK_PER_GROUP = { "Children's baptisms": 8, "Children's marriages": 6 };
+const CHECK_PER_GROUP = { "Children's baptisms": 12, "Children's marriages": 6 };
 const CHECK_DEFAULT = 3;
 const CHECK_MIN_SCORE = 0;
 // Groups whose records name the person's relatives (or, emigration, the destination)
@@ -188,8 +188,28 @@ async function fetchRecord(hit) {
 }
 
 // The hits worth checking: in each group, the best few (CHECK_PER_GROUP) scoring at
-// least CHECK_MIN_SCORE (groups from groupHits())
-function hitsToCheck(groups) {
-  return groups.filter((g) => CHECKED_GROUPS.includes(g.title))
-    .flatMap((g) => g.hits.filter((h) => h.score >= CHECK_MIN_SCORE && h.url).slice(0, CHECK_PER_GROUP[g.title] || CHECK_DEFAULT));
+// least CHECK_MIN_SCORE (groups from groupHits()). In children's baptisms, first the
+// best few of each known child's years (`P`, the profile) until a checked record
+// names that child: a namesake's records can outscore the one baptism that has the
+// child's father under another name.
+function hitsToCheck(groups, P) {
+  return groups.filter((g) => CHECKED_GROUPS.includes(g.title)).flatMap((g) => {
+    const hits = g.hits.filter((h) => h.score >= CHECK_MIN_SCORE && h.url);
+    const first = g.title === "Children's baptisms" && P ? childYearHits(hits, P) : [];
+    const rest = hits.filter((h) => !first.includes(h));
+    return [...first, ...rest].slice(0, Math.max(first.length, CHECK_PER_GROUP[g.title] || CHECK_DEFAULT));
+  });
+}
+
+// For each known child no checked record names (a ✓ "child ..." of checkRecord()),
+// the best three hits of the child's years (baptism in the birth year or the next)
+function childYearHits(hits, P) {
+  const yearOf = (h) => Number(((h.date || '').match(/\b(1[5-9]\d\d)\b/) || [])[1]);
+  const named = (h) => (h.checks || []).some((r) => r.ok && /^child /.test(r.text));
+  const first = [];
+  for (const child of P.children.filter((c) => c.year)) {
+    const mine = hits.filter((h) => yearOf(h) >= child.year && yearOf(h) <= child.year + 1);
+    if (!mine.some(named)) first.push(...mine.slice(0, 3).filter((h) => !first.includes(h)));
+  }
+  return first.sort((a, b) => b.score - a.score);
 }

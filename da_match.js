@@ -26,8 +26,9 @@ function groupOf(hit) {
   }
 }
 
-// Add a query's hits to `merged` (a Map by permanent ID); a record found by several
-// queries is kept once, with all of them
+// Add a search's hits to `merged` (a Map by permanent ID); a record found by several
+// searches is kept once, with all of them (`query`: anything with the `reasons`
+// its hits matched, a query's step in search.js)
 function mergeHits(merged, query, hits) {
   for (const hit of hits) {
     const key = hit.id || hit.url;
@@ -180,20 +181,39 @@ function scoreHit(hit, P) {
     else if (hasWord(farmText, farm)) add(2, 'farm ' + farm, true);
   }
 
-  // What the queries themselves matched (a parent, a spouse)
-  for (const query of hit.queries) for (const r of query.reasons || []) add(2, r, true);
+  // What the searches themselves matched (a parent, a spouse, a farm): once per
+  // relative, from the strictest search that found the hit ("mother Ing* Lars*", not
+  // also "mother Ing*")
+  const matched = new Set();
+  for (const query of hit.queries) {
+    for (const r of query.reasons || []) {
+      const relation = r.replace(/ (?=[^ ]*\p{Lu}|[^ ]*\*).*$/u, '');
+      if (!matched.has(relation)) { matched.add(relation); add(2, r, true); }
+    }
+  }
   // What the record page says (da_verify.js checkRecord)
   for (const r of hit.checks || []) add(r.points, r.text, r.ok);
 
   return { score: reasons.reduce((sum, r) => sum + r.points, 0), reasons };
 }
 
-// The merged hits, scored, as [{ title, hits }] in GROUP_ORDER, best first
+// A hit's event date as a number to sort by (1821-04-08 → 18210408; a year alone, or
+// a year from the source title, sorts before that year's dates); undated hits last
+function dateKey(hit) {
+  const m = (hit.date || '').match(/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/);
+  if (m) return Number(m[1]) * 10000 + (Number(m[2]) <= 12 ? Number(m[2]) * 100 : 0) + (m[2] && Number(m[2]) <= 12 && m[3] ? Number(m[3]) : 0);
+  const year = yearIn(hit.date) || yearIn(hit.source);
+  return year ? year * 10000 : Infinity;
+}
+
+// The merged hits, scored, as [{ title, hits }] in GROUP_ORDER, best first, and
+// those with the same score by date, earliest first (a couple's children in order)
 function groupHits(merged, P) {
   const groups = new Map(GROUP_ORDER.map((title) => [title, []]));
   for (const hit of merged.values()) {
     groups.get(groupOf(hit)).push({ ...hit, ...scoreHit(hit, P) });
   }
+  const order = (a, b) => b.score - a.score || (dateKey(a) - dateKey(b) || 0);
   return [...groups].filter(([, hits]) => hits.length)
-    .map(([title, hits]) => ({ title, hits: hits.sort((a, b) => b.score - a.score) }));
+    .map(([title, hits]) => ({ title, hits: hits.sort(order) }));
 }
