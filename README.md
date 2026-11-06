@@ -18,15 +18,35 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 
 ## Install
 
-There's no build step.
+There's no build step: the extension is its source files.
 
-1. Download or clone this repository: https://github.com/Dude4Linux/arkivet2fs
-   (**Code** → **Download ZIP**, then unzip it).
-2. Open `chrome://extensions` (or `brave://extensions`) and turn on **Developer mode**.
-3. Click **Load unpacked** and choose the repository folder.
-4. Pin the extension's icon to the toolbar.
+1. Download `arkivet2fs-X.Y.Z-chromium.zip` from the latest release:
+   https://github.com/Dude4Linux/arkivet2fs/releases/latest (or clone the repository,
+   or **Code** → **Download ZIP**, for the newest code).
+2. Unzip it where it can stay, for instance in your home folder. It unpacks to a folder
+   named `arkivet2fs`.
+3. Open `chrome://extensions` (or `brave://extensions`) and turn on **Developer mode**.
+4. Click **Load unpacked** and choose the `arkivet2fs` folder.
+5. Pin the extension's icon to the toolbar.
 
 You need to be signed in to FamilySearch. Digitalarkivet needs no account.
+
+**To update**, unzip the new release over the same folder, replacing its files, and
+click the reload button on the extension's card in `chrome://extensions`. Chrome keeps
+an unpacked extension's stored persons and drafts by its folder, so keep the folder
+where it is.
+
+**To check a download** (optional): each package has a signature (`.sig`) made with
+the maintainer's key, `keys/release.pub` in the repository, whose SHA-256 fingerprint
+is
+
+    7642e107e134dfb53e43e4932b32a23301b88b8d28a32b10abe367d16d36bc54
+
+With the package, its `.sig`, `SHA256SUMS` and `SHA256SUMS.sig` in one folder, and
+OpenSSL 3, run `sh tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip` in a clone of the
+repository (or give the path of `release.pub` after the package). GitHub also attests
+where each package was built: `gh attestation verify arkivet2fs-X.Y.Z-chromium.zip
+--repo Dude4Linux/arkivet2fs`.
 
 ## Use
 
@@ -230,7 +250,11 @@ use that language.
 | `plan.md` | Design notes and milestones for the FS → DA search |
 | `release-plan.md` | The plan for packages, signed releases and other browsers |
 | `tests/` | The tests (`npm test`), on sanitized Digitalarkivet pages; see `tests/README.md` |
-| `.github/workflows/ci.yml` | Runs the tests on GitHub for every push and pull request |
+| `.github/workflows/ci.yml` | Runs the tests and a build on GitHub for every push and pull request |
+| `.github/workflows/release.yml` | Drafts a release, with the package, for each version tag |
+| `tools/` | Building the package (`build.mjs`), signing a release (`sign.mjs`), checking a download (`verify.sh`) |
+| `keys/release.pub` | The public key the releases are signed with |
+| `CHANGELOG.md` | What changed in each version |
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |
 | `LICENSE` | The GNU General Public License, version 3 |
 
@@ -262,8 +286,12 @@ Pull requests are welcome. Before you open one:
   Or just give the record's address in the pull request, and the page is added for
   you. Never add FamilySearch pages: they hold living people and other users' work.
   `tests/README.md` says how.
-- **Keep the extension dependency-free.** It has no build step; `package.json` is for
-  the tests only.
+- **Keep the extension dependency-free.** It has no build step (the release package
+  is the source files, zipped by `tools/build.mjs`); `package.json` is for the tests
+  only. A new file of the extension needs a line in `tools/build.mjs`'s lists, or the
+  build stops.
+- **Say what changed for users** in a line under a new version's heading in
+  `CHANGELOG.md`; the version number is the maintainer's to set.
 
 ## License
 

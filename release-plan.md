@@ -60,7 +60,7 @@ tools/
 tests/                    the jsdom unit tests, rebuilt and kept in the repo
 keys/release.pub          the public signing key (also pinned in the extension)
 .github/workflows/
-  ci.yml                  on push and pull request: syntax, fixture IDs, tests (build later)
+  ci.yml                  on push and pull request: syntax, fixture IDs, tests, build
   release.yml             on a v* tag: build, sign, draft a GitHub release
 CHANGELOG.md              one section per version; the release notes come from here
 package.json              dev-only tools (jsdom, web-ext); nothing ships from npm
@@ -164,15 +164,35 @@ Done but for the mirror and the settings (marked *to do*).
 
 ### Phase 2: Chromium packages and signed releases
 
-- **Tooling:** `tools/build.mjs` (chromium target), `tools/sign.mjs`, `tools/verify.sh`,
-  `CHANGELOG.md`, and `release.yml`. A tag builds, signs, attests and drafts the
-  release; you publish the draft.
-- **Exclude from the zip:** what users don't need (docs for developers, tests, tools,
-  platform/, `banner.*`).
+- **Done: tooling:** `tools/build.mjs` (chromium target), `tools/sign.mjs`, `tools/verify.sh`,
+  `CHANGELOG.md`, and `release.yml` (tests in `tests/tools.test.js`; CI builds the
+  package on every push). A tag builds, attests and drafts the release; `sign.mjs`
+  signs it locally (decision 5), and you publish the draft.
+- **How it turned out:**
+  - The zip is reproducible: the committed files of the tag (never the working tree),
+    stored uncompressed in name order with the commit's time. `sign.mjs` rebuilds the
+    tag locally and signs CI's zip only when the two are byte for byte the same, so a
+    signature vouches for both the source and the build.
+  - The zip unpacks to a folder `arkivet2fs/`. Chrome keeps an unpacked extension's
+    data by its folder, so an update is unzipped over the same folder. A store upload
+    (3b) wants the manifest at the zip's root and gets its own zip then.
+  - Every file in the tree is either shipped or excluded by a rule; a new file with
+    neither stops the build, as does a shipped file nothing refers to (the SVG sources
+    of the icons are left out that way) or a reference to one that isn't shipped.
+  - The private key is encrypted, in `~/.config/arkivet2fs/release-key.pem`, made by
+    `node tools/sign.mjs --new-key`; the public key is `keys/release.pub`, its
+    fingerprint in the README.
+  - release.yml can also be run by hand for an existing tag, e.g. v1.1.3, made before
+    the workflow.
+- *To do:* the key pair, and the first release.
+- **Done: exclude from the zip:** what users don't need (docs for developers, tests, tools,
+  platform/, keys/, `banner.*`, the icons' SVG sources but `icon32.svg`).
 - **Test:** a throwaway tag on a fork, or a draft release that's deleted afterwards, to
   check the zip loads in Chrome and Brave, and that `verify.sh` accepts the signature
   and rejects a tampered byte.
-- **Version:** the next PATCH (1.1.3, or 1.1.4 if the two scoring fixes found by the tests ship first); the first release from GitHub.
+- **Version:** none for the tooling (the shipped files don't change). The first release
+  from GitHub is v1.1.3, drafted by hand from its tag (1.1.3 shipped the two scoring
+  fixes the tests found), or the next version if there's a change to ship first.
 
 ### Phase 3: The update checker (Chromium)
 

@@ -1,4 +1,5 @@
-# The tests and a syntax check of every script, on each push and pull request.
+# The tests, a syntax check of every script and a build of the packages, on each push
+# and pull request.
 # Actions are pinned to commit SHAs (the tag in the comment); the token can only read.
 name: CI
 
@@ -31,7 +32,10 @@ jobs:
       - run: npm ci
 
       - name: Syntax of every script
-        run: git ls-files -z '*.js' '*.mjs' | xargs -0 -n1 node --check
+        run: |
+          git ls-files -z '*.js' '*.mjs' | xargs -0 -n1 node --check
+          git ls-files -z '*.sh' | xargs -0 -n1 sh -n
+          git ls-files -z '*.sh' | xargs -0 shellcheck
 
       # The fixtures are sanitized DA pages: their permanent IDs are made up (pd99...).
       # A real one (also inside an encoded address, %2Fpd0000...) means a page went in
@@ -44,3 +48,14 @@ jobs:
           fi
 
       - run: npm test
+
+      # Every file must be shipped or excluded, and the shipped ones must refer to each
+      # other completely (tools/build.mjs); the package is kept for a week to try out.
+      - name: Build the packages
+        run: node tools/build.mjs --out dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: dist/*.zip
+          retention-days: 7

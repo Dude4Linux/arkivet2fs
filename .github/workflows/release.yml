@@ -1,0 +1,77 @@
+# Drafts a GitHub release for a vX.Y.Z tag: tests, builds the packages from the tag
+# (tools/build.mjs), attests where they were built, and creates a draft release with
+# the notes from CHANGELOG.md. Signing happens afterwards on the maintainer's machine
+# (node tools/sign.mjs vX.Y.Z), which then leaves the draft to be published by hand.
+#
+# Runs on a pushed tag, or by hand (Actions -> Release -> Run workflow) for a tag that
+# already exists, e.g. one made before this workflow. Actions are pinned to commit SHAs.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release tag, vX.Y.Z
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the draft release
+      id-token: write # sign the attestation (Sigstore)
+      attestations: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the tags, and the tagged commit when run by hand
+
+      - name: The tag
+        run: |
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::$TAG isn't a vX.Y.Z tag"; exit 1 ;;
+          esac
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm test
+
+      # checks the tag (annotated, the manifest's version) and builds from it
+      - name: Build the packages
+        run: |
+          node tools/build.mjs --tag "$TAG" --out dist
+          node tools/build.mjs --notes "$TAG" > notes.md
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.zip
+
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::a release $TAG exists already; delete the draft to make it again"
+            exit 1
+          fi
+          gh release create "$TAG" dist/*.zip --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "arkivet2fs ${TAG#v}" --notes-file notes.md
+          echo "Drafted $TAG. Sign it locally: node tools/sign.mjs $TAG" >> "$GITHUB_STEP_SUMMARY"
