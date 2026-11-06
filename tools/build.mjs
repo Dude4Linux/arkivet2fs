@@ -225,9 +225,22 @@ export function changelogSection(text, v) {
   if (start < 0) throw new Error(`CHANGELOG.md has no section for ${v}`);
   let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
   if (end < 0) end = lines.length;
-  const body = lines.slice(start + 1, end).join('\n').trim();
+  const body = unwrap(lines.slice(start + 1, end)).join('\n').trim();
   if (!body) throw new Error(`CHANGELOG.md's section for ${v} is empty`);
   return body + '\n';
+}
+
+// Joins the wrapped lines of a paragraph or list item: GitHub shows each line break
+// in release notes as one
+export function unwrap(lines) {
+  const out = [];
+  for (const line of lines) {
+    const prev = out.length ? out[out.length - 1] : '';
+    const starts = /^\s*([-*+] |\d+\. |#|```|>)/.test(line);
+    if (line.trim() && prev.trim() && !starts && !/^```/.test(prev)) out[out.length - 1] = prev.replace(/\s+$/, '') + ' ' + line.trim();
+    else out.push(line);
+  }
+  return out;
 }
 
 function main(argv) {

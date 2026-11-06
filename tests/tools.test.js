@@ -79,6 +79,9 @@ test('changelogSection(): a version\'s notes; CHANGELOG.md has the manifest\'s v
   assert.equal(b.changelogSection(text, '1.2.0'), '- New\n');
   assert.equal(b.changelogSection(text, '1.1.9'), '- Old\n');
   assert.throws(() => b.changelogSection(text, '1.2'), /no section for 1\.2/);
+  // GitHub shows a line break in release notes as one, so wrapped lines are joined
+  assert.equal(b.changelogSection('## 2.0.0\n\n- A long\n  item\n- Next\n  - sub\n\nA para\ngraph.\n', '2.0.0'),
+    '- A long item\n- Next\n  - sub\n\nA para graph.\n');
   const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')).version;
   assert.ok(b.changelogSection(fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8'), version));
 });
