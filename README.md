@@ -217,6 +217,7 @@ use that language.
 | `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |
+| `LICENSE` | The GNU General Public License, version 3 |
 
 The version is shown when you hover over the extension's toolbar icon, and on its
 card in `chrome://extensions`. It counts up as MAJOR.MINOR.PATCH: fixes raise the
@@ -224,3 +225,18 @@ last number, new features the middle one.
 
 Developer notes are in `CLAUDE.md`. After changing the code, reload the extension on
 `chrome://extensions`.
+
+## License
+
+Copyright © 2025–2026 Dude4Linux
+
+arkivet2fs is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License in [`LICENSE`](LICENSE) for details.
+
+In short: you may use, study, share and change it, also commercially, but a changed
+version you distribute must be under the GPL too, with its source and this notice.

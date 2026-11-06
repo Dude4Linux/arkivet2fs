@@ -78,4 +78,4 @@ The extension requires access to `https://*.familysearch.org/*` and `https://*.d
 
 ## Reference
 
-`README.md` is the user guide (install, the three steps, limits). `plan.md` holds the Phase 1–2 design notes and milestones. `ai_prompt.md` contains the original project specification, including DA Permanent ID type prefixes and the planned multi-record-type workflow.
+`README.md` is the user guide (install, the three steps, limits, the license). `LICENSE` is the GPL-3.0 text (GPL-3.0-or-later, as the README says). `plan.md` holds the Phase 1–2 design notes and milestones. `ai_prompt.md` contains the original project specification, including DA Permanent ID type prefixes and the planned multi-record-type workflow.
