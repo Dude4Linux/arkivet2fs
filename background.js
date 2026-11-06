@@ -152,15 +152,15 @@ function yearsOf(date) {
 
 // FS person (from fs_person.js) → search criteria, named like FS's record search
 // (q.givenName, q.surname.1, q.birthLikeDate.from, ...; repeats get .1, .2, ...).
-// Year ranges are ±2, as on FS.
+// Year ranges are ±2, as on FS (a full birth date ±1); q.birthLikeDate is FS's birth date.
 async function personToQuery(person) {
   const q = new URLSearchParams();
   const suffix = (k) => (k === 0 ? '' : '.' + k);
   const set = (name, value) => { if (value !== '' && value != null) q.set(name, String(value)); };
-  const range = (name, years, k = 0) => {
+  const range = (name, years, k = 0, pad = 2) => {
     if (years.length === 0) return;
-    set('q.' + name + 'Date.from' + suffix(k), Math.min(...years) - 2);
-    set('q.' + name + 'Date.to' + suffix(k), Math.max(...years) + 2);
+    set('q.' + name + 'Date.from' + suffix(k), Math.min(...years) - pad);
+    set('q.' + name + 'Date.to' + suffix(k), Math.max(...years) + pad);
   };
 
   set('treeref', person.pid);
@@ -214,7 +214,13 @@ async function personToQuery(person) {
   // The more specific of the two ("Vågå, Oppland, Norway", not just "Norway")
   const parts = (place) => (place || '').split(',').filter((p) => p.trim()).length;
   set('q.birthLikePlace', parts(christening.place) > parts(birth.place) ? christening.place : birth.place || christening.place);
-  range('birthLike', [...yearsOf(birth.date), ...yearsOf(christening.date)]);
+  // FS's birth date as written ("16 July 1846", often from a gravestone: Find a Grave),
+  // for scoring by the year and the day (else the christening's year). A full date is
+  // searched ±1 year, others ±2.
+  const born = parseFsDate(birth.date);
+  const christened = parseFsDate(christening.date);
+  set('q.birthLikeDate', born ? birth.date.trim() : christened ? christened.year : '');
+  range('birthLike', [...yearsOf(birth.date), ...yearsOf(christening.date)], 0, born && born.exact ? 1 : 2);
 
   const marriage = (person.families || []).map(f => f.marriage).find(m => m && (m.date || m.place));
   if (marriage) {

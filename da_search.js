@@ -201,6 +201,8 @@ function profile(criteria) {
     surnames: unique(names.map((n) => (n.surname || '').trim()).filter(Boolean)),
     sex: first('sex').sex || '',
     birth: range(b['birthLikeDate.from'], b['birthLikeDate.to']), birthPlace: (b.birthLikePlace || '').trim(),
+    // FS's birth date ({year, month, day, exact}: parseFsDate()) and year, when it has one
+    birthDate: parseFsDate(b.birthLikeDate),
     marriage: range(m['marriageLikeDate.from'], m['marriageLikeDate.to']), marriagePlace: (m.marriageLikePlace || '').trim(),
     death: range(d['deathLikeDate.from'], d['deathLikeDate.to']), deathPlace: (d.deathLikePlace || '').trim(),
     emigration: range(e['emigrationLikeDate.from'], e['emigrationLikeDate.to']), emigrationPlace: (e.emigrationLikePlace || '').trim(),
@@ -212,6 +214,12 @@ function profile(criteria) {
     residences: criteria.residence.map((r) => (r.residencePlace || '').trim()).filter(Boolean),
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };
+  // Without a date, a range four years wide is FS's year ±2 (personToQuery(); an
+  // older link), so its middle is FS's year
+  if (!P.birthDate && P.birth && P.birth.to - P.birth.from === 4) {
+    P.birthDate = { year: P.birth.from + 2, month: null, day: null, exact: false };
+  }
+  P.birthYear = P.birthDate ? P.birthDate.year : null;
   P.places = unique([P.birthPlace, P.marriagePlace, P.deathPlace, ...P.residences].filter(Boolean));
   P.estBirth = estimatedBirth(P);
   // The last year to search Norway's records in: the end of the emigration range

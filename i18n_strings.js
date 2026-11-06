@@ -254,6 +254,12 @@ function i18nTable() {
     '{relation} {name} at the same residence': ['{relation} {name} på samme bosted', '{relation} {name} på same bustad'],
     'unmarried in {year}, married by {married} in FamilySearch': ['ugift i {year}, gift innen {married} i FamilySearch', 'ugift i {year}, gift innan {married} i FamilySearch'],
     'going to {place}': ['skal til {place}', 'skal til {place}'],
+    '{relation} {name} in the record, for {fs}': ['{relation} {name} i oppføringen, for {fs}', '{relation} {name} i oppføringa, for {fs}'],
+    'born {date}, as in FamilySearch': ['født {date}, som i FamilySearch', 'fødd {date}, som i FamilySearch'],
+    'born {date} (FamilySearch: {fs})': ['født {date} (FamilySearch: {fs})', 'fødd {date} (FamilySearch: {fs})'],
+    'born {date}, not {fs} as in FamilySearch': ['født {date}, ikke {fs} som i FamilySearch', 'fødd {date}, ikkje {fs} som i FamilySearch'],
+    '{what} {year} (FamilySearch: b. {fs})': ['{what} {year} (FamilySearch: f. {fs})', '{what} {year} (FamilySearch: f. {fs})'],
+    'baptised {date}, before the birth ({fs})': ['døpt {date}, før fødselen ({fs})', 'døypt {date}, før fødselen ({fs})'],
 
     // --- Linker page -------------------------------------------------------------------
     'Digital Arkivet linker': ['Kobling fra Digitalarkivet', 'Kopling frå Digitalarkivet'],

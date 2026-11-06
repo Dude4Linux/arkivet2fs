@@ -106,6 +106,22 @@ function formatDate(year, month, day) {
   return [d ? d + '.' : '', no[m], year].filter(Boolean).join(' ');
 }
 
+// A date as FS writes it, on its English or Norwegian pages ("16 July 1846",
+// "16. juli 1846", "Abt 1846", "ca. 1846", "1846") → { year, month, day, exact }, or
+// null without a year. `exact`: a day, a month and no qualifier (a recorded date, such
+// as a gravestone's); a date before, after or between years gives no year at all.
+function parseFsDate(text) {
+  const s = String(text || '').toLowerCase().trim();
+  const year = s.match(/\b(1[5-9]\d\d|20\d\d)\b/);
+  if (!year) return null;
+  if (/\b(bef|before|før|aft|after|etter|bet|between|mellom|from|fra|to|til|or|eller)\b|[<>–-]\s*\d|\d\s*[–-]/.test(s.replace(year[0], ''))) return null;
+  const months = ['jan', 'feb', 'mar', 'apr', 'ma[iy]', 'jun', 'jul', 'aug', 'sep', 'o[ck]t', 'nov', 'de[cs]'];
+  const month = months.findIndex((m) => new RegExp('(^|[^\\p{L}])' + m, 'u').test(s)) + 1 || null;
+  const day = month && Number((s.match(/(?:^|\s)(\d{1,2})\.?\s+\p{L}/u) || [])[1]) || null;
+  const approx = /\b(abt|about|ca|circa|omkring|omtrent|est|estimated|calc|calculated)\b/.test(s);
+  return { year: Number(year[1]), month, day: day && day <= 31 ? day : null, exact: !!(month && day && day <= 31 && !approx) };
+}
+
 // A DA page in the user's language: Bokmål has no prefix, Nynorsk /nn/, English /en/.
 // Only for links the user opens: the extension reads DA's English pages.
 function daPageUrl(url) {

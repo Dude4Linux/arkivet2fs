@@ -71,6 +71,19 @@ function nameMatch(word, name) {
   return sk.length >= 2 && skeleton(word) === sk;
 }
 
+// Points for a year this far from FS's (scoreHit()): 0 → 2, 1 → 1, 2–3 → -2,
+// 4–9 → -4, 10 or more → -6
+function yearPoints(off) {
+  return off === 0 ? 2 : off === 1 ? 1 : off <= 3 ? -2 : off <= 9 ? -4 : -6;
+}
+
+// A record's given name close to FS's, but not one of its forms: the record's is a
+// stem of FS's (Mari, Maria, Marie for Marit; nameMatch() the other way round), as
+// church books often write it
+function nameClose(word, name) {
+  return !nameMatch(word, name) && nameMatch(name, word);
+}
+
 // An FS place's parts, each with its other names
 function placeNames(place) {
   return place.split(',').map((part) => part.trim()).filter((part) => part.length >= 3 && !PLACE_IGNORE.test(part))
@@ -125,8 +138,9 @@ function scoreHit(hit, P) {
   // Sex: only a contradiction counts
   if (hit.gender && P.sex && hit.gender !== P.sex) add(-4, t(hit.gender).toLowerCase(), false);
 
-  // Years against a range: inside it 3 points (4 for its middle, which is FS's own
-  // year, since personToQuery widens it by 2), close 1, otherwise -4
+  // Other events' years (marriage, emigration, burial) against the sidebar's range:
+  // inside it 3 points (4 for its middle, FS's own year: personToQuery() widens it by
+  // 2), within `near` 1, otherwise -4
   const inRange = (y, from, to, text, near) => {
     const off = distance(y, from, to);
     const middle = (from + to) / 2;
@@ -135,15 +149,53 @@ function scoreHit(hit, P) {
     else add(-4, text + ' ' + y, false);
   };
 
-  // Birth year, when the record gives one
+  // Birth years by how far they are from FS's (yearPoints()): the same year +2, one
+  // off +1 (≈), and ✗ -2 two or three years off, -4 up to nine, -6 from ten (another
+  // generation: a namesake grandfather or grandson). Census ages are often a year or
+  // two off; a gravestone's year seldom.
+  const fsText = (text, year) => t('{what} {year} (FamilySearch: b. {fs})', { what: text, year, fs: P.birthYear });
+  const byYear = (off, year, text) => {
+    const a = Math.abs(off);
+    add(yearPoints(a), a === 0 ? text + ' ' + year : fsText(text, year), a === 0 ? true : a === 1 ? null : false);
+  };
+  // Without FS's year, the sidebar's range: inside it +1, one off 0, then as above
+  const byRange = (year, from, to, text) => {
+    const off = distance(year, from, to);
+    add(off === 0 ? 1 : off === 1 ? 0 : yearPoints(off), text + ' ' + year, off === 0 ? true : off === 1 ? null : false);
+  };
+  // A baptism against FS's birth: the same year, or the next for a birth from
+  // October; with both full dates, within half a year after the birth counts as the
+  // same year, and before the birth is ✗ (another child: two Oles of one Halvor Larsen)
+  const baptised = (date, year) => {
+    const b = P.birthDate;
+    const d = String(date || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (b.exact && d) {
+      const days = (Date.UTC(+d[1], d[2] - 1, +d[3]) - Date.UTC(b.year, b.month - 1, b.day)) / 864e5;
+      if (days < 0 && days > -730) {
+        add(-2, t('baptised {date}, before the birth ({fs})', { date: formatDate(d[1], d[2], d[3]), fs: formatDate(b.year, b.month, b.day) }), false);
+        return;
+      }
+      if (days >= 0 && days <= 183) { byYear(0, year, t('baptised')); return; }
+    }
+    const off = year - b.year;
+    byYear(off === 1 && b.month >= 10 ? 0 : off, year, t('baptised'));
+  };
+
+  // Birth year, when the record gives one: against FS's year, or the sidebar's range.
+  // DA's "1766*" is the year less an age (a census), itself a year uncertain (35 on
+  // census day: born 1765 or 1766), so it counts one year closer.
   const born = yearIn(hit.born);
-  if (born && P.birth) inRange(born, P.birth.from, P.birth.to, t('b.'), 3);
+  const fromAge = /\*/.test(hit.born || '');
+  const bornOff = born && P.birthYear ? born - P.birthYear : 0;
+  if (born && P.birthYear) byYear(fromAge && bornOff ? bornOff - Math.sign(bornOff) : bornOff, born, t('b.'));
+  else if (born && P.birth) byRange(born, P.birth.from, P.birth.to, t('b.'));
 
   // The event's year, by the person's role in it
   const event = yearIn(hit.date);
   if (event) {
     const check = (from, to, text, near) => inRange(event, from, to, text, near);
-    if (hit.role === 'Child' && P.birth && !born) check(P.birth.from, P.birth.to + 1, t('baptised'), 2);
+    if (hit.role === 'Child' && P.birthYear && !born) baptised(hit.date, event);
+    else if (hit.role === 'Child' && P.birth && !born) byRange(event, P.birth.from, P.birth.to + 1, t('baptised'));
     else if ((hit.role === 'Groom' || hit.role === 'Bride') && P.marriage) check(P.marriage.from - 1, P.marriage.to + 1, t('married'), 3);
     else if (hit.type === 'Emigration' && P.emigration) check(P.emigration.from, P.emigration.to, t('emigrated'), 2);
     else if (hit.role === 'Deceased' && P.death) check(P.death.from - 1, P.death.to + 1, t('buried'), 2);

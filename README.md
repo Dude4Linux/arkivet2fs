@@ -48,7 +48,9 @@ record search. You can edit any of them and click **Search**:
   near the person's places. Otherwise it's a family or place name and is searched as
   the surname.
 - **Events:** birth or christening, marriage, residences, emigration or immigration,
-  death or burial; years are ±2. With an emigration or immigration year, the searches
+  death or burial; years are ±2. A full birth date (a gravestone's "16 July 1846",
+  from Find a Grave, say) is searched ±1 and kept in the **Date** field, for
+  scoring. With an emigration or immigration year, the searches
   stop two years after it (the latest, when FS has several), and the ones that can
   only find later records, such as a marriage in America, are skipped. The first
   event FS has outside Norway (a residence, marriage or death in America) counts the
@@ -86,9 +88,17 @@ Other) and ranked by a score. Each hit shows the reasons for its score:
 - ≈ close: another spelling, or one of DA's name variants
 - ✗ contradicts FS: wrong sex, a year far off, too young for the role
 
+A birth year scores by how far it is from FS's: the same year +2, one year off +1, two
+or three years off -2, up to nine -4, and ten or more -6 (another generation). With
+FS's full birth date, a baptism before the birth is another child, and a baptism
+within half a year after it counts as the same year.
+
 After the searches, the extension opens the records of the best hits. It checks the
 people in them against the FS relatives: the parents of a baptized child, the couple of a
-marriage, a census household, an emigrant's destination. That separates namesakes:
+marriage, a census household, an emigrant's destination. A relative with a close given
+name (Mari or Maria for Marit) is ≈ +2; another given name (Anne for Marit) is -3. A
+baptism's date of birth is checked against FS's full birth date: the same day +3,
+another day -2. That separates namesakes:
 several men of the same name in one census, for example. Hits scoring below 0 are
 dimmed.
 

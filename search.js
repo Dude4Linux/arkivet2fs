@@ -11,7 +11,9 @@ const GROUPS = [
     fields: [{ name: 'givenName', label: 'Given names' }, { name: 'surname', label: 'Surname' }] },
   { id: 'sex', title: 'Sex',
     fields: [{ name: 'sex', label: 'Sex', type: 'select', options: ['', 'Male', 'Female'] }] },
-  { id: 'birth', title: 'Birth or christening', fields: eventFields('birthLike') },
+  // FS's birth date as written (16 July 1846), for scoring by the exact year and day
+  { id: 'birth', title: 'Birth or christening', fields: [eventFields('birthLike')[0],
+    { name: 'birthLikeDate', label: 'Date', wide: true }, ...eventFields('birthLike').slice(1)] },
   { id: 'marriage', title: 'Marriage', fields: eventFields('marriageLike') },
   { id: 'residence', title: 'Residences', repeat: true, add: 'Add a residence',
     fields: [{ name: 'residencePlace', label: 'Place', wide: true },

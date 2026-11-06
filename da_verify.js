@@ -95,6 +95,34 @@ function hasGivenName(person, given) {
   return names.length > 0 && words.some((w) => names.some((n) => nameMatch(w, n)));
 }
 
+// Does a record person's first given name come close to one of the FS relative's
+// (Mari or Maria for Marit: nameClose() in da_match.js)?
+function hasCloseName(person, given) {
+  const first = (person.name || '').replace(/[%*,]/g, ' ').trim().split(/\s+/)[0] || '';
+  return !!first && (given || '').split(/\s+/).some((g) => nameClose(first, g));
+}
+
+// The birth date the record gives for its open person, the hit's own row (not a
+// parent's, nor a godparent's): "Date of birth: 07-16" or "1846-07-16", with the
+// year from "Birth year", else for a baptism the record's year (the year before when
+// the day comes after the baptism's) → { year, month, day } (year may be null)
+function ownBirthDate(record) {
+  const me = (record.people || []).find((p) => p.current);
+  const kind = me ? roleKind(me) : '';
+  const census = record.recordTypeInfo && record.recordTypeInfo.type === 'census';
+  if (!me || ['father', 'mother', 'groomFather', 'brideFather'].includes(kind) || (!census && !kind)) return null;
+  const fields = record.fields || {};
+  const m = String(fields['date of birth'] || '').trim().match(/^(?:(\d{4})-)?(\d{1,2})-(\d{1,2})$/);
+  if (!m) return null;
+  const month = Number(m[2]), day = Number(m[3]);
+  let year = Number(m[1] || (String(fields['birth year'] || '').match(/\b1[5-9]\d\d\b/) || [])[0]) || null;
+  const recorded = String(record.recordDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!year && recorded && record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd') {
+    year = Number(recorded[1]) - (month * 100 + day > Number(recorded[2]) * 100 + Number(recorded[3]) ? 1 : 0);
+  }
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? { year, month, day } : null;
+}
+
 // A record person whose patronymic isn't the FS relative's (Halvor Moen for FS Halvor
 // Olsen; Halvor Larsen Moen or Halvor Larssen agree, Knud alone says nothing)
 function patronymicDiffers(person, surname) {
@@ -110,8 +138,9 @@ function patronymicDiffers(person, surname) {
 
 // Could a record person be this FS relative: the given name, no other patronymic, and
 // a birth year within 5 of FS's (census ages are often a few years off)
-function isRelative(person, relative, record) {
-  if (!hasGivenName(person, relative.given) || patronymicDiffers(person, relative.surname)) return false;
+function isRelative(person, relative, record, close = false) {
+  const named = close ? !hasGivenName(person, relative.given) && hasCloseName(person, relative.given) : hasGivenName(person, relative.given);
+  if (!named || patronymicDiffers(person, relative.surname)) return false;
   const year = birthYearOf(person, record);
   return !relative.year || !year || Math.abs(year - relative.year) <= 5;
 }
@@ -122,7 +151,7 @@ const firstName = (person) => (person.name || '').replace(/[%*]/g, '').split(/\s
 // "Knud in the record, not Ole", or with the same given name "Halvor Moen (b. 1735) in
 // the record, not Halvor Larsen (b. 1762)"
 function notRelative(person, relatives, record) {
-  if (!relatives.some((r) => hasGivenName(person, r.given))) {
+  if (!relatives.some((r) => hasGivenName(person, r.given) || hasCloseName(person, r.given))) {
     return t('{name} in the record, not {fs}', { name: firstName(person), fs: relatives.map((r) => r.given.split(/\s+/)[0]).join(t(' or ')) });
   }
   const year = birthYearOf(person, record);
@@ -133,8 +162,10 @@ function notRelative(person, relatives, record) {
 
 // The record compared with the person → reasons like scoreHit()'s: each FS parent,
 // spouse or child named in the record ✓ +3 (children +2, at most three; a parent or
-// spouse also by patronymic and birth year, isRelative()), a parent or
-// spouse in the record with another name ✗ -2 (not a census household's parents),
+// spouse also by patronymic and birth year, isRelative()), with a close given name
+// ≈ +2 (Mari for Marit), a parent or spouse in the record with another given name
+// ✗ -3, another patronymic or year ✗ -2 (not a census household's parents), the
+// person's own date of birth against FS's full date (+3, +1 or -2),
 // unmarried in a census after FS's marriage ✗ -3, an emigrant's destination among the
 // FS places ✓ +2. DA's transcriptions of names can be far off, hence the small minus.
 function checkRecord(record, P) {
@@ -155,19 +186,46 @@ function checkRecord(record, P) {
     const candidates = inRecord[key];
     const match = candidates.find((p) => isRelative(p, relative, record));
     const near = !match && elsewhere.find((p) => isRelative(p, relative, record));
+    const close = !match && !near && !census && candidates.find((p) => isRelative(p, relative, record, true));
     if (match) add(3, t('{relation} {name} in the record', { relation, name: match.name }), true);
     else if (near) add(2, t('{relation} {name} at the same residence', { relation, name: near.name }), true);
-    else if (candidates.length && !census) {
-      add(-2, relation + ' ' + notRelative(candidates[0], [relative], record), false);
-    }
+    else if (close) add(2, t('{relation} {name} in the record, for {fs}', { relation, name: close.name, fs: relative.given.split(/\s+/)[0] }), null);
+    else if (candidates.length && !census) differs(relation, candidates[0], [relative]);
+  };
+  // Another person where FS has a relative: -3 with another given name (Anne for
+  // Marit), -2 with the same or a close one (another patronymic or birth year)
+  const differs = (relation, person, relatives) => {
+    const named = relatives.some((r) => hasGivenName(person, r.given) || hasCloseName(person, r.given));
+    add(named ? -2 : -3, relation + ' ' + notRelative(person, relatives, record), false);
   };
   parent('father', P.father);
   parent('mother', P.mother);
 
   if (P.spouses.length && inRecord.spouse.length) {
     const match = inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record)));
+    const close = !match && !census && inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record, true)));
     if (match) add(3, t('{relation} {name} in the record', { relation: t('spouse'), name: match.name }), true);
-    else add(-2, t('spouse') + ' ' + notRelative(inRecord.spouse[0], P.spouses, record), false);
+    else if (close) {
+      const spouse = P.spouses.find((s) => isRelative(close, s, record, true));
+      add(2, t('{relation} {name} in the record, for {fs}', { relation: t('spouse'), name: close.name, fs: spouse.given.split(/\s+/)[0] }), null);
+    } else differs(t('spouse'), inRecord.spouse[0], P.spouses);
+  }
+
+  // The person's own birth date in the record (a baptism's "Date of birth: 07-16")
+  // against FS's full date: the same day ✓ +3; the same day a year off, or within
+  // ten days ≈ +1; another day ✗ -2 (another child of the same name). Only when the
+  // years are at most one apart: scoreHit() already counts a year further off.
+  const birthDay = ownBirthDate(record);
+  const fsBirth = P.birthDate;
+  if (birthDay && fsBirth && fsBirth.exact) {
+    const fs = formatDate(fsBirth.year, fsBirth.month, fsBirth.day);
+    const here = formatDate(birthDay.year || '', birthDay.month, birthDay.day);
+    const yearOff = birthDay.year ? Math.abs(birthDay.year - fsBirth.year) : 0;
+    const sameDay = birthDay.month === fsBirth.month && birthDay.day === fsBirth.day;
+    const days = birthDay.year ? Math.abs(Date.UTC(birthDay.year, birthDay.month - 1, birthDay.day) - Date.UTC(fsBirth.year, fsBirth.month - 1, fsBirth.day)) / 864e5 : null;
+    if (sameDay && !yearOff) add(3, t('born {date}, as in FamilySearch', { date: here }), true);
+    else if ((sameDay && yearOff === 1) || (days !== null && days <= 10)) add(1, t('born {date} (FamilySearch: {fs})', { date: here, fs }), null);
+    else if (yearOff <= 1) add(-2, t('born {date}, not {fs} as in FamilySearch', { date: here, fs }), false);
   }
 
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
