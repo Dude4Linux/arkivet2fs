@@ -13,9 +13,9 @@ function isDigitalArkivet(address) {
 }
 
 // The toolbar icon's tooltip: the extension's name and version (manifest.json's
-// "version"), set each time the service worker starts
+// "version", after "v. "), set each time the service worker starts
 chrome.action.setTitle({
-  title: (chrome.i18n.getMessage('name') || 'DigitalArkivet to FamilySearch') + ' ' + chrome.runtime.getManifest().version
+  title: (chrome.i18n.getMessage('name') || 'DigitalArkivet to FamilySearch') + ' v. ' + chrome.runtime.getManifest().version
 });
 
 chrome.action.onClicked.addListener((tab) => {

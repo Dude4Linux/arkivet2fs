@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <title>arkivet2fs</title>
   <!-- Kirkebok: an open church book with a pedigree (the person in copper, two parents) growing from its spine -->
-  <rect width="128" height="128" rx="28" fill="#1d3f5e"/>
+  <rect width="128" height="128" rx="28" fill="#4a88c4"/>
   <path d="M64 84 V52 M38 52 H90 M38 52 V44 M90 52 V44" fill="none" stroke="#f4ecdc" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M16 86 C30 79 48 79 61 86 V108 C48 101 30 101 16 108 Z M67 86 C80 79 98 79 112 86 V108 C98 101 80 101 67 108 Z" fill="#f4ecdc"/>
-  <path d="M24 93 C34 89 44 89 54 93 M24 100 C34 96 44 96 54 100 M74 93 C84 89 94 89 104 93 M74 100 C84 96 94 96 104 100" fill="none" stroke="#1d3f5e" stroke-opacity="0.35" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M24 93 C34 89 44 89 54 93 M24 100 C34 96 44 96 54 100 M74 93 C84 89 94 89 104 93 M74 100 C84 96 94 96 104 100" fill="none" stroke="#2e547a" stroke-opacity="0.4" stroke-width="2.5" stroke-linecap="round"/>
   <circle cx="38" cy="34" r="11" fill="#f4ecdc"/>
   <circle cx="90" cy="34" r="11" fill="#f4ecdc"/>
-  <circle cx="64" cy="68" r="10" fill="#d0843f" stroke="#1d3f5e" stroke-width="4"/>
+  <circle cx="64" cy="68" r="10" fill="#d0843f" stroke="#2e547a" stroke-width="4"/>
 </svg>

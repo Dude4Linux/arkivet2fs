@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
   <title>arkivet2fs</title>
   <!-- Drawn for 16 px (the toolbar) -->
-  <rect width="16" height="16" rx="3.5" fill="#1d3f5e"/>
+  <rect width="16" height="16" rx="3.5" fill="#4a88c4"/>
   <path d="M8 10.5 V6.5 M4.5 6.5 H11.5 M4.5 6.5 V5 M11.5 6.5 V5" fill="none" stroke="#f4ecdc" stroke-width="1.2" stroke-linecap="round"/>
   <path d="M2 11 Q4.75 10 7.6 11 V14 Q4.75 13 2 14 Z M8.4 11 Q11.25 10 14 11 V14 Q11.25 13 8.4 14 Z" fill="#f4ecdc"/>
   <circle cx="4.5" cy="4" r="1.7" fill="#f4ecdc"/>
   <circle cx="11.5" cy="4" r="1.7" fill="#f4ecdc"/>
-  <circle cx="8" cy="8.6" r="1.5" fill="#d0843f"/>
+  <circle cx="8" cy="8.6" r="1.5" fill="#d0843f" stroke="#2e547a" stroke-width="0.8"/>
 </svg>
