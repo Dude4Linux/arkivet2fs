@@ -20,7 +20,8 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 
 There's no build step.
 
-1. Download or clone this repository.
+1. Download or clone this repository: https://github.com/Dude4Linux/arkivet2fs
+   (**Code** → **Download ZIP**, then unzip it).
 2. Open `chrome://extensions` (or `brave://extensions`) and turn on **Developer mode**.
 3. Click **Load unpacked** and choose the repository folder.
 4. Pin the extension's icon to the toolbar.
@@ -227,6 +228,10 @@ use that language.
 | `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |
+| `release-plan.md` | The plan for packages, signed releases and other browsers |
+| `tests/` | The tests (`npm test`), on sanitized Digitalarkivet pages; see `tests/README.md` |
+| `.github/workflows/ci.yml` | Runs the tests on GitHub for every push and pull request |
+| `SECURITY.md` | How to report a security problem, and what the extension does with your data |
 | `LICENSE` | The GNU General Public License, version 3 |
 
 The version is shown when you hover over the extension's toolbar icon, and on its
@@ -235,6 +240,30 @@ last number, new features the middle one.
 
 Developer notes are in `CLAUDE.md`. After changing the code, reload the extension on
 `chrome://extensions`.
+
+## Problems and contributing
+
+Report bugs and ideas in the [issues](https://github.com/Dude4Linux/arkivet2fs/issues):
+the DA record or search (its address or permanent ID), what you expected, and what
+the extension did. A record's address is enough; please don't paste FamilySearch pages
+or living people's details. Security problems go privately, as `SECURITY.md` says.
+
+Pull requests are welcome. Before you open one:
+
+- **Run the tests:** `npm install` once, then `npm test` (Node 22.13 or later; about
+  2 seconds, offline). GitHub runs them again on the pull request.
+- **Add a test** for each bug you fix, in the `tests/` file of the extension file you
+  changed. Write the expectation from how it should behave, not from what the code
+  gives.
+- **Real cases, made-up names.** A new Digitalarkivet page for the tests is saved with
+  `tests/capture.js` and sanitized with `tests/sanitize.js` (historical records only).
+  The sanitized page in `tests/fixtures/da/` has made-up names, IDs and links, and only
+  that goes in the pull request; `tests/private/`, with the real page, stays with you.
+  Or just give the record's address in the pull request, and the page is added for
+  you. Never add FamilySearch pages: they hold living people and other users' work.
+  `tests/README.md` says how.
+- **Keep the extension dependency-free.** It has no build step; `package.json` is for
+  the tests only.
 
 ## License
 

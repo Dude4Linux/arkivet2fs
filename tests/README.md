@@ -71,7 +71,9 @@ pages, `names.json` the fixture names and the real → made-up names the tests r
 (spellings of one name must stay spellings of one name, as Peer/Per/Pehr), and
 `map.json` every name, ID and number given so far, so a page made again gets the same
 ones and the tests' expectations stay right. Don't delete `map.json`; a new page adds
-to it. Write tests against the made-up names, never the real ones.
+to it. Write tests against the made-up names, never the real ones. Both files are
+the maintainer's; in a fresh clone `sanitize.js` runs without them, starting a new
+`map.json` and taking every made-up name from its pools.
 
 FamilySearch pages are never saved here: they show living people and other users'
 work. FS persons in the tests are made up in the test files, with `TEST-…` PIDs.

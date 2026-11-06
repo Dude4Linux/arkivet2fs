@@ -35,7 +35,10 @@ const RAW = path.join(PRIVATE, 'raw');
 const OUT = path.join(__dirname, 'fixtures', 'da');
 const MAP_FILE = path.join(PRIVATE, 'map.json');
 
-const config = JSON.parse(fs.readFileSync(path.join(PRIVATE, 'names.json'), 'utf8'));
+// names.json is optional: without it every name comes from the pools below
+const NAMES_FILE = path.join(PRIVATE, 'names.json');
+const config = { files: {}, names: {}, keep: [], mustGo: [],
+  ...(fs.existsSync(NAMES_FILE) ? JSON.parse(fs.readFileSync(NAMES_FILE, 'utf8')) : {}) };
 const map = fs.existsSync(MAP_FILE) ? JSON.parse(fs.readFileSync(MAP_FILE, 'utf8')) : {};
 for (const k of ['words', 'ids', 'numbers', 'hex']) map[k] = map[k] || {};
 

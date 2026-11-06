@@ -1,18 +1,19 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **draft, for approval**. Decisions 1–3 are made (below); the test harness is
-in place (it was asked for on its own). Nothing else is started until the plan is approved.
+Status: **approved; Phase 0 done, Phase 1 nearly done** (the Forgejo mirror and the
+GitHub settings are left). All the decisions below are made.
 Each phase ends with a test and a tagged release (or a test tag), so the next
 phase starts from something that works.
 
-## Where we are (1.1.2)
+## Where we are (1.1.3)
 
 - One Chromium MV3 extension at the repo root: Chrome and Brave load the folder
-  unpacked. There's no build step. The tests are in the repo now (`tests/`, `npm test`:
-  77 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
+  unpacked. There's no build step. The tests are in the repo (`tests/`, `npm test`:
+  82 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
   harness that lived in a temporary folder and was lost.
-- The repo is on git-server (Forgejo, private): one author, 4 tags (v1.0.0 – v1.1.2),
-  3.9 MB of history.
+- The repo is public on GitHub, `Dude4Linux/arkivet2fs`: one author (the noreply
+  address), 5 tags (v1.0.0 – v1.1.3), the history rewritten once without the real
+  names. git-server still holds a copy, to become a pull mirror.
 - APIs used: `action`, `scripting`, `storage.local/session`, `tabs`, `notifications`,
   `runtime`, `i18n`. The service worker loads its helpers with `importScripts()`.
 
@@ -59,7 +60,7 @@ tools/
 tests/                    the jsdom unit tests, rebuilt and kept in the repo
 keys/release.pub          the public signing key (also pinned in the extension)
 .github/workflows/
-  ci.yml                  on push and pull request: lint, tests, build every target
+  ci.yml                  on push and pull request: syntax, fixture IDs, tests (build later)
   release.yml             on a v* tag: build, sign, draft a GitHub release
 CHANGELOG.md              one section per version; the release notes come from here
 package.json              dev-only tools (jsdom, web-ext); nothing ships from npm
@@ -122,33 +123,42 @@ checker reads them without one. Before publishing:
   push, which is the only time that's easy.
 - **Decide the open questions below.**
 - **Done when:** the audit is clean and the decisions are made.
+- **Done** (November 2026): gitleaks found no secrets; the audit found the real names,
+  real DA IDs, 4 FS PIDs and other details in the older commits, all rewritten out
+  in Phase 1; the decisions are below.
 
 ### Phase 1: Move to GitHub
 
-- **Rewrite the commit emails** to the GitHub noreply address (decided) with
+Done but for the mirror and the settings (marked *to do*).
+
+- **Done: rewrite the commit emails** to the GitHub noreply address (decided) with
   `git filter-repo --mailmap`, on a fresh clone, before the first push. Every commit hash
-  and the four tags change; the tags are recreated, annotated, on the rewritten commits.
+  and the five tags change; the tags are recreated, annotated, on the rewritten commits.
   git-server is then force-updated to the rewritten history, once.
-- **Rewrite the real names out of the history,** in the same pass: the older commits
+- **Done: rewrite the real names out of the history,** in the same pass: the older commits
   hold the real family names and the real DA pages they came from (the fixtures before
   sanitizing, and examples in docs and comments). `git filter-repo --replace-text` with
   a list made from `tests/private/names.json` and `map.json` (the real names, IDs and
   farms, each → its made-up one), and `--invert-paths` for any real page that was ever
   committed; then grep the rewritten history (`git log -p --all`) for every `mustGo`
   word and real permanent ID. The list stays private (`tests/private/`).
-- **Create the repo** `Dude4Linux/arkivet2fs`, public, GPL-3.0 (decided). Push master and
-  all four tags.
-- **git-server becomes a read-only mirror of GitHub** (decided): a Forgejo pull mirror,
+- **Done: create the repo** `Dude4Linux/arkivet2fs`, public, GPL-3.0 (decided). Push master and
+  all five tags.
+- *To do:* **git-server becomes a read-only mirror of GitHub** (decided): a Forgejo pull mirror,
   so nothing is pushed there by hand any more. GitHub is the main repo.
-- **Settings:** protect master and `v*` tags; Actions limited to read-only tokens except
-  in release.yml; issues on; a SECURITY.md that says how to report problems.
-- **The tests (done ahead of the move):** `tests/`, one file per file of the extension,
+- *To do:* **Settings:** protect master and `v*` tags; Actions limited to read-only tokens except
+  in release.yml; issues on; private vulnerability reporting on (SECURITY.md points to it).
+- **Done: SECURITY.md** says how to report problems privately and what the extension
+  does with the user's data.
+- **Done: the tests (ahead of the move):** `tests/`, one file per file of the extension,
   on 15 sanitized DA pages in `tests/fixtures/da/` (historical records, with made-up
   names, IDs and links; `tests/sanitize.js`) and synthetic FS persons; `tests/README.md` says how. They go to GitHub with the code; the audit checks
   the fixtures too. No FamilySearch page is ever saved there.
-- **ci.yml:** runs the tests and `node --check` on every file.
-- **Docs:** update README and CLAUDE.md with the new home, how to contribute, and the
-  layout above.
+- **Done: ci.yml:** on each push to master and pull request, `npm ci`, `node --check` on
+  every script, a check that the fixtures hold no real DA permanent ID, and the tests;
+  actions pinned to commit SHAs, a read-only token.
+- **Done: docs:** README and CLAUDE.md give the new home and how to contribute; the
+  layout above comes with Phase 2's tools.
 - **Test:** CI passes on GitHub; the mirror on git-server follows a test push.
 - **Version:** none (docs and tooling only).
 

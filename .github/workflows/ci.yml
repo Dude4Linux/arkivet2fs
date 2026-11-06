@@ -1,0 +1,46 @@
+# The tests and a syntax check of every script, on each push and pull request.
+# Actions are pinned to commit SHAs (the tag in the comment); the token can only read.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Syntax of every script
+        run: git ls-files -z '*.js' '*.mjs' | xargs -0 -n1 node --check
+
+      # The fixtures are sanitized DA pages: their permanent IDs are made up (pd99...).
+      # A real one (also inside an encoded address, %2Fpd0000...) means a page went in
+      # without tests/sanitize.js.
+      - name: No real DA permanent IDs in the fixtures
+        run: |
+          if git grep -nP '(?<![0-9])[a-z]{2}(?!99)[0-9]{14,}(?![0-9])' -- tests/fixtures; then
+            echo "::error::real DA permanent IDs in tests/fixtures: run tests/sanitize.js"
+            exit 1
+          fi
+
+      - run: npm test
