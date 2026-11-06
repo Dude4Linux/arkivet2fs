@@ -24,8 +24,7 @@ const GROUPS = [
   { id: 'father', title: 'Father', skip: 'fatherSkip', fields: relativeFields('father') },
   { id: 'mother', title: 'Mother', skip: 'motherSkip', fields: relativeFields('mother') },
   { id: 'spouse', title: 'Spouses', repeat: true, add: 'Add a spouse', skip: 'spouseSkip', fields: relativeFields('spouse') },
-  { id: 'child', title: 'Children', repeat: true, add: 'Add a child', skip: 'childSkip',
-    fields: [...relativeFields('child'), { name: 'childBirthYear', label: 'Born', type: 'year' }] }
+  { id: 'child', title: 'Children', repeat: true, add: 'Add a child', skip: 'childSkip', fields: relativeFields('child') }
 ];
 
 function eventFields(prefix) {
@@ -35,7 +34,8 @@ function eventFields(prefix) {
 }
 
 function relativeFields(prefix) {
-  return [{ name: prefix + 'GivenName', label: 'Given names' }, { name: prefix + 'Surname', label: 'Surname' }];
+  return [{ name: prefix + 'GivenName', label: 'Given names' }, { name: prefix + 'Surname', label: 'Surname' },
+    { name: prefix + 'BirthYear', label: 'Born', type: 'year' }];
 }
 
 const suffix = (k) => (k === 0 ? '' : '.' + k);
@@ -227,7 +227,7 @@ function whereGroup(criteria) {
   // Suggestions: the municipalities the FS places name, not yet chosen
   const suggested = [...new Set(profile(criteria).places.flatMap(municipalityCodes))].filter((code) => !criteria.where.m.includes(code));
   if (suggested.length) {
-    fieldset.append(el('div', { class: 'suggest muted' }, ['From the FS places: ', ...suggested.map((code) => {
+    fieldset.append(el('div', { class: 'suggest muted' }, ['From the FamilySearch places: ', ...suggested.map((code) => {
       const button = el('button', { type: 'button', class: 'add', text: '+ ' + municipalityName(code) });
       button.addEventListener('click', () => { addChip('m', code); searchNow(); });
       return button;
@@ -391,7 +391,7 @@ async function checkHits(run, merged, person, container, status) {
     renderGroups(container, merged, person);
   }
   if (run === generation) {
-    status.textContent = checked ? 'Checked the records of the best ' + checked + ' hits against the FS relatives.' : '';
+    status.textContent = checked ? 'Checked the records of the best ' + checked + ' hits against the FamilySearch relatives.' : '';
   }
 }
 

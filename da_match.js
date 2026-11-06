@@ -118,7 +118,7 @@ function scoreHit(hit, P) {
   // Kristina Caspara for Maren Kristine)
   if (allGiven && P.givenNames.length) {
     for (const w of names) {
-      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, w + ' not in FS', false);
+      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, w + ' not in FamilySearch', false);
     }
   }
 

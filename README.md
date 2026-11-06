@@ -130,6 +130,14 @@ only reads), and closes the tab; a line above the rows says how many it paired. 
 example, from Halvor Larsen in 1865, it pairs his wife and children, his parents in
 household 02, and through his father, his brother Iver's family in household 03.
 
+The census's own family positions count too: "hans Kone", "deres Søn", or "hans
+Fader" heading the next household. A resident the census places in another relation
+than the tree isn't paired. Households the census doesn't link to the record's own,
+and with nobody in the tree, are hidden, such as the lodgers' and servants' families
+on an 1801 farm. A link under the rows shows them. If you opened a namesake in another
+household, the linker switches to the household where the FS person fits, and says
+so above the rows.
+
 The family comes from the FS person you started the search from. From the toolbar
 icon, the linker uses the last person you searched for when their name is in the
 record. Otherwise, type the FS ID at the top.

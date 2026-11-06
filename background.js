@@ -209,6 +209,8 @@ async function personToQuery(person) {
     const n = splitName(p.name);
     set('q.' + prefix + 'GivenName' + suffix(i), n.given);
     set('q.' + prefix + 'Surname' + suffix(i), n.surname);
+    // Lifespan "1796–Deceased"; "–1822" has no birth year
+    set('q.' + prefix + 'BirthYear' + suffix(i), ((p.lifespan || '').match(/^\d{4}/) || [])[0]);
   };
   relative('father', person.father);
   relative('mother', person.mother);
@@ -216,8 +218,6 @@ async function personToQuery(person) {
   families.filter(f => f.spouse).forEach((f, i) => relative('spouse', f.spouse, i));
   families.flatMap(f => f.children || []).forEach((child, i) => {
     relative('child', child, i);
-    // Lifespan "1796–Deceased"; "–1822" has no birth year
-    set('q.childBirthYear' + suffix(i), ((child.lifespan || '').match(/^\d{4}/) || [])[0]);
   });
 
   return q;

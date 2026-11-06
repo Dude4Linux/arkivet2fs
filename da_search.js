@@ -191,8 +191,8 @@ function profile(criteria) {
   const names = criteria.name.filter((n) => n.givenName || n.surname);
   const b = first('birth'), m = first('marriage'), d = first('death');
   // A relative turned off in the sidebar (q.fatherSkip, ...) isn't used at all
-  const relative = (r, prefix) => (r[prefix + 'Skip'] ? { given: '', surname: '' }
-    : { given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim() });
+  const relative = (r, prefix) => (r[prefix + 'Skip'] ? { given: '', surname: '', year: null }
+    : { given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim(), year: year(r[prefix + 'BirthYear']) });
   const P = {
     given: firstWord(names[0] && names[0].givenName),
     givenNames: ((names[0] && names[0].givenName) || '').trim().split(/\s+/).filter(Boolean),
@@ -206,7 +206,7 @@ function profile(criteria) {
     father: relative(first('father'), 'father'),
     mother: relative(first('mother'), 'mother'),
     spouses: criteria.spouse.map((s) => relative(s, 'spouse')).filter((s) => s.given),
-    children: criteria.child.filter((c) => !c.childSkip).map((c) => ({ ...relative(c, 'child'), year: year(c.childBirthYear) })).filter((c) => c.given || c.year),
+    children: criteria.child.filter((c) => !c.childSkip).map((c) => relative(c, 'child')).filter((c) => c.given || c.year),
     residences: criteria.residence.map((r) => (r.residencePlace || '').trim()).filter(Boolean),
     farms: criteria.farm.map((f) => (f.farm || '').trim()).filter(Boolean)
   };

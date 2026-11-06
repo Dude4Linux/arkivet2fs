@@ -95,11 +95,45 @@ function hasGivenName(person, given) {
   return names.length > 0 && words.some((w) => names.some((n) => nameMatch(w, n)));
 }
 
+// A record person whose patronymic isn't the FS relative's (Halvor Moen for FS Halvor
+// Olsen; Halvor Larsen Moen or Halvor Larssen agree, Knud alone says nothing)
+function patronymicDiffers(person, surname) {
+  if (!isPatronymic(surname)) return false;
+  const words = (person.name || '').replace(/%[^%]*%|[*,]/g, ' ').split(/\s+/).filter(Boolean).slice(1);
+  if (!words.length) return false;
+  const base = patronymicBase(surname).toLowerCase();
+  return !words.some((w) => {
+    const b = patronymicBase(w).toLowerCase();
+    return isPatronymic(w) && (b.startsWith(base) || base.startsWith(b) || nameMatch(b, base) || nameMatch(base, b));
+  });
+}
+
+// Could a record person be this FS relative: the given name, no other patronymic, and
+// a birth year within 5 of FS's (census ages are often a few years off)
+function isRelative(person, relative, record) {
+  if (!hasGivenName(person, relative.given) || patronymicDiffers(person, relative.surname)) return false;
+  const year = birthYearOf(person, record);
+  return !relative.year || !year || Math.abs(year - relative.year) <= 5;
+}
+
 // The first given name of a record person ("Lars Halvorsen" → "Ole")
 const firstName = (person) => (person.name || '').replace(/[%*]/g, '').split(/\s+/)[0] || '';
 
+// "Knud in the record, not Ole", or with the same given name "Halvor Moen (b. 1735) in
+// the record, not Halvor Larsen (b. 1762)"
+function notRelative(person, relatives, record) {
+  if (!relatives.some((r) => hasGivenName(person, r.given))) {
+    return firstName(person) + ' in the record, not ' + relatives.map((r) => r.given.split(/\s+/)[0]).join(' or ');
+  }
+  const year = birthYearOf(person, record);
+  const born = (y) => (y ? ' (b. ' + y + ')' : '');
+  return person.name.replace(/[%*]/g, '') + born(year) + ' in the record, not ' +
+    relatives.map((r) => (r.given + ' ' + r.surname).trim() + born(r.year)).join(' or ');
+}
+
 // The record compared with the person → reasons like scoreHit()'s: each FS parent,
-// spouse or child named in the record ✓ +3 (children +2, at most three), a parent or
+// spouse or child named in the record ✓ +3 (children +2, at most three; a parent or
+// spouse also by patronymic and birth year, isRelative()), a parent or
 // spouse in the record with another name ✗ -2 (not a census household's parents),
 // unmarried in a census after FS's marriage ✗ -3, an emigrant's destination among the
 // FS places ✓ +2. DA's transcriptions of names can be far off, hence the small minus.
@@ -117,21 +151,21 @@ function checkRecord(record, P) {
   const parent = (relation, relative) => {
     if (!relative || !relative.given) return;
     const candidates = inRecord[relation];
-    const match = candidates.find((p) => hasGivenName(p, relative.given));
-    const near = !match && elsewhere.find((p) => hasGivenName(p, relative.given));
+    const match = candidates.find((p) => isRelative(p, relative, record));
+    const near = !match && elsewhere.find((p) => isRelative(p, relative, record));
     if (match) add(3, relation + ' ' + match.name + ' in the record', true);
     else if (near) add(2, relation + ' ' + near.name + ' at the same residence', true);
     else if (candidates.length && !census) {
-      add(-2, relation + ' ' + firstName(candidates[0]) + ' in the record, not ' + relative.given.split(/\s+/)[0], false);
+      add(-2, relation + ' ' + notRelative(candidates[0], [relative], record), false);
     }
   };
   parent('father', P.father);
   parent('mother', P.mother);
 
   if (P.spouses.length && inRecord.spouse.length) {
-    const match = inRecord.spouse.find((p) => P.spouses.some((s) => hasGivenName(p, s.given)));
+    const match = inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record)));
     if (match) add(3, 'spouse ' + match.name + ' in the record', true);
-    else add(-2, 'spouse ' + firstName(inRecord.spouse[0]) + ' in the record, not ' + P.spouses.map((s) => s.given.split(/\s+/)[0]).join(' or '), false);
+    else add(-2, 'spouse ' + notRelative(inRecord.spouse[0], P.spouses, record), false);
   }
 
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
@@ -159,7 +193,7 @@ function checkRecord(record, P) {
   // A census's marital status: unmarried (ugift, ugivt) after FS's marriage
   const fields = record.fields || {};
   if (census && P.marriage && recordYear && recordYear > P.marriage.to && /^(ug|unmarried)/i.test(fields['marital status'] || '')) {
-    add(-3, 'unmarried in ' + recordYear + ', married by ' + P.marriage.to + ' in FS', false);
+    add(-3, 'unmarried in ' + recordYear + ', married by ' + P.marriage.to + ' in FamilySearch', false);
   }
 
   // Where an emigrant or someone moving was going: an FS place (Denver Col. for Denver)
