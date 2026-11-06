@@ -238,7 +238,11 @@ checker reads them without one. Before publishing:
 - **Package:** a separate `-opera.zip` only if Opera turns out to need its own manifest.
 - **Version:** PATCH if only fixes, MINOR if Opera gets its own package.
 
-### Phase 6: Safari (macOS)
+### Phase 6: Safari (macOS) — deferred
+
+A placeholder: not planned until there's a Mac and an Apple Developer membership
+(decision 8). The notes below are kept for then.
+
 
 - **What you'll need:** a Mac with Xcode, and an Apple Developer Program membership
   ($99 a year) for anything beyond local testing. Without the membership, Safari can
@@ -265,14 +269,15 @@ checker reads them without one. Before publishing:
 2. ~~Commit emails~~ **Decided:** rewritten to the GitHub noreply address before the
    first push.
 3. ~~git-server's role~~ **Decided:** a read-only mirror of GitHub.
-4. **Signature scheme.** Ed25519 `.sig` (recommended; checked by the extension), GPG
-   `.asc`, or both?
-5. **Where the signing key lives.** A GitHub secret behind an approval step, or local
-   signing only?
-6. **Chrome Web Store and Edge listing (Phase 3b).** Now, later, or never?
-7. **Firefox ID and channel.** For example `arkivet2fs@dude4linux` (permanent once
-   published); self-distributed first, AMO listing later?
-8. **Safari.** Do you have a Mac and an Apple Developer membership, or should Phase 6
-   wait?
-9. **Dev-only `package.json` (jsdom, web-ext).** Now in place for the tests (jsdom
-   only; CLAUDE.md updated). OK to keep, and to add web-ext to it in Phase 4?
+4. ~~Signature scheme~~ **Decided:** Ed25519 `.sig` only, checked by the extension (no
+   GPG).
+5. ~~Where the signing key lives~~ **Decided:** local signing for now; a GitHub secret
+   behind an approval step can come later, when releases are frequent.
+6. ~~Chrome Web Store and Edge listing~~ **Decided:** later. Self-distributed releases
+   first; a listing once the update checker has proven itself.
+7. ~~Firefox ID and channel~~ **Decided:** `arkivet2fs@dude4linux` (permanent once
+   published); self-distributed first, an AMO listing later.
+8. ~~Safari~~ **Deferred:** Phase 6 is a placeholder until there's a Mac and an Apple
+   Developer membership.
+9. ~~Dev-only `package.json`~~ **Decided:** keep it (jsdom, for the tests); add web-ext to
+   it in Phase 4.

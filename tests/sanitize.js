@@ -268,10 +268,17 @@ function swapWords(text, anyCase) {
 }
 function swap(text) {
   return swapWords(String(text)
+    // an address inside another's query (a login link's back_to=https%3A%2F%2F...),
+    // swapped decoded, then encoded again
+    .replace(/https?%3A%2F%2F[^\s"'<>&]*/gi, (m) => encodeURIComponent(swap(decoded(m))))
     .replace(/https?:\/\/[^\s"'<>)\]]+/g, fakeUrl)
-    .replace(/\b([a-z]{2})(\d{14,})\b/g, (id, prefix, digits) => fakeId(id, prefix, digits))
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g, fakeHex)
-    .replace(/\b[0-9a-f]{32,}\b/g, fakeHex));
+    // IDs and hex also run into other characters (%2Fpd..., ...6e9https)
+    .replace(/(?<![0-9])([a-z]{2})(\d{14,})(?![0-9])/g, (id, prefix, digits) => fakeId(id, prefix, digits))
+    .replace(/(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])/g, fakeHex)
+    .replace(/(?<![0-9a-f])[0-9a-f]{32,}(?![0-9a-f])/g, fakeHex));
+}
+function decoded(text) {
+  try { return decodeURIComponent(text); } catch { return text; }
 }
 const URL_ATTRS = new Set(['href', 'src', 'action', 'data-url', 'data-current', 'content', 'data-path']);
 function swapAttr(name, value) {
@@ -280,7 +287,8 @@ function swapAttr(name, value) {
 
 // The page around the record, which nothing reads
 const CHROME = ['header', 'body > nav', '.breadcrumb-container', 'footer', '#reportpanel', 'noscript', 'iframe',
-  'meta:not([charset])', '.right-view-column .card', '#helpbox', 'a[href*="/actors/"]'];
+  'meta:not([charset])', '.right-view-column .card', '#helpbox', 'a[href*="/actors/"]',
+  'a[href*="login.digitalarkivet.no"]'];
 
 function sanitize(html) {
   const doc = new w.DOMParser().parseFromString(html, 'text/html');
@@ -343,7 +351,8 @@ for (const page of pages) {
   const diff = firstDifference(swapAll(page.result), JSON.parse(JSON.stringify(extract(html, url))));
   if (diff) problems.push('read differently: ' + diff.slice(0, 400));
   for (const word of mustGo) if (fold(out).includes(word)) problems.push('"' + word + '" is left');
-  const ids = out.match(/\b[a-z]{2}(?!99)\d{14,}\b/g);
+  // also in encoded addresses, and next to other letters (%2Fpd...)
+  const ids = (out + '\n' + out.replace(/%([0-9a-f]{2})/gi, (m, h) => String.fromCharCode(parseInt(h, 16)))).match(/(?<![0-9])[a-z]{2}(?!99)\d{14,}(?![0-9])/g);
   if (ids) problems.push('real IDs are left: ' + [...new Set(ids)].slice(0, 5).join(', '));
 
   // Words in the people's lines that are neither made up nor known: names missed?
