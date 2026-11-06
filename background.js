@@ -1,6 +1,17 @@
 // The languages (the notifications), place tables and the farm check (personToQuery)
 importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js');
 
+// Whether an address is a page on DigitalArkivet (https, digitalarkivet.no or a
+// subdomain of it)
+function isDigitalArkivet(address) {
+  try {
+    const url = new URL(address);
+    return url.protocol === 'https:' && /(^|\.)digitalarkivet\.no$/.test(url.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
 // The toolbar icon's tooltip: the extension's name and version (manifest.json's
 // "version"), set each time the service worker starts
 chrome.action.setTitle({
@@ -10,14 +21,17 @@ chrome.action.setTitle({
 chrome.action.onClicked.addListener((tab) => {
   console.log('Extension icon clicked');
 
-  // Ensure the tab is not a chrome:// URL
-  if (tab.url.startsWith('chrome://')) {
+  // Ensure the tab is not a chrome:// URL (without the "tabs" permission, a page the
+  // extension may not touch has no url at all)
+  const url = tab.url || '';
+  if (url.startsWith('chrome://')) {
     showErrorMessage('Cannot execute script on a chrome:// URL');
     return;
   }
 
-  // Ensure the tab is a DigitalArkivet URL
-  if (!tab.url.includes('digitalarkivet.no')) {
+  // Ensure the tab is a DigitalArkivet page: its host, not just the text anywhere in
+  // the address ("https://example.com/?digitalarkivet.no" isn't one)
+  if (!isDigitalArkivet(url)) {
     showErrorMessage('Not a DigitalArkivet URL');
     return;
   }

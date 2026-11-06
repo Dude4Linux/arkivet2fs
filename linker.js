@@ -1015,8 +1015,11 @@ async function navigate(tabId, url) {
   await loaded;
 }
 
-// One step in the FS tab (fs_attach.js), answered within two minutes
+// One step in the FS tab (fs_attach.js), answered within two minutes; only while the
+// tab is still on FamilySearch (the user may have taken it elsewhere)
 async function step(tabId, name, args) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!onFamilySearch(tab.url)) return { ok: false, error: t('The FamilySearch tab is no longer on FamilySearch.') };
   await chrome.scripting.executeScript({ target: { tabId }, files: ['fs_attach.js'] });
   const answer = await Promise.race([
     chrome.tabs.sendMessage(tabId, { linker: name, args }),
@@ -1024,6 +1027,18 @@ async function step(tabId, name, args) {
   ]);
   if (!answer) return { ok: false, error: t('FamilySearch did not answer.') };
   return answer.ok ? answer : { ...answer, error: fsMessage(answer.error) };
+}
+
+// Whether an address is on FamilySearch (https, familysearch.org or a subdomain, such
+// as its sign-in page). Without the extension's access to a tab's site, its url is
+// empty: not FamilySearch.
+function onFamilySearch(address) {
+  try {
+    const url = new URL(address || '');
+    return url.protocol === 'https:' && /(^|\.)familysearch\.org$/.test(url.hostname);
+  } catch (e) {
+    return false;
+  }
 }
 
 // The plan from the page: the source, and each paired person (PIDs checked)

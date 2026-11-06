@@ -1071,12 +1071,27 @@ function extractRecord(document, pageUrl) {
 // .load-more; rows (DA's table view) go into the table. A failure leaves the rest out.
 // (An emigrant protocol's "Load more" lists the whole protocol, thousands of
 // emigrants who aren't family, so it isn't followed.)
+// Whether an address (absolute, or relative to DA) is a page on DigitalArkivet
+function onDigitalArkivet(address) {
+  try {
+    const url = new URL(address, 'https://www.digitalarkivet.no/');
+    return url.protocol === 'https:' && /(^|\.)digitalarkivet\.no$/.test(url.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
 async function loadMoreResidents(doc, fetchText) {
   const section = doc.querySelector('#collapse-persons');
   const more = section && section.querySelector('.load-more[data-url]');
   if (!more) return;
   let url = more.getAttribute('data-url');
   for (let page = 0; url && page < 20; page++) {
+    // Only DA's own pages are read (the address comes from the page)
+    if (!onDigitalArkivet(url)) {
+      console.warn('arkivet2fs: not loading more residents from ' + url);
+      break;
+    }
     let data;
     try {
       data = JSON.parse(await fetchText(url));

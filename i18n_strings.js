@@ -234,6 +234,7 @@ function i18nTable() {
     'in {places}': ['i {places}', 'i {places}'],
     'Turned off under Record kinds.': ['Slått av under Typer oppføringer.', 'Slått av under Typar oppføringar.'],
     'Digital Arkivet is refusing requests ({status}). Wait a while and search again.': ['Digitalarkivet avviser forespørsler ({status}). Vent en stund og søk igjen.', 'Digitalarkivet avviser førespurnader ({status}). Vent ei stund og søk igjen.'],
+    'The FamilySearch tab is no longer on FamilySearch.': ['FamilySearch-fanen er ikke lenger på FamilySearch.', 'FamilySearch-fana er ikkje lenger på FamilySearch.'],
     'Digital Arkivet answered {status}.': ['Digitalarkivet svarte {status}.', 'Digitalarkivet svarte {status}.'],
     'Could not read the English page of this record: {detail}': ['Kunne ikke lese den engelske siden for denne oppføringen: {detail}', 'Kunne ikkje lese den engelske sida for denne oppføringa: {detail}'],
 

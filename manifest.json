@@ -6,7 +6,6 @@
   "default_locale": "en",
   "permissions": [
     "activeTab",
-    "tabs",
     "scripting",
     "notifications",
     "storage"
