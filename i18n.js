@@ -69,12 +69,15 @@ function t(text, params) {
 }
 
 // A message made elsewhere in English (da_record.js and fs_attach.js run in DA's and
-// FS's pages, without this file): the whole text, or "Prefix: detail" with a
-// translation of "Prefix: {detail}" ("Invalid permanent ID format: pdX")
+// FS's pages, without this file): the whole text, "Prefix: detail" with a
+// translation of "Prefix: {detail}" ("Invalid permanent ID format: pdX"; the detail
+// is translated the same way), or "Text 403." with one of "Text {status}."
 function tMessage(text) {
   if (!text || uiLanguage() === 'en' || hasTranslation(text)) return t(text);
   const m = String(text).match(/^(.*?): (.*)$/s);
-  if (m && hasTranslation(m[1] + ': {detail}')) return t(m[1] + ': {detail}', { detail: m[2] });
+  if (m && hasTranslation(m[1] + ': {detail}')) return t(m[1] + ': {detail}', { detail: tMessage(m[2]) });
+  const status = String(text).match(/^(.*) (\d+)\.$/);
+  if (status && hasTranslation(status[1] + ' {status}.')) return t(status[1] + ' {status}.', { status: status[2] });
   return text;
 }
 

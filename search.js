@@ -123,7 +123,7 @@ function instanceRow(group, values) {
   const row = el('div', { class: 'instance' + (group.skip ? ' has-use' : '') });
   row.style.setProperty('--cols', String(Math.max(2, group.fields.filter(f => !f.wide).length)));
   if (group.skip) {
-    const use = el('input', { type: 'checkbox', 'data-use': '', title: t('Use in the searches'), 'aria-label': t('Use {what} in the searches', { what: t(group.title).toLowerCase() }) });
+    const use = el('input', { type: 'checkbox', 'data-use': '', title: t('Use in the searches'), 'aria-label': t('Use this {what} in the searches', { what: t(group.id) }) });
     use.checked = !values[group.skip];
     row.classList.toggle('off', !use.checked);
     use.addEventListener('change', () => {

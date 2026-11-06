@@ -25,10 +25,10 @@
 
   // Name shown in a NAME / ALTERNATE_NAME conclusion. The alternate name's body is
   // prefixed with its type ("Also Known As"; on FS in Norwegian "Også kjent som",
-  // ...), so prefer the name template when present. (Case-sensitive, and followed by
-  // a space, a capital or the end: "Annette" keeps its name. Nynorsk "Anna" for
-  // Other is left out: it is a given name.)
-  const NAME_TYPES = /^(Also Known As|Also known as|Birth Name|Birth name|Married Name|Married name|Nickname|Other|Også kjent som|Også kjend som|Fødselsnavn|Fødenavn|Fødenamn|Navn som gift|Namn som gift|Giftenavn|Kallenavn|Kallenamn|Annet)(?=\s|\p{Lu}|$)\s*/u;
+  // ...), so prefer the name template when present. (Case-sensitive, and not followed
+  // by a lowercase letter: "Annette" keeps its name, 'Nickname"Stor-Ola"' loses the
+  // type. Nynorsk "Anna" for Other is left out: it is a given name.)
+  const NAME_TYPES = /^(Also Known As|Also known as|Birth Name|Birth name|Married Name|Married name|Nickname|Other|Også kjent som|Også kjend som|Fødselsnavn|Fødenavn|Fødenamn|Navn som gift|Namn som gift|Giftenavn|Kallenavn|Kallenamn|Annet)(?!\p{Ll})\s*/u;
   function conclusionName(el) {
     const template = el.querySelector('[data-testid="conclusion-name-template"]');
     if (template) return text(template);
@@ -49,9 +49,10 @@
   function familyMember(row) {
     if (!row) return null;
     // The sex is its own (visually hidden) text node; the row's text runs it into the
-    // name ("Per AslaksenMale1764–1822"), so look for the element that holds just that.
+    // name ("Per AslaksenMale1764–1822"), so look for the element that holds just that
+    // (outside the name: a surname Mann isn't the sex).
     const genderEl = [...row.querySelectorAll('*')]
-      .find(el => el.children.length === 0 && sexOf(text(el)));
+      .find(el => el.children.length === 0 && !el.closest('[data-testid="fullName"]') && sexOf(text(el)));
     const gender = genderEl ? sexOf(text(genderEl)) : '';
     return {
       name: text(row.querySelector('[data-testid="fullName"]')),

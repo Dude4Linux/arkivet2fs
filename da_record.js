@@ -1110,26 +1110,26 @@ function englishPageUrl(href) {
 async function gatherData() {
   const fetchText = async function(url) {
     const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-    if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status);
+    if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status + '.');
     return response.text();
   };
   // The record is read from DA's English page (the labels and roles extractRecord()
   // knows): on a Bokmål or Nynorsk page, the English page of the same address is
-  // fetched; if that fails, the open page is read as it is
+  // fetched; if that fails, that is the error (the Norwegian page's labels aren't read)
   let page = document;
   let pageUrl = location.href;
   const englishUrl = englishPageUrl(location.href);
   if (englishUrl !== location.href) {
     try {
       const response = await fetch(englishUrl, { credentials: 'same-origin' });
-      if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status);
+      if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status + '.');
       page = new DOMParser().parseFromString(await response.text(), 'text/html');
       pageUrl = englishUrl;
-      await loadMoreResidents(page, fetchText);
     } catch (err) {
       console.warn('arkivet2fs: could not load the English page ' + englishUrl, err);
-      page = document;
+      return { error: 'Could not read the English page of this record: ' + (err && err.message || err) };
     }
+    await loadMoreResidents(page, fetchText);
   }
   // Else a copy of the open page, with all of a census residence's residents (the
   // page itself stays as it is)

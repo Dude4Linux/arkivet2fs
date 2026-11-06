@@ -230,7 +230,7 @@ function countyCodeList() { return Object.keys(DA_COUNTIES); }
 
 // Folded name → codes, for municipalities and counties
 let placeIndex = null;
-function placeCodes(name) {
+function placeCodes(name, exact) {
   if (!placeIndex) {
     placeIndex = { m: new Map(), c: new Map() };
     const add = (map, n, code) => map.set(foldPlace(n), [...(map.get(foldPlace(n)) || []), code]);
@@ -241,7 +241,7 @@ function placeCodes(name) {
   }
   const lookup = (map, ascii) => {
     const codes = [...new Set(placeAliases(name).flatMap((n) => map.get(n) || []))];
-    if (codes.length || /[^\x00-\x7f]/.test(name || '')) return codes;
+    if (codes.length || exact || /[^\x00-\x7f]/.test(name || '')) return codes;
     // A name without its Norwegian letters, as FS's Norwegian pages can give it
     // ("Vaga" for Vågå, "Hagebostad" for Hægebostad); several are narrowed by the
     // FS county as names several counties share are
@@ -272,7 +272,9 @@ function asciiIndex(map) {
 // the parent queries don't use places.
 function municipalityCodes(place) {
   const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
-  const found = parts.map(placeCodes);
+  // A place abroad has no names without Norwegian letters (Orland, California isn't Ørland)
+  const exact = placeAbroad(place);
+  const found = parts.map((part) => placeCodes(part, exact));
   const counties = found.flatMap((f) => f.counties);
   const codes = [];
   for (const { municipalities } of found) {
@@ -286,7 +288,7 @@ function municipalityCodes(place) {
 // the municipalities it names (a municipality's code starts with its county's)
 function countyCodes(place) {
   const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
-  const named = parts.flatMap((part) => placeCodes(part).counties);
+  const named = parts.flatMap((part) => placeCodes(part, placeAbroad(place)).counties);
   return [...new Set([...named, ...municipalityCodes(place).map((code) => code.slice(0, 2))])].filter((code) => code in DA_COUNTIES);
 }
 

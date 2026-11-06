@@ -55,6 +55,7 @@ function i18nTable() {
     'Relative': ['Pårørende', 'Pårørande'],
     'In-migrant': ['Innflytter', 'Innflyttar'],
     'Out-migrant': ['Utflytter', 'Utflyttar'],
+    'Emigrant': ['Utvandrer', 'Utvandrar'],
     'Stillborn': ['Dødfødt', 'Dødfødd'],
     'Parent': ['Forelder', 'Forelder'],
     'Assistant': ['Medhjelper', 'Medhjelpar'],
@@ -135,7 +136,7 @@ function i18nTable() {
     'Add a child': ['Legg til et barn', 'Legg til eit barn'],
     'Add a farm': ['Legg til en gård', 'Legg til ein gard'],
     'Use in the searches': ['Bruk i søkene', 'Bruk i søka'],
-    'Use {what} in the searches': ['Bruk {what} i søkene', 'Bruk {what} i søka'],
+    'Use this {what} in the searches': ['Bruk {what} i søkene', 'Bruk {what} i søka'],
     'Clear': ['Tøm', 'Tøm'],
     'Clear {what}': ['Tøm {what}', 'Tøm {what}'],
     'Remove': ['Fjern', 'Fjern'],
@@ -234,6 +235,7 @@ function i18nTable() {
     'Turned off under Record kinds.': ['Slått av under Typer oppføringer.', 'Slått av under Typar oppføringar.'],
     'Digital Arkivet is refusing requests ({status}). Wait a while and search again.': ['Digitalarkivet avviser forespørsler ({status}). Vent en stund og søk igjen.', 'Digitalarkivet avviser førespurnader ({status}). Vent ei stund og søk igjen.'],
     'Digital Arkivet answered {status}.': ['Digitalarkivet svarte {status}.', 'Digitalarkivet svarte {status}.'],
+    'Could not read the English page of this record: {detail}': ['Kunne ikke lese den engelske siden for denne oppføringen: {detail}', 'Kunne ikkje lese den engelske sida for denne oppføringa: {detail}'],
 
     // --- Scoring and checking (da_match.js, da_verify.js) -------------------------------
     '{name} (variant of {fs})': ['{name} (variant av {fs})', '{name} (variant av {fs})'],
