@@ -204,7 +204,9 @@ const PLACE_ALIASES = [
   ['sør-trøndelag', 'søndre trondhjem'],
   ['nord-trøndelag', 'nordre trondhjem'],
   ['troms', 'tromsø amt'],
-  ['finnmark', 'finmarken']
+  ['finnmark', 'finmarken'],
+  // Old spellings DA's transcriptions keep (aa for å is added for every name)
+  ['vågå', 'vaage', 'vaagaa', 'vaaga']
 ];
 
 // Municipalities searched along with another: Oslo's suburbs and several of its
@@ -213,9 +215,11 @@ const MUNICIPALITY_NEIGHBOURS = { '0301': ['0218'] };
 
 const foldPlace = (s) => (s || '').toLowerCase().trim();
 
-// A place name with its other names (PLACE_ALIASES)
+// A place name with its other names (PLACE_ALIASES), and with aa for å, as written
+// before 1917 (Faaberg, Aamot for Fåberg, Åmot)
 function placeAliases(name) {
-  return PLACE_ALIASES.find((list) => list.includes(foldPlace(name))) || [foldPlace(name)];
+  const list = PLACE_ALIASES.find((names) => names.includes(foldPlace(name))) || [foldPlace(name)];
+  return [...new Set([...list, ...list.filter((n) => n.includes('å')).map((n) => n.replace(/å/g, 'aa'))])];
 }
 
 function municipalityName(code) { return DA_MUNICIPALITIES[code] || code; }
@@ -260,4 +264,27 @@ function countyCodes(place) {
   const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
   const named = parts.flatMap((part) => placeCodes(part).counties);
   return [...new Set([...named, ...municipalityCodes(place).map((code) => code.slice(0, 2))])].filter((code) => code in DA_COUNTIES);
+}
+
+// An FS place that lies outside Norway by its last part: a country other than
+// Norway, a US state or a Canadian province ("Spencer, Clay, Iowa, United States",
+// "Spencer, Iowa"). A place without one (a farm, "Bakken, Vågå") isn't taken to be
+// abroad, nor is a US town with a Norwegian name, which ends in its state.
+const ABROAD_PLACE = new RegExp('^(' + [
+  'united states( of america)?', 'usa', 'u\\.s\\.a?\\.?', 'us', 'america', 'amerika', 'nord-amerika', 'north america',
+  'canada', 'sweden', 'sverige', 'denmark', 'danmark', 'finland', 'iceland', 'russia', 'germany', 'tyskland',
+  'england', 'scotland', 'wales', 'ireland', 'united kingdom', 'great britain', 'netherlands', 'holland',
+  'australia', 'new zealand', 'south africa', 'argentina', 'brazil', 'chile',
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida',
+  'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine',
+  'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska',
+  'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio',
+  'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas',
+  'utah', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming', 'dakota territory',
+  'alberta', 'british columbia', 'manitoba', 'new brunswick', 'newfoundland', 'nova scotia', 'ontario',
+  'quebec', 'saskatchewan'
+].join('|') + ')$', 'i');
+function placeAbroad(place) {
+  const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
+  return parts.length > 0 && ABROAD_PLACE.test(parts[parts.length - 1]);
 }

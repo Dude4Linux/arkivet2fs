@@ -192,8 +192,8 @@ function givenNameFit(person, tree) {
 
 // A resident's sex where the record tells it: a patronymic (Olsdatter, Halvorsen) or a
 // family position (hans Kone, deres Søn; the census codes d and s) → 'Male', 'Female' or ''
-const FEMALE_ROLE = /\b(kone|hustru|hustroe|datter|dotter|daughter|wife|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|d)\b/i;
-const MALE_ROLE = /\b(søn|son|fader|far|father|mand|husband|husbond|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)\b/i;
+const FEMALE_ROLE = /\b(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughter|wife|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|d)\b/i;
+const MALE_ROLE = /\b(søn|son|fader|far|father|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)\b/i;
 function recordSex(person) {
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
   if (/(datter|dotter|dtr\.?|sd\.?)(\s|$)/i.test(last)) return 'Female';
@@ -567,7 +567,11 @@ function surnameSuggestions(person, people, record, tree) {
 // The record from DA: the page `rec` (a search hit, the FS person's own entry), and
 // for the source fields the principal's page of it (the baptized child's, ...)
 async function loadFromDA(rec) {
-  const read = async (url) => extractRecord(new DOMParser().parseFromString(await fetchResultPage(url, false), 'text/html'), url);
+  const read = async (url) => {
+    const doc = new DOMParser().parseFromString(await fetchResultPage(url, false), 'text/html');
+    await loadMoreResidents(doc, (more) => fetchResultPage(more, false));  // a census's residents past the 50th
+    return extractRecord(doc, url);
+  };
   const open = await read(rec);
   if (open.error) throw new Error(open.error);
   let record = open;

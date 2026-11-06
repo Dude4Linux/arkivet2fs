@@ -69,6 +69,11 @@
       }
     }
 
+    // Emigration and immigration: FS's own facts, and custom events of that title
+    // ("Immigration 1872")
+    const moves = (type, title) => [...all(type), ...all('OTHER_EVENT')
+      .filter(el => title.test(text(el.querySelector('[data-testid="conclusion-title"]'))))].map(conclusionValue);
+
     // Family cards: the person is in the couple on their own families (spouse +
     // children), and among the children on their parents' family.
     let father = null;
@@ -104,6 +109,8 @@
       death: first('DEATH'),
       burial: first('BURIAL'),
       residences: residences,
+      emigration: moves('EMIGRATION', /^emigrat/i),
+      immigration: moves('IMMIGRATION', /^immigrat/i),
       father: father,
       mother: mother,
       families: families

@@ -322,7 +322,7 @@ function extractRecord(document, pageUrl) {
   // "Husmoderens Tante" → "... Tante [aunt]"); only there, since occupations use them
   // in passing ("Gaar sin Moder tilhaande")
   const RELATIVES = [
-    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husfader', 'Husfar'], 'head of household'],
+    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar'], 'head of household'],
     [['Husmoder', 'Husmor', 'Huusmoder'], 'woman of the house'],
     [['Søn', 'Sønn', 'Sön'], 'son'], [['Datter', 'Dotter', 'Dattér'], 'daughter'],
     [['Børn', 'Born', 'Barn'], 'children'],
@@ -401,7 +401,7 @@ function extractRecord(document, pageUrl) {
     [['Sogneprest', 'Sognepræst', 'Prest', 'Præst'], 'priest'],
     [['Lensmand', 'Lensmann'], 'sheriff'],
     [['Soldat', 'Dragon', 'Musketeer'], 'soldier'],
-    [['Hustru', 'Hustrue', 'Kone'], 'wife'],
+    [['Hustru', 'Hustrue', 'Hustroe', 'Hustro', 'Kone'], 'wife'],
     [['Enke', 'Enkekone'], 'widow'],
     [['Enkemand', 'Enkemann'], 'widower'],
     [['Ungkarl', 'Ungkar'], 'bachelor'],
@@ -917,6 +917,29 @@ function extractRecord(document, pageUrl) {
     // Extract primary person details from always-visible section
     const primaryDetails = extractPrimaryPersonDetails();
 
+    const ownFields = {};
+    for (const field of primaryDetails.fields) ownFields[field.label.toLowerCase()] = field.value;
+
+    // An emigrant protocol lists all its emigrants, 50 at a time ("Load more"), so
+    // the open person (no. 0064) is often not among the persons shown: add them
+    // from their own fields
+    if (!isCensus && !people.some(function(p) { return p.current; })) {
+      const ownName = [ownFields['first name'] || ownFields['given name'], ownFields['surname'] || ownFields['last name']]
+        .filter(Boolean).join(' ');
+      if (ownName) {
+        const ownRole = (ownFields['role'] || '').toLowerCase();
+        people.unshift({
+          id: idValidation.valid ? permanentId : '', name: ownName, role: ownRole,
+          roleEnglish: ownRole ? translateRole(ownRole) : '',
+          position: ownFields['position'] || ownFields['occupation'] || '',
+          birthYear: ownFields['year of birth'] || ownFields['birth year'] || '',
+          birthPlace: ownFields['birth place'] || ownFields['place of birth'] || '',
+          residence: ownFields['residence'] || '',
+          current: true, primary: false
+        });
+      }
+    }
+
     // Mark the person whose page is open as primary (falls back to the first person)
     const primaryPerson = people.find(function(p) { return p.current; }) || people[0];
     const primaryPersonId = primaryPerson ? primaryPerson.id : null;
@@ -925,8 +948,6 @@ function extractRecord(document, pageUrl) {
     // Name of the open person: from the persons list, else Given name + Last name fields
     const scans = extractScans();
 
-    const ownFields = {};
-    for (const field of primaryDetails.fields) ownFields[field.label.toLowerCase()] = field.value;
     const pageName = (primaryPerson && primaryPerson.current && primaryPerson.name) ||
                      [ownFields['given name'], ownFields['last name']].filter(Boolean).join(' ');
     // Migration lists give the open person's role only in their own fields, and
@@ -975,7 +996,10 @@ function extractRecord(document, pageUrl) {
     const principal = recordPrincipal(recordTypeInfo.type, people);
     // When the open page isn't one of the principal's, point to the principal's page
     // so gatherData() can extract the record from that person's perspective
-    const principalUrl = principal && !principal.persons.some(function(p) { return p.current; }) &&
+    // (Not when the open person isn't among the people at all, as when a census
+    // page's "Load more" couldn't be read: the principal would be another household's.)
+    const principalUrl = principal && people.some(function(p) { return p.current; }) &&
+                         !principal.persons.some(function(p) { return p.current; }) &&
                          principal.persons[0].id ? new URL(pageUrl).origin + '/en/' + principal.persons[0].id : '';
     let titleName = principal ? principalNames(principal) : stripNameVariants(pageName);
     // A census household with where it lived: "Halvor Larsen household, Bakken nedre, Nordlien"
@@ -1039,8 +1063,54 @@ function extractRecord(document, pageUrl) {
 // notes and title should describe the record's principal (e.g. the baptized
 // child), so fetch the principal's own page of the same record and extract
 // from that instead. On any failure, keep the open page's result.
+// A census page shows the residence's first 50 residents; "Load more" (a
+// .load-more with a data-url) fetches the next 50 as JSON, {view: their HTML,
+// nextPage: the next URL or false}. Adds them all to doc's #collapse-persons (at most
+// 20 pages), so that a resident past the 50th, the open person among them, and their
+// households are read too. fetchText(url) gives a URL's text. Cards go before the
+// .load-more; rows (DA's table view) go into the table. A failure leaves the rest out.
+// (An emigrant protocol's "Load more" lists the whole protocol, thousands of
+// emigrants who aren't family, so it isn't followed.)
+async function loadMoreResidents(doc, fetchText) {
+  const section = doc.querySelector('#collapse-persons');
+  const more = section && section.querySelector('.load-more[data-url]');
+  if (!more) return;
+  let url = more.getAttribute('data-url');
+  for (let page = 0; url && page < 20; page++) {
+    let data;
+    try {
+      data = JSON.parse(await fetchText(url));
+    } catch (err) {
+      console.warn('arkivet2fs: could not load more residents from ' + url, err);
+      return;
+    }
+    const template = doc.createElement('template');
+    template.innerHTML = data.view || '';
+    const rows = template.content.querySelector('tr');
+    const table = rows && Array.from(section.querySelectorAll('tbody')).filter(function(body) {
+      return body.querySelector('tr.data-item');
+    }).pop();
+    if (table) table.appendChild(template.content);
+    else more.parentNode.insertBefore(template.content, more);
+    url = data.nextPage || '';
+  }
+  more.remove();
+}
+
 async function gatherData() {
-  const result = extractRecord(document, location.href);
+  const fetchText = async function(url) {
+    const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status);
+    return response.text();
+  };
+  // A copy of the open page, with all of a census residence's residents (the page
+  // itself stays as it is)
+  let page = document;
+  if (document.querySelector('#collapse-persons .load-more[data-url]')) {
+    page = document.cloneNode(true);
+    await loadMoreResidents(page, fetchText);
+  }
+  const result = extractRecord(page, location.href);
   // The person whose page is open (the linker pairs the record's people from them)
   result.openPerson = result.people.find(function(p) { return p.current; }) || null;
   if (!result.error && result.principalUrl) {
@@ -1048,6 +1118,7 @@ async function gatherData() {
       const response = await fetch(result.principalUrl, { credentials: 'same-origin' });
       if (response.ok) {
         const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        await loadMoreResidents(doc, fetchText);
         const principalResult = extractRecord(doc, result.principalUrl);
         if (!principalResult.error) {
           principalResult.openPerson = result.openPerson;

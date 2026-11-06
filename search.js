@@ -17,6 +17,9 @@ const GROUPS = [
     fields: [{ name: 'residencePlace', label: 'Place', wide: true },
              { name: 'residenceDate.from', label: 'From year', type: 'year' },
              { name: 'residenceDate.to', label: 'To year', type: 'year' }] },
+  { id: 'emigration', title: 'Emigration or immigration', fields: [...eventFields('emigrationLike'),
+    // FS's first event outside Norway (background.js): searches end two years after it
+    { name: 'abroadPlace', label: 'First place abroad', wide: true }, { name: 'abroadYear', label: 'Year', type: 'year' }] },
   { id: 'death', title: 'Death or burial', fields: eventFields('deathLike') },
   { id: 'farm', title: 'Farms', repeat: true, add: 'Add a farm',
     fields: [{ name: 'farm', label: 'Farm', wide: true }] },

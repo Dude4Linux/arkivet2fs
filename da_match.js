@@ -145,9 +145,11 @@ function scoreHit(hit, P) {
     const check = (from, to, text, near) => inRange(event, from, to, text, near);
     if (hit.role === 'Child' && P.birth && !born) check(P.birth.from, P.birth.to + 1, 'baptised', 2);
     else if ((hit.role === 'Groom' || hit.role === 'Bride') && P.marriage) check(P.marriage.from - 1, P.marriage.to + 1, 'married', 3);
+    else if (hit.type === 'Emigration' && P.emigration) check(P.emigration.from, P.emigration.to, 'emigrated', 2);
     else if (hit.role === 'Deceased' && P.death) check(P.death.from - 1, P.death.to + 1, 'buried', 2);
     else if (P.birth && event < P.birth.from - 1) add(-4, event + ' is before birth', false);
     else if (P.death && event > P.death.to + 1) add(-4, event + ' is after death', false);
+    else if (P.leftNorway && event > P.leftNorway) add(-4, event + ' is after ' + leavingText(P), false);
     else if (P.birth && !born && MIN_AGE[hit.role] && event - P.birth.from < MIN_AGE[hit.role]) {
       add(-4, hit.role.toLowerCase() + ' at about ' + Math.max(0, event - Math.round((P.birth.from + P.birth.to) / 2)), false);
     }

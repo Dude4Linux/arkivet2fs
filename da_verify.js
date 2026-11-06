@@ -20,7 +20,7 @@ const ROLE_KINDS = {
   father: /^(father|far|fader)$/i,
   mother: /^(mother|mor|moder)$/i,
   head: /^(head of household|man of the house|woman of the house|hp|hf|hm|(hus|huus|hos)(bonde|bond|fader|far|moder|mor|mand)|bonde|gaardmand|gårdmann)\b/i,
-  spouse: /^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|ægtefælle|ektefelle|mand|mann|ektemann))\b/i,
+  spouse: /^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|hustrue|hustroe|hustro|ægtefælle|ektefelle|mand|mann|ektemann))\b/i,
   groom: /^(groom|brudgom)$/i,
   bride: /^(bride|brud|brur)$/i,
   deceased: /^(deceased|avdød|avdøde)$/i,
@@ -214,6 +214,7 @@ async function fetchRecord(hit) {
   } catch (e) { /* storage unavailable */ }
   const html = await fetchResultPage(hit.url, false);
   const doc = new DOMParser().parseFromString(html, 'text/html');
+  await loadMoreResidents(doc, (url) => fetchResultPage(url, false));
   const full = extractRecord(doc, hit.url);
   if (full.error) throw new Error(full.error);
   const record = { people: full.people, others: full.others || [], fields: full.fields, recordTypeInfo: full.recordTypeInfo, recordDate: full.recordDate };

@@ -117,6 +117,15 @@ function splitName(full) {
 }
 
 // The years in an FS date ("11 November 1764", "1764", "1726–Deceased")
+// A name without its nickname: a quoted word ('Stor'), or a leading Big, Little,
+// Old, Young (Stor, Lille, Gamle, Unge, ...) that tells two brothers Ole apart:
+// "Big 'Stor' Lars Halvorsen" → "Lars Halvorsen", "Little Lars Halvorson" → "Lars Halvorson"
+function withoutNickname(name) {
+  return (name || '').replace(/(^|\s)(['"‘’“”])[^'"‘’“”]*\2(?=\s|$)/gu, ' ')
+    .replace(/^\s*(big|little|old|young|stor|store|lille|litle|vesle|gamle|gamla|unge|junior|senior)\s+(?=\S+\s)/i, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
 function yearsOf(date) {
   return ((date || '').match(/\b\d{4}\b/g) || []).map(Number);
 }
@@ -149,7 +158,7 @@ async function personToQuery(person) {
   const names = [];
   const farms = [];
   const seen = new Set();
-  for (const full of [person.name, ...(person.altNames || [])]) {
+  for (const full of [person.name, ...(person.altNames || [])].map(withoutNickname)) {
     const key = (full || '').toLowerCase().replace(/\s+/g, ' ').trim();
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -182,7 +191,9 @@ async function personToQuery(person) {
   // Events: birth or christening, marriage, residence, death or burial
   const birth = person.birth || {};
   const christening = person.christening || {};
-  set('q.birthLikePlace', birth.place || christening.place);
+  // The more specific of the two ("Vågå, Oppland, Norway", not just "Norway")
+  const parts = (place) => (place || '').split(',').filter((p) => p.trim()).length;
+  set('q.birthLikePlace', parts(christening.place) > parts(birth.place) ? christening.place : birth.place || christening.place);
   range('birthLike', [...yearsOf(birth.date), ...yearsOf(christening.date)]);
 
   const marriage = (person.families || []).map(f => f.marriage).find(m => m && (m.date || m.place));
@@ -195,6 +206,29 @@ async function personToQuery(person) {
     set('q.residencePlace' + suffix(i), r.place);
     range('residence', yearsOf(r.date), i);
   });
+
+  // Leaving Norway: the years of the emigrations and of the immigrations elsewhere
+  // (an immigration to a Norwegian place is a return)
+  const inNorway = (place) => /\b(norway|norge|noreg)\s*$/i.test(place || '');
+  const moves = [...(person.emigration || []), ...(person.immigration || []).filter((m) => !inNorway(m.place))];
+  const departure = moves.find((m) => m.place && inNorway(m.place)) || moves.find((m) => m.place);
+  set('q.emigrationLikePlace', departure && departure.place);
+  range('emigrationLike', moves.flatMap((m) => yearsOf(m.date)));
+
+  // The first dated event outside Norway (a residence, marriage, death or burial in
+  // America) after the last one in Norway: by then the person had left, emigration or
+  // not. Searches stop two years after it too (da_search.js profile()). A birth
+  // abroad doesn't count (born in Sweden, then moved to Norway).
+  const dated = (events) => events.filter((e) => e && e.place && yearsOf(e.date).length)
+    .map((e) => ({ place: e.place, date: e.date, year: Math.min(...yearsOf(e.date)) }));
+  const later = dated([...(person.residences || []), ...(person.families || []).map((f) => f.marriage), person.death, person.burial]);
+  const lastHome = Math.max(0, ...dated([person.birth, person.christening, ...later])
+    .filter((e) => !placeAbroad(e.place)).map((e) => e.year));
+  const firstAbroad = later.filter((e) => placeAbroad(e.place) && e.year >= lastHome).sort((a, b) => a.year - b.year)[0];
+  if (firstAbroad) {
+    set('q.abroadPlace', firstAbroad.place);
+    set('q.abroadYear', firstAbroad.year);
+  }
 
   const death = person.death || {};
   const burial = person.burial || {};

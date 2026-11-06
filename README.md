@@ -41,12 +41,19 @@ family.
 The sidebar on the right holds the search criteria, laid out like FamilySearch's
 record search. You can edit any of them and click **Search**:
 
-- **Names:** given names and surname, one row per name; FS alternate names are added.
+- **Names:** given names and surname, one row per name; FS alternate names are added,
+  without nicknames such as "Big" or "Little" (two brothers Ole).
   The names follow the patronymic convention. In "Tollef Johansen Skofteland",
   Johansen is the surname. Skofteland is a farm only when a farm of that name lies
   near the person's places. Otherwise it's a family or place name and is searched as
   the surname.
-- **Events:** birth or christening, marriage, residences, death or burial; years are ±2.
+- **Events:** birth or christening, marriage, residences, emigration or immigration,
+  death or burial; years are ±2. With an emigration or immigration year, the searches
+  stop two years after it (the latest, when FS has several), and the ones that can
+  only find later records, such as a marriage in America, are skipped. The first
+  event FS has outside Norway (a residence, marriage or death in America) counts the
+  same way, under **First place abroad**: the searches stop two years after it, or
+  after the emigration if that's earlier. Clear its year to search later years too.
 - **Farms:** each farm gets its own "Records at <farm>" search.
 - **Relatives:** father, mother, spouses and children. Untick a relative to leave them
   out of the searches.
