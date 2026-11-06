@@ -257,9 +257,9 @@ function emigrationYears(P) {
 // (FS: 1866–1868)", or "leaving Norway (FS: La Crosse, Wisconsin, United States, 1880)"
 // when FS's first event abroad is the earlier cutoff
 function leavingText(P) {
-  if (P.emigration && !(P.abroad && P.abroad.year + 2 < P.emigration.to)) return 'emigrating (FS: ' + emigrationYears(P) + ')';
-  if (P.abroad) return 'leaving Norway (FS: ' + (P.abroad.place ? P.abroad.place + ', ' : '') + P.abroad.year + ')';
-  return 'leaving Norway';
+  if (P.emigration && !(P.abroad && P.abroad.year + 2 < P.emigration.to)) return t('emigrating (FS: {years})', { years: emigrationYears(P) });
+  if (P.abroad) return t('leaving Norway (FS: {what})', { what: (P.abroad.place ? P.abroad.place + ', ' : '') + P.abroad.year });
+  return t('leaving Norway');
 }
 
 // The person's lifetime: birth range start to death range end (a century if one is
@@ -321,21 +321,21 @@ function buildQueries(criteria) {
   const lifeTo = left ? Math.min(lifeEnd || left, left) : lifeEnd;
   const capped = (to) => (left && to ? Math.min(to, left) : to);
   const emigrated = leavingText(P);
-  const gone = (from, to) => (left && from && to && from > to ? 'After ' + emigrated + '.' : '');
-  const span = (from, to) => (from || to ? (from || '…') + '–' + (to || '…') : 'any year');
+  const gone = (from, to) => (left && from && to && from > to ? t('After {what}.', { what: emigrated }) : '');
+  const span = (from, to) => (from || to ? (from || '…') + '–' + (to || '…') : t('any year'));
   const given = givenStem(P.given);
   const nameText = [given, stem].filter(Boolean).join(' ');
   const byRole = (male, female) => (P.sex === 'Male' ? [male] : P.sex === 'Female' ? [female] : [male, female]);
   const roleText = { brudgom: 'groom', brud: 'bride', far: 'father', mor: 'mother', barn: 'child', konfirmant: 'confirmand', 'avdød': 'deceased',
     brudgommensfar: "groom's father", brudensfar: "bride's father" };
-  const as = (roles) => 'as ' + roles.map((r) => roleText[r]).join(' or ');
+  const as = (roles) => t('as {roles}', { roles: roles.map((r) => t(roleText[r])).join(t(' or ')) });
   // FS's birth, or the one estimated from the marriage and children (shown as "about")
   const birth = P.birth || P.estBirth;
-  const bornText = (from, to) => (P.birth ? 'born ' : 'born about ') + span(from, to);
+  const bornText = (from, to) => t(P.birth ? 'born {years}' : 'born about {years}', { years: span(from, to) });
   const years = (from, to) => ({ event_year_from: from, event_year_to: to });
   const bornFields = birth ? { birth_year_from: birth.from - 3, birth_year_to: birth.to + 3 } : {};
   const hitYear = (hit) => Number(((hit.date || '') + ' ' + (hit.source || '')).match(/\b(1[5-9]\d\d)\b/)?.[1]) || null;
-  const listText = (names) => names.join(', ').replace(/, ([^,]*)$/, ' or $1');
+  const listText = (names) => names.join(', ').replace(/, ([^,]*)$/, (all, last) => t(' or ') + last);
 
   // Where: the places chosen under Where to search (DA finds records in any of the
   // chosen counties and municipalities), or the municipalities of the event's FS
@@ -345,7 +345,7 @@ function buildQueries(criteria) {
     fields: { 'm[]': picked.m, 'c[]': picked.c },
     text: listText([...picked.c.map(countyName), ...picked.m.map(municipalityName)])
   }] : null;
-  const norway = { fields: {}, text: 'Norway' };
+  const norway = { fields: {}, text: t('Norway') };
   // (the event's places, or all the FS places when FS has none of them)
   const levelsFor = (places) => {
     if (chosen) return chosen;
@@ -378,7 +378,7 @@ function buildQueries(criteria) {
     return {
       fields: { related_first_name: first ? who.first : '', related_last_name: last ? who.last : '', 'related_roles[]': who.roles || [] },
       text: who.relation + ' ' + names,
-      reasons: [who.relation + ' ' + (foldName(names) === foldName(fs) ? fs : names + ' for ' + fs)]
+      reasons: [who.relation + ' ' + (foldName(names) === foldName(fs) ? fs : t('{name} for {fs}', { name: names, fs }))]
     };
   };
   const step = (parts, extra = {}) => ({
@@ -408,7 +408,7 @@ function buildQueries(criteria) {
       id, title, base: withFields(new URLSearchParams(), base), levels, reasons: [],
       steps: steps.filter((s) => { const key = withFields(new URLSearchParams(), s.fields).toString(); return !seen.has(key) && seen.add(key); }),
       summary: summary.filter(Boolean).join(' · '),
-      goal: (hits) => (hits.length ? [] : ['a record']),
+      goal: (hits) => (hits.length ? [] : [t('a record')]),
       ...extra
     };
     queries.push(q);
@@ -421,26 +421,26 @@ function buildQueries(criteria) {
   // be far off) and by the first given name alone, in the FS birthplace
   if (P.given) {
     const from = P.birth && P.birth.from, to = P.birth && P.birth.to + 1; // baptism can fall in the next year
-    const parents = [relative(P.father, 'father', ['far']), relative(P.mother, 'mother', ['mor'])].filter(Boolean);
+    const parents = [relative(P.father, t('father'), ['far']), relative(P.mother, t('mother'), ['mor'])].filter(Boolean);
     const pairs = parents.map((r) => pairSteps(r, { first: given }));
     // (two given names find fewer children than one and a parent's given name)
     const two = P.givenNames.length > 1 ? P.givenNames.slice(0, 2).map(givenStem).join(' ') : '';
     const steps = [...pairs.map((p) => p[0]), ...(P.birth && two ? alone({ first: two }, 1, 0) : []),
       ...pairs.map((p) => p[1]), ...(P.birth ? alone(me, 1, 0) : [])].filter(Boolean);
-    const q = query('baptism', 'Baptism', { 'roles[]': 'barn', ...years(from, to) }, steps,
+    const q = query('baptism', t('Baptism'), { 'roles[]': 'barn', ...years(from, to) }, steps,
       levelsFor(P.birthPlace ? [P.birthPlace] : allPlaces), [as(['barn']), span(from, to)]);
-    if (!steps.length) q.skip = 'Add the father or mother, or a birth year, to search for the baptism.';
+    if (!steps.length) q.skip = t('Add the father or mother, or a birth year, to search for the baptism.');
   }
 
   // Confirmation, usually at 14–16: by name, with the father (some confirmations
   // name him), and by the given name alone, in the birthplace and residences
   {
     const from = birth && birth.from + 13, to = capped(birth && birth.to + 20);
-    const father = relative(P.father, 'father', []);
+    const father = relative(P.father, t('father'), []);
     const steps = [...alone(me), ...(father ? pairSteps(father, { first: given }).slice(0, 2) : []), ...alone(me, 1, 0)];
-    const q = query('confirmation', 'Confirmation', { 'roles[]': 'konfirmant', ...years(from, to) }, steps,
+    const q = query('confirmation', t('Confirmation'), { 'roles[]': 'konfirmant', ...years(from, to) }, steps,
       levelsFor([P.birthPlace, ...P.residences]), [as(['konfirmant']), span(from, to)]);
-    if (!birth) q.skip = 'Add a birth year to search for the confirmation.';
+    if (!birth) q.skip = t('Add a birth year to search for the confirmation.');
     else if (gone(from, to)) q.skip = gone(from, to);
   }
 
@@ -451,15 +451,19 @@ function buildQueries(criteria) {
       : birth ? [birth.from + 16, Math.min(birth.to + 60, lifeTo)] : [lifeFrom, lifeTo];
     // FS's marriage abroad, or after the person left Norway, isn't in DA
     const abroad = P.marriage && (outsideNorway(P.marriagePlace) || (left && P.marriage.from > left))
-      ? 'Married ' + (P.marriagePlace ? 'in ' + P.marriagePlace + ', ' : '') + Math.round((P.marriage.from + P.marriage.to) / 2) +
-        (outsideNorway(P.marriagePlace) ? '.' : ', after ' + emigrated + '.')
+      ? (() => {
+        const year = Math.round((P.marriage.from + P.marriage.to) / 2);
+        if (outsideNorway(P.marriagePlace)) return t('Married in {place}, {year}.', { place: P.marriagePlace, year });
+        return P.marriagePlace ? t('Married in {place}, {year}, after {what}.', { place: P.marriagePlace, year, what: emigrated })
+          : t('Married {year}, after {what}.', { year, what: emigrated });
+      })()
       : !P.marriage ? gone(from, to) : '';
     const roles = byRole('brudgom', 'brud');
     const spouses = P.spouses.length ? P.spouses : [null];
     const levels = levelsFor(P.marriagePlace ? [P.marriagePlace] : allPlaces);
     spouses.forEach((spouse, k) => {
-      const s = relative(spouse, 'spouse', []);
-      const q = query('marriage' + (k ? '-' + k : ''), spouse ? 'Marriage to ' + spouse.given : 'Marriage', { 'roles[]': roles, ...years(from, to) },
+      const s = relative(spouse, t('spouse'), []);
+      const q = query('marriage' + (k ? '-' + k : ''), spouse ? t('Marriage to {name}', { name: spouse.given }) : t('Marriage'), { 'roles[]': roles, ...years(from, to) },
         [...(s ? pairSteps(s, me) : []), ...alone(me)], levels, [as(roles), span(from, to)]);
       if (abroad) q.skip = abroad;
     });
@@ -485,21 +489,21 @@ function buildQueries(criteria) {
     // Children born after the person left Norway aren't looked for; when FS has
     // children and all of them were, there's nothing to look for
     const abroad = left && childYears.length && childYears.every((y) => y > left)
-      ? 'All ' + childYears.length + ' FS children were born after ' + emigrated + '.' : gone(from, to);
+      ? t('All {n} FS children were born after {what}.', { n: childYears.length, what: emigrated }) : gone(from, to);
     // The spouse's role is the other parent's: mother for a man, father for a woman
     const other = P.sex === 'Male' ? ['mor'] : P.sex === 'Female' ? ['far'] : ['far', 'mor'];
-    const relation = other.map((r) => roleText[r]).join(' or ');
+    const relation = other.map((r) => t(roleText[r])).join(t(' or '));
     const known = P.children.filter((c) => c.year && !(left && c.year > left));
     const goal = known.length ? (hits) => known.filter((c) => !hits.some((h) => {
       const y = hitYear(h);
       return (h.role === 'Father' || h.role === 'Mother') && y >= c.year && y <= c.year + 1;
-    })).map((c) => 'a baptism for ' + [c.given, '(b. ' + c.year + ')'].filter(Boolean).join(' ')) : undefined;
+    })).map((c) => t('a baptism for {child}', { child: [c.given, '(' + t('b.') + ' ' + c.year + ')'].filter(Boolean).join(' ') })) : undefined;
     const levels = levelsFor([P.marriagePlace, ...P.residences, P.birthPlace]);
     const spouses = P.spouses.length ? P.spouses : [null];
     spouses.forEach((spouse, k) => {
       const s = relative(spouse, relation, other);
       const steps = s ? (P.sex === 'Female' ? pairSteps(me, s) : pairSteps(s, me)) : [];
-      const q = query('children' + (k ? '-' + k : ''), spouse ? "Children's baptisms with " + spouse.given : "Children's baptisms",
+      const q = query('children' + (k ? '-' + k : ''), spouse ? t("Children's baptisms with {name}", { name: spouse.given }) : t("Children's baptisms"),
         { 'roles[]': roles, ...years(from, to) }, [...steps, ...alone(me)], levels,
         [as(roles), span(from, to)], goal ? { goal } : {});
       if (abroad) q.skip = abroad;
@@ -514,11 +518,11 @@ function buildQueries(criteria) {
     const childYears = P.children.map((c) => c.year).filter((y) => y && !(left && y > left));
     const from = childYears.length ? Math.min(...childYears) + 16 : birth ? birth.from + 36 : lifeFrom;
     const to = capped(childYears.length ? Math.max(...childYears) + 45 : lifeTo);
-    const q = query('childmarriage', "Children's marriages", { 'roles[]': roles, ...years(from, to) }, alone(me),
+    const q = query('childmarriage', t("Children's marriages"), { 'roles[]': roles, ...years(from, to) }, alone(me),
       levelsFor(allPlaces), [as(roles), span(from, to)]);
     const allLater = left && P.children.some((c) => c.year) && P.children.every((c) => !c.year || c.year > left);
-    if (P.sex === 'Female') q.skip = 'Church books name only the fathers of a couple.';
-    else if (allLater) q.skip = 'All FS children were born after ' + emigrated + '.';
+    if (P.sex === 'Female') q.skip = t('Church books name only the fathers of a couple.');
+    else if (allLater) q.skip = t('All FS children were born after {what}.', { what: emigrated });
     else if (gone(from, to)) q.skip = gone(from, to);
   }
 
@@ -532,10 +536,10 @@ function buildQueries(criteria) {
     // Done when each of the censuses DA has for all of Norway has a hit (the others
     // are fragments or towns only)
     const full = censuses.filter((y) => FULL_CENSUSES.includes(y));
-    const goal = full.length ? (hits) => full.filter((y) => !hits.some((h) => hitYear(h) === y)).map((y) => 'the ' + y + ' census') : undefined;
-    const q = query('census', 'Census', base, [...alone(me), ...(P.birth ? alone(me, 1, 0) : [])], levelsFor(allPlaces),
-      [censuses.length ? censuses.join(', ') : 'all censuses', birth && bornText(bornFields.birth_year_from, bornFields.birth_year_to)], goal ? { goal } : {});
-    if (lifeFrom && !censuses.length) q.skip = 'No Norwegian census was taken in the person’s lifetime.';
+    const goal = full.length ? (hits) => full.filter((y) => !hits.some((h) => hitYear(h) === y)).map((y) => t('the {year} census', { year: y })) : undefined;
+    const q = query('census', t('Census'), base, [...alone(me), ...(P.birth ? alone(me, 1, 0) : [])], levelsFor(allPlaces),
+      [censuses.length ? censuses.join(', ') : t('all censuses'), birth && bornText(bornFields.birth_year_from, bornFields.birth_year_to)], goal ? { goal } : {});
+    if (lifeFrom && !censuses.length) q.skip = t('No Norwegian census was taken in the person’s lifetime.');
   }
 
   // Emigration: emigrant protocols and other emigration sources, from birth (children
@@ -544,36 +548,36 @@ function buildQueries(criteria) {
   {
     // (FS's emigration or immigration years, ±2, when it has them)
     const [from, to] = P.emigration ? [P.emigration.from, P.emigration.to] : [lifeFrom, lifeTo];
-    query('emigration', 'Emigration', { 'sc[]': 'em', ...years(from, to), ...bornFields },
+    query('emigration', t('Emigration'), { 'sc[]': 'em', ...years(from, to), ...bornFields },
       [...alone(me), ...(P.birth ? alone(me, 1, 0) : [])], chosen || [norway],
-      ['emigration sources', span(from, to), birth && bornText(bornFields.birth_year_from, bornFields.birth_year_to)]);
+      [t('emigration sources'), span(from, to), birth && bornText(bornFields.birth_year_from, bornFields.birth_year_to)]);
   }
 
   // Moving away: church books' lists of people moving out of the parish (within
   // Norway too), from birth (children moved with their parents)
-  query('moving', 'Moving away (church books)', { 'lt[]': ['uf', 'fl'], ...years(lifeFrom, lifeTo) }, alone(me), levelsFor(allPlaces),
-    ['moving out of a parish', span(lifeFrom, lifeTo)]);
+  query('moving', t('Moving away (church books)'), { 'lt[]': ['uf', 'fl'], ...years(lifeFrom, lifeTo) }, alone(me), levelsFor(allPlaces),
+    [t('moving out of a parish'), span(lifeFrom, lifeTo)]);
 
   // Burial: by name, then by the given name alone when FS has the death, in the
   // death place
   {
     const [from, to] = P.death ? [P.death.from, P.death.to + 1] : [lifeFrom, lifeTo];
-    const q = query('burial', 'Burial', { 'roles[]': 'avdød', ...years(from, to) }, [...alone(me), ...(P.death ? alone(me, 1, 0) : [])],
+    const q = query('burial', t('Burial'), { 'roles[]': 'avdød', ...years(from, to) }, [...alone(me), ...(P.death ? alone(me, 1, 0) : [])],
       levelsFor(P.deathPlace ? [P.deathPlace] : allPlaces), [as(['avdød']), span(from, to)]);
-    if (outsideNorway(P.deathPlace)) q.skip = 'Died outside Norway (' + P.deathPlace + ').';
-    else if (left) q.skip = 'After ' + emigrated + ', and FS has no death in Norway.';
+    if (outsideNorway(P.deathPlace)) q.skip = t('Died outside Norway ({place}).', { place: P.deathPlace });
+    else if (left) q.skip = t('After {what}, and FS has no death in Norway.', { what: emigrated });
   }
 
   // Records at each farm (DA's domicile), under the given name: they find the person
   // whatever the patronymic's spelling
   P.farms.slice(0, 2).forEach((farm, k) => {
-    query('farm' + (k ? '-' + k : ''), 'Records at ' + farm, years(lifeFrom, lifeTo),
-      [{ fields: { firstname: given, domicile: farm }, text: given + ' at ' + farm, reasons: ['farm ' + farm] }],
+    query('farm' + (k ? '-' + k : ''), t('Records at {farm}', { farm }), years(lifeFrom, lifeTo),
+      [{ fields: { firstname: given, domicile: farm }, text: t('{name} at {farm}', { name: given, farm }), reasons: [t('farm {farm}', { farm })] }],
       levelsFor(allPlaces), [span(lifeFrom, lifeTo)]);
   });
 
   // Everything else under the name, over the person's lifetime
-  query('other', 'All records under the name', years(lifeFrom, lifeTo), alone(me), levelsFor(allPlaces), [span(lifeFrom, lifeTo)]);
+  query('other', t('All records under the name'), years(lifeFrom, lifeTo), alone(me), levelsFor(allPlaces), [span(lifeFrom, lifeTo)]);
 
   // Other names to fall back on while a query finds nothing, in order: the
   // patronymic from the father (FS's patronymics are sometimes guesses), FS's
@@ -608,8 +612,8 @@ function buildQueries(criteria) {
       }
     }
     q.params = q.steps.length ? withFields(withFields(q.base, q.steps[0].fields), q.levels[0].fields) : q.base;
-    if (chosen) q.summary += (q.summary ? ' · ' : '') + 'in ' + chosen[0].text;
-    if (off.includes(q.kind) && !q.skip) q.skip = 'Turned off under Record kinds.';
+    if (chosen) q.summary += (q.summary ? ' · ' : '') + t('in {places}', { places: chosen[0].text });
+    if (off.includes(q.kind) && !q.skip) q.skip = t('Turned off under Record kinds.');
   }
   return queries;
 }
@@ -679,9 +683,13 @@ async function fetchResultPage(url, store = true) {
   lastRequest = Date.now();
   const response = await fetch(url, { credentials: 'omit' });
   if (!response.ok) {
-    throw new Error(response.status === 403 || response.status === 429
-      ? 'Digital Arkivet is refusing requests (' + response.status + '). Wait a while and search again.'
-      : 'Digital Arkivet answered ' + response.status + '.');
+    // (error.refused: DA refuses requests; search.js stops searching)
+    const refused = response.status === 403 || response.status === 429;
+    const error = new Error(refused
+      ? t('Digital Arkivet is refusing requests ({status}). Wait a while and search again.', { status: response.status })
+      : t('Digital Arkivet answered {status}.', { status: response.status }));
+    error.refused = refused;
+    throw error;
   }
   const html = await response.text();
   if (store) try { sessionStorage.setItem('da:' + url, html); } catch (e) { /* full or unavailable */ }

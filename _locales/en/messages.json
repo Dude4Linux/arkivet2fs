@@ -1,0 +1,10 @@
+{
+  "name": {
+    "message": "DigitalArkivet to FamilySearch",
+    "description": "The extension's name"
+  },
+  "description": {
+    "message": "A tool to extract data from Norwegian DigitalArkivet and format it for FamilySearch.org SourceBox",
+    "description": "The extension's description"
+  }
+}

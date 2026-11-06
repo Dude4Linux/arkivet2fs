@@ -236,9 +236,33 @@ function placeCodes(name) {
     const add = (map, n, code) => map.set(foldPlace(n), [...(map.get(foldPlace(n)) || []), code]);
     for (const [code, n] of Object.entries(DA_MUNICIPALITIES)) add(placeIndex.m, n, code);
     for (const [code, n] of Object.entries(DA_COUNTIES)) add(placeIndex.c, n, code);
+    placeIndex.am = asciiIndex(placeIndex.m);
+    placeIndex.ac = asciiIndex(placeIndex.c);
   }
-  const lookup = (map) => [...new Set(placeAliases(name).flatMap((n) => map.get(n) || []))];
-  return { municipalities: lookup(placeIndex.m), counties: lookup(placeIndex.c) };
+  const lookup = (map, ascii) => {
+    const codes = [...new Set(placeAliases(name).flatMap((n) => map.get(n) || []))];
+    if (codes.length || /[^\x00-\x7f]/.test(name || '')) return codes;
+    // A name without its Norwegian letters, as FS's Norwegian pages can give it
+    // ("Vaga" for Vågå, "Hagebostad" for Hægebostad); several are narrowed by the
+    // FS county as names several counties share are
+    return ascii.get(asciiPlace(name)) || [];
+  };
+  return { municipalities: lookup(placeIndex.m, placeIndex.am), counties: lookup(placeIndex.c, placeIndex.ac) };
+}
+
+// A place name without ø and å ("vågå" → "vaga"; æ as ae or a), and an index of
+// the names by both of these spellings
+function asciiPlace(name, ae) {
+  return foldPlace(name).replace(/æ/g, ae || 'ae').replace(/ø/g, 'o').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function asciiIndex(map) {
+  const index = new Map();
+  for (const [n, codes] of map) {
+    for (const key of new Set([asciiPlace(n), asciiPlace(n, 'a')])) {
+      index.set(key, [...new Set([...(index.get(key) || []), ...codes])]);
+    }
+  }
+  return index;
 }
 
 // An FS place ("Hægebostad, Vest-Agder, Norway") → the DA municipality codes it
@@ -275,6 +299,9 @@ const ABROAD_PLACE = new RegExp('^(' + [
   'canada', 'sweden', 'sverige', 'denmark', 'danmark', 'finland', 'iceland', 'russia', 'germany', 'tyskland',
   'england', 'scotland', 'wales', 'ireland', 'united kingdom', 'great britain', 'netherlands', 'holland',
   'australia', 'new zealand', 'south africa', 'argentina', 'brazil', 'chile',
+  // FS's Norwegian names (its /no/ pages): Amerikas forente stater, Storbritannia, ...
+  'amerikas forente stater', 'amerikas sameinte statar', 'sambandsstatane', 'forente stater', 'island', 'russland',
+  'storbritannia', 'skottland', 'irland', 'nederland', 'sør-afrika', 'brasil',
   'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida',
   'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine',
   'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska',

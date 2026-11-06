@@ -24,12 +24,25 @@
   }
 
   // Name shown in a NAME / ALTERNATE_NAME conclusion. The alternate name's body is
-  // prefixed with its type ("Also Known As"), so prefer the name template when present.
+  // prefixed with its type ("Also Known As"; on FS in Norwegian "Også kjent som",
+  // ...), so prefer the name template when present. (Case-sensitive, and followed by
+  // a space, a capital or the end: "Annette" keeps its name. Nynorsk "Anna" for
+  // Other is left out: it is a given name.)
+  const NAME_TYPES = /^(Also Known As|Also known as|Birth Name|Birth name|Married Name|Married name|Nickname|Other|Også kjent som|Også kjend som|Fødselsnavn|Fødenavn|Fødenamn|Navn som gift|Namn som gift|Giftenavn|Kallenavn|Kallenamn|Annet)(?=\s|\p{Lu}|$)\s*/u;
   function conclusionName(el) {
     const template = el.querySelector('[data-testid="conclusion-name-template"]');
     if (template) return text(template);
-    return text(el.querySelector('[data-testid="conclusion-body"]'))
-      .replace(/^(Also Known As|Birth Name|Married Name|Nickname|Other)\s*/i, '');
+    return text(el.querySelector('[data-testid="conclusion-body"]')).replace(NAME_TYPES, '');
+  }
+
+  // The sex as FS shows it in English or Norwegian ("Mann", "Kvinne"; FS's Norwegian
+  // pages also say "Man", "Woman") → Male, Female, Unknown or ''
+  function sexOf(value) {
+    const v = String(value || '').trim().toLowerCase();
+    if (/^(male|man|mann)$/.test(v)) return 'Male';
+    if (/^(female|woman|kvinne)$/.test(v)) return 'Female';
+    if (/^(unknown|ukjent|ukjend)$/.test(v)) return 'Unknown';
+    return '';
   }
 
   // A person row on a family card: { name, pid, lifespan, gender }
@@ -38,8 +51,8 @@
     // The sex is its own (visually hidden) text node; the row's text runs it into the
     // name ("Per AslaksenMale1764–1822"), so look for the element that holds just that.
     const genderEl = [...row.querySelectorAll('*')]
-      .find(el => el.children.length === 0 && /^(Male|Female|Unknown)$/.test(text(el)));
-    const gender = genderEl ? text(genderEl) : '';
+      .find(el => el.children.length === 0 && sexOf(text(el)));
+    const gender = genderEl ? sexOf(text(genderEl)) : '';
     return {
       name: text(row.querySelector('[data-testid="fullName"]')),
       pid: text(row.querySelector('[data-testid="pid"]')),
@@ -70,7 +83,7 @@
     }
 
     // Emigration and immigration: FS's own facts, and custom events of that title
-    // ("Immigration 1872")
+    // ("Immigration 1872"; in Norwegian Utvandring/Emigrasjon, Innvandring/Immigrasjon)
     const moves = (type, title) => [...all(type), ...all('OTHER_EVENT')
       .filter(el => title.test(text(el.querySelector('[data-testid="conclusion-title"]'))))].map(conclusionValue);
 
@@ -103,14 +116,14 @@
       url: location.origin + '/en/tree/person/details/' + pid,
       name: nameEl ? conclusionName(nameEl) : '',
       altNames: all('ALTERNATE_NAME').map(conclusionName).filter(Boolean),
-      gender: genderEl ? text(genderEl.querySelector('[data-testid="conclusion-body"]')) : '',
+      gender: genderEl ? sexOf(text(genderEl.querySelector('[data-testid="conclusion-body"]'))) : '',
       birth: first('BIRTH'),
       christening: first('CHRISTENING'),
       death: first('DEATH'),
       burial: first('BURIAL'),
       residences: residences,
-      emigration: moves('EMIGRATION', /^emigrat/i),
-      immigration: moves('IMMIGRATION', /^immigrat/i),
+      emigration: moves('EMIGRATION', /^(emigra|utvandr)/i),
+      immigration: moves('IMMIGRATION', /^(immigra|innvandr)/i),
       father: father,
       mother: mother,
       families: families

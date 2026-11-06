@@ -68,6 +68,18 @@ button, input, select { font: inherit; }
 }
 .topbar h1 { font-size: 18px; margin: 0; font-weight: 600; white-space: nowrap; }
 .topbar .fs-link { margin-left: auto; }
+/* The language menu (i18n.js languageMenu()), at the right end, after the FS link */
+.topbar select.language {
+  margin-left: auto;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.topbar .fs-link:not([hidden]) ~ select.language { margin-left: 16px; }
 
 .layout {
   display: grid;

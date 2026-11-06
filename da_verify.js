@@ -123,12 +123,12 @@ const firstName = (person) => (person.name || '').replace(/[%*]/g, '').split(/\s
 // the record, not Halvor Larsen (b. 1762)"
 function notRelative(person, relatives, record) {
   if (!relatives.some((r) => hasGivenName(person, r.given))) {
-    return firstName(person) + ' in the record, not ' + relatives.map((r) => r.given.split(/\s+/)[0]).join(' or ');
+    return t('{name} in the record, not {fs}', { name: firstName(person), fs: relatives.map((r) => r.given.split(/\s+/)[0]).join(t(' or ')) });
   }
   const year = birthYearOf(person, record);
-  const born = (y) => (y ? ' (b. ' + y + ')' : '');
-  return person.name.replace(/[%*]/g, '') + born(year) + ' in the record, not ' +
-    relatives.map((r) => (r.given + ' ' + r.surname).trim() + born(r.year)).join(' or ');
+  const born = (y) => (y ? ' (' + t('b.') + ' ' + y + ')' : '');
+  return t('{name} in the record, not {fs}', { name: person.name.replace(/[%*]/g, '') + born(year),
+    fs: relatives.map((r) => (r.given + ' ' + r.surname).trim() + born(r.year)).join(t(' or ')) });
 }
 
 // The record compared with the person → reasons like scoreHit()'s: each FS parent,
@@ -139,7 +139,8 @@ function notRelative(person, relatives, record) {
 // FS places ✓ +2. DA's transcriptions of names can be far off, hence the small minus.
 function checkRecord(record, P) {
   const reasons = [];
-  const add = (points, text, ok) => reasons.push({ points, text, ok, checked: true });
+  // (kind 'child': a reason about a child, for childYearHits())
+  const add = (points, text, ok, kind) => reasons.push({ points, text, ok, checked: true, ...(kind ? { kind } : {}) });
   const inRecord = relativesInRecord(record);
 
   // A parent: in a census household, the head or the head's spouse, and no ✗ there
@@ -148,13 +149,14 @@ function checkRecord(record, P) {
   // In a census, a parent may head (or be married to the head of) another household
   // at the residence: the old parents on their føderaad, a grown child's family
   const elsewhere = census ? (record.others || []).flatMap((h) => h.filter((p) => ['head', 'spouse'].includes(roleKind(p)))) : [];
-  const parent = (relation, relative) => {
+  const parent = (key, relative) => {
     if (!relative || !relative.given) return;
-    const candidates = inRecord[relation];
+    const relation = t(key);
+    const candidates = inRecord[key];
     const match = candidates.find((p) => isRelative(p, relative, record));
     const near = !match && elsewhere.find((p) => isRelative(p, relative, record));
-    if (match) add(3, relation + ' ' + match.name + ' in the record', true);
-    else if (near) add(2, relation + ' ' + near.name + ' at the same residence', true);
+    if (match) add(3, t('{relation} {name} in the record', { relation, name: match.name }), true);
+    else if (near) add(2, t('{relation} {name} at the same residence', { relation, name: near.name }), true);
     else if (candidates.length && !census) {
       add(-2, relation + ' ' + notRelative(candidates[0], [relative], record), false);
     }
@@ -164,8 +166,8 @@ function checkRecord(record, P) {
 
   if (P.spouses.length && inRecord.spouse.length) {
     const match = inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record)));
-    if (match) add(3, 'spouse ' + match.name + ' in the record', true);
-    else add(-2, 'spouse ' + notRelative(inRecord.spouse[0], P.spouses, record), false);
+    if (match) add(3, t('{relation} {name} in the record', { relation: t('spouse'), name: match.name }), true);
+    else add(-2, t('spouse') + ' ' + notRelative(inRecord.spouse[0], P.spouses, record), false);
   }
 
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
@@ -178,7 +180,8 @@ function checkRecord(record, P) {
       return !child.year || !year || Math.abs(year - child.year) <= 2;
     });
     if (match && (child.given || child.year)) {
-      add(2, 'child ' + match.name + (birthYearOf(match, record) ? ' (b. ' + birthYearOf(match, record) + ')' : '') + ' in the record', true);
+      add(2, t('{relation} {name} in the record', { relation: t('child'),
+        name: match.name + (birthYearOf(match, record) ? ' (' + t('b.') + ' ' + birthYearOf(match, record) + ')' : '') }), true, 'child');
       children++;
     }
   }
@@ -187,20 +190,20 @@ function checkRecord(record, P) {
   const baptism = record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd';
   if (baptism && recordYear && !children && inRecord.child.length) {
     const sameYear = P.children.find((c) => c.given && c.year && Math.abs(c.year - recordYear) <= 1);
-    if (sameYear) add(-2, 'child ' + firstName(inRecord.child[0]) + ' in the record, not ' + sameYear.given.split(/\s+/)[0], false);
+    if (sameYear) add(-2, t('child') + ' ' + t('{name} in the record, not {fs}', { name: firstName(inRecord.child[0]), fs: sameYear.given.split(/\s+/)[0] }), false, 'child');
   }
 
   // A census's marital status: unmarried (ugift, ugivt) after FS's marriage
   const fields = record.fields || {};
   if (census && P.marriage && recordYear && recordYear > P.marriage.to && /^(ug|unmarried)/i.test(fields['marital status'] || '')) {
-    add(-3, 'unmarried in ' + recordYear + ', married by ' + P.marriage.to + ' in FamilySearch', false);
+    add(-3, t('unmarried in {year}, married by {married} in FamilySearch', { year: recordYear, married: P.marriage.to }), false);
   }
 
   // Where an emigrant or someone moving was going: an FS place (Denver Col. for Denver)
   const destination = fields['destination'] || fields['migrating to'] || '';
   if (destination) {
     const found = P.places.flatMap(placeNames).find(({ names }) => names.some((n) => hasWord(destination, n)));
-    if (found) add(2, 'going to ' + destination, true);
+    if (found) add(2, t('going to {place}', { place: destination }), true);
   }
   return reasons;
 }
@@ -240,7 +243,7 @@ function hitsToCheck(groups, P) {
 // the best three hits of the child's years (baptism in the birth year or the next)
 function childYearHits(hits, P) {
   const yearOf = (h) => Number(((h.date || '').match(/\b(1[5-9]\d\d)\b/) || [])[1]);
-  const named = (h) => (h.checks || []).some((r) => r.ok && /^child /.test(r.text));
+  const named = (h) => (h.checks || []).some((r) => r.ok && r.kind === 'child');
   const first = [];
   for (const child of P.children.filter((c) => c.year)) {
     const mine = hits.filter((h) => yearOf(h) >= child.year && yearOf(h) <= child.year + 1);

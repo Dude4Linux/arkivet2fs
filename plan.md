@@ -366,6 +366,90 @@ Each milestone is testable on its own.
    kept in extension storage. Tags are only added, never removed, and a source with
    the same title already in the SourceBox is reused.
 
+## Phase 4 — languages: Bokmål, Nynorsk and English
+
+DA is in Bokmål (no prefix: `/view/...`), Nynorsk (`/nn/...`) and English (`/en/...`).
+The extension's own pages should be in the user's language as well.
+
+### What we found
+
+- **DA's Norwegian pages translate everything**, even the source title ("Klokkerbok
+  for Vågå prestegjeld", not "Church book from Vågå parish") and the field labels
+  ("Fødselsår:", "Namn:", "Bustad:"). `da_record.js` reads DA's English labels and
+  titles, so it must keep reading the `/en/` pages. Searches and record checks
+  already fetch `/en/`. The toolbar icon reads the open page, which breaks on a
+  Norwegian page.
+- **FS in Norwegian (`/no/`)** mixes languages and spellings. Family cards give the
+  sex as "Mann"/"Kvinne" or "Man"/"Woman", not "Male"/"Female", so `fs_person.js`
+  loses the parents. Places can lose their letters ("Vaga, Oppland, Norway" for
+  Vågå), and alternate names get Norwegian type words.
+- **DA's search form in all three languages** gives the words for record kinds,
+  roles and events (Fødte og døpte / Fødde og døypte, Folketellingen /
+  Folketeljinga 1865, Døde og begravde / Døde og gravlagde, Utflyttede / Utflytta,
+  Fadder, Brud / Brur, ...). The translations use DA's words, plus FS's Norwegian
+  words for what mirrors FS's record search (Fornavn, Etternavn, Fødsel, Dåp).
+
+### What is translated
+
+- The **search page**: the sidebar, record kinds, groups and column headings, hints,
+  status lines, the steps' descriptions ("mother Ing* Lars* for Ingrid Larsdr"),
+  skip reasons, "Not found", the score reasons (✓/≈/✗), the record checks, and
+  dates ("6. april 1845").
+- The **linker**: the labels, hints, pairing reasons, status lines and the log. Also
+  the **reason for attaching**, which goes to FS as the user's own words.
+- The background's **notifications**, and the extension's name and description
+  (`_locales`, Chrome's `no` locale).
+
+### What isn't (a decision to review)
+
+- **The source itself** (title, citation, notes) stays in English. FS's tree is
+  shared worldwide, the citation follows Evidence Explained, and the notes put
+  DA's Norwegian codes into English. A "source language" setting could come later.
+  It would need Norwegian citation phrasing and the notes' code tables in both
+  written languages.
+- DA's own text (names, roles and positions as written) and the "Digital Arkivet"
+  entry on FS.
+
+### How
+
+- **`i18n.js`**, loaded first by both pages, and by background.js (`importScripts`).
+  It uses only function declarations, so the jsdom tests see them.
+  - `uiLanguage()`: the saved choice, else the browser's (`navigator.languages`: nn →
+    Nynorsk; nb or no → Bokmål; anything else → English).
+  - `t(text, params)`: the English text is the key, `{name}` placeholders, English as
+    the fallback.
+  - `localizePage()` fills elements marked `data-i18n`, and `languageMenu()` is the
+    picker in the page header.
+  - `daPageUrl(url)` gives a DA link in the user's language (record links, "Open on
+    DA"). Fetching stays on `/en/`.
+  - The choice is kept in `localStorage` (shared by the extension's pages) and in
+    `chrome.storage.local` (for the service worker). Changing it reloads the page:
+    the search page's state is in its address, and the linker reads its record again.
+- **Toolbar icon on a Norwegian DA page:** `gatherData()` fetches the `/en/` version
+  of the open page and reads that, with the open person as on the page.
+- **FS in Norwegian:** `fs_person.js` reads the sex in either language and
+  normalizes it to Male/Female/Unknown. It also reads Norwegian alternate-name types
+  and the titles of emigration/immigration events (Utvandring, Emigrasjon,
+  Innvandring, Immigrasjon). Place lookups also try names without Norwegian letters
+  ("Vaga" → Vågå, "Hagebostad" → Hægebostad) when the name as written finds nothing;
+  a spelling several municipalities share is narrowed by the FS county, as for names.
+- **Checks:** a script lists every `t()` text in the code and confirms it has a
+  Bokmål and a Nynorsk translation with the same placeholders. The existing tests
+  run in English unchanged, and once more in nb and nn to read the output.
+
+### Status (6 November 2026)
+
+Done as described above, not yet committed. The English output of every test is
+unchanged; the tests were also run in Bokmål and Nynorsk and read through. Not yet
+tried in the browser on DA's and FS's Norwegian pages.
+
+### Open for review
+
+- The Nynorsk texts (written by the assistant, using DA's Nynorsk words) need a
+  native reader.
+- Whether the source should follow the language, at least the reason for attaching
+  (done) and later the notes.
+
 ## Decisions
 
 1. **Results** appear on an extension search page, with an FS-style sidebar.

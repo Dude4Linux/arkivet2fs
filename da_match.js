@@ -95,7 +95,7 @@ function scoreHit(hit, P) {
   const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => nameMatch(patronymicBase(w), patronymicBase(s)));
   const surname = words.slice(1).find(isSurname) || words.slice(1).find(spelled);
   if (surname && isSurname(surname)) add(2, surname, true);
-  else if (surname) add(2, surname + ' for ' + spelled(surname), null);
+  else if (surname) add(2, t('{name} for {fs}', { name: surname, fs: spelled(surname) }), null);
   const names = words.filter((w) => w !== surname);
 
   // Baptisms and confirmations give all the given names
@@ -106,8 +106,8 @@ function scoreHit(hit, P) {
   const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g)));
   const variant = !first && !close && P.givens.length && names[0];
   if (first) add(2, first, true);
-  else if (close) add(2, close + ' for ' + P.givens.find((g) => nameMatch(close, g)), null);
-  else if (variant) add(allGiven ? 0 : 1, variant + ' (variant of ' + P.given + ')', null);
+  else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => nameMatch(close, g)) }), null);
+  else if (variant) add(allGiven ? 0 : 1, t('{name} (variant of {fs})', { name: variant, fs: P.given }), null);
   // Further given names (Magdalen for Magdaline)
   const used = new Set([first || close || variant]);
   for (const name of P.givenNames.slice(1)) {
@@ -118,12 +118,12 @@ function scoreHit(hit, P) {
   // Kristina Caspara for Maren Kristine)
   if (allGiven && P.givenNames.length) {
     for (const w of names) {
-      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, w + ' not in FamilySearch', false);
+      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, t('{name} not in FamilySearch', { name: w }), false);
     }
   }
 
   // Sex: only a contradiction counts
-  if (hit.gender && P.sex && hit.gender !== P.sex) add(-4, hit.gender.toLowerCase(), false);
+  if (hit.gender && P.sex && hit.gender !== P.sex) add(-4, t(hit.gender).toLowerCase(), false);
 
   // Years against a range: inside it 3 points (4 for its middle, which is FS's own
   // year, since personToQuery widens it by 2), close 1, otherwise -4
@@ -137,26 +137,26 @@ function scoreHit(hit, P) {
 
   // Birth year, when the record gives one
   const born = yearIn(hit.born);
-  if (born && P.birth) inRange(born, P.birth.from, P.birth.to, 'b.', 3);
+  if (born && P.birth) inRange(born, P.birth.from, P.birth.to, t('b.'), 3);
 
   // The event's year, by the person's role in it
   const event = yearIn(hit.date);
   if (event) {
     const check = (from, to, text, near) => inRange(event, from, to, text, near);
-    if (hit.role === 'Child' && P.birth && !born) check(P.birth.from, P.birth.to + 1, 'baptised', 2);
-    else if ((hit.role === 'Groom' || hit.role === 'Bride') && P.marriage) check(P.marriage.from - 1, P.marriage.to + 1, 'married', 3);
-    else if (hit.type === 'Emigration' && P.emigration) check(P.emigration.from, P.emigration.to, 'emigrated', 2);
-    else if (hit.role === 'Deceased' && P.death) check(P.death.from - 1, P.death.to + 1, 'buried', 2);
-    else if (P.birth && event < P.birth.from - 1) add(-4, event + ' is before birth', false);
-    else if (P.death && event > P.death.to + 1) add(-4, event + ' is after death', false);
-    else if (P.leftNorway && event > P.leftNorway) add(-4, event + ' is after ' + leavingText(P), false);
+    if (hit.role === 'Child' && P.birth && !born) check(P.birth.from, P.birth.to + 1, t('baptised'), 2);
+    else if ((hit.role === 'Groom' || hit.role === 'Bride') && P.marriage) check(P.marriage.from - 1, P.marriage.to + 1, t('married'), 3);
+    else if (hit.type === 'Emigration' && P.emigration) check(P.emigration.from, P.emigration.to, t('emigrated'), 2);
+    else if (hit.role === 'Deceased' && P.death) check(P.death.from - 1, P.death.to + 1, t('buried'), 2);
+    else if (P.birth && event < P.birth.from - 1) add(-4, t('{year} is before birth', { year: event }), false);
+    else if (P.death && event > P.death.to + 1) add(-4, t('{year} is after death', { year: event }), false);
+    else if (P.leftNorway && event > P.leftNorway) add(-4, t('{year} is after {what}', { year: event, what: leavingText(P) }), false);
     else if (P.birth && !born && MIN_AGE[hit.role] && event - P.birth.from < MIN_AGE[hit.role]) {
-      add(-4, hit.role.toLowerCase() + ' at about ' + Math.max(0, event - Math.round((P.birth.from + P.birth.to) / 2)), false);
+      add(-4, t('{role} at about {age}', { role: t(hit.role).toLowerCase(), age: Math.max(0, event - Math.round((P.birth.from + P.birth.to) / 2)) }), false);
     }
 
     if (hit.role === 'Father' || hit.role === 'Mother') {
       const child = P.children.find((c) => c.year && Math.abs(c.year - event) <= 1);
-      if (child) add(2, 'child ' + [child.given, 'b. ' + child.year].filter(Boolean).join(' '), true);
+      if (child) add(2, t('child') + ' ' + [child.given, t('b.') + ' ' + child.year].filter(Boolean).join(' '), true);
     }
   }
 
@@ -179,8 +179,8 @@ function scoreHit(hit, P) {
   for (const farm of P.farms) {
     const sk = skeleton(farm);
     const spelling = !hasWord(farmText, farm) && sk.length >= 3 && farmWords.find((w) => skeleton(w) === sk);
-    if (spelling) add(2, 'farm ' + farm + ' = ' + spelling, true);
-    else if (hasWord(farmText, farm)) add(2, 'farm ' + farm, true);
+    if (spelling) add(2, t('farm {farm}', { farm }) + ' = ' + spelling, true);
+    else if (hasWord(farmText, farm)) add(2, t('farm {farm}', { farm }), true);
   }
 
   // What the searches themselves matched (a parent, a spouse, a farm): once per

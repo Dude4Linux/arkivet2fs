@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Digital Arkivet search</title>
+  <title data-i18n>Digital Arkivet search</title>
   <link rel="icon" href="icons/icon32.svg" type="image/svg+xml">
   <link rel="stylesheet" href="search.css">
 </head>
 <body>
   <header class="topbar">
     <img src="icons/icon32.svg" alt="" width="28" height="28">
-    <h1>Digital Arkivet search</h1>
-    <a id="fs-person" class="fs-link" target="_blank" rel="noopener" hidden>Open person on FamilySearch</a>
+    <h1 data-i18n>Digital Arkivet search</h1>
+    <a id="fs-person" class="fs-link" target="_blank" rel="noopener" hidden data-i18n>Open person on FamilySearch</a>
   </header>
   <div class="layout">
     <main class="results">
@@ -21,15 +21,17 @@
     <aside class="sidebar">
       <form id="criteria" autocomplete="off">
         <div class="sidebar-head">
-          <h2>Search criteria</h2>
+          <h2 data-i18n>Search criteria</h2>
         </div>
         <div id="groups"></div>
         <div class="sidebar-foot">
-          <button type="submit" class="primary">Search</button>
+          <button type="submit" class="primary" data-i18n>Search</button>
         </div>
       </form>
     </aside>
   </div>
+  <script src="i18n.js"></script>
+  <script src="i18n_strings.js"></script>
   <script src="da_places.js"></script>
   <script src="da_search.js"></script>
   <script src="da_match.js"></script>

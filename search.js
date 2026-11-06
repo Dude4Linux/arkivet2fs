@@ -123,7 +123,7 @@ function instanceRow(group, values) {
   const row = el('div', { class: 'instance' + (group.skip ? ' has-use' : '') });
   row.style.setProperty('--cols', String(Math.max(2, group.fields.filter(f => !f.wide).length)));
   if (group.skip) {
-    const use = el('input', { type: 'checkbox', 'data-use': '', title: 'Use in the searches', 'aria-label': 'Use this ' + group.title.toLowerCase().replace(/s$/, '') + ' in the searches' });
+    const use = el('input', { type: 'checkbox', 'data-use': '', title: t('Use in the searches'), 'aria-label': t('Use {what} in the searches', { what: t(group.title).toLowerCase() }) });
     use.checked = !values[group.skip];
     row.classList.toggle('off', !use.checked);
     use.addEventListener('change', () => {
@@ -135,7 +135,7 @@ function instanceRow(group, values) {
   for (const field of group.fields) {
     let input;
     if (field.type === 'select') {
-      input = el('select', {}, field.options.map(o => el('option', { value: o, text: o || 'Any' })));
+      input = el('select', {}, field.options.map(o => el('option', { value: o, text: o ? t(o) : t('Any') })));
     } else {
       input = el('input', field.type === 'year'
         ? { type: 'text', inputmode: 'numeric', pattern: '\\d{4}', maxlength: '4' }
@@ -143,10 +143,10 @@ function instanceRow(group, values) {
     }
     input.dataset.field = field.name;
     input.value = values[field.name] || '';
-    row.append(el('label', field.wide ? { class: 'wide' } : {}, [field.label, input]));
+    row.append(el('label', field.wide ? { class: 'wide' } : {}, [t(field.label), input]));
   }
   // Empties the row; on Search an empty row is dropped
-  const remove = el('button', { type: 'button', class: 'remove', title: 'Clear', 'aria-label': 'Clear ' + group.title, text: '×' });
+  const remove = el('button', { type: 'button', class: 'remove', title: t('Clear'), 'aria-label': t('Clear {what}', { what: t(group.title) }), text: '×' });
   remove.addEventListener('click', () => {
     if (group.repeat && row.parentElement.querySelectorAll('.instance').length > 1) row.remove();
     else row.querySelectorAll('input, select').forEach(i => { i.value = ''; });
@@ -159,13 +159,13 @@ function renderSidebar(criteria) {
   const container = document.getElementById('groups');
   container.replaceChildren();
   for (const group of GROUPS) {
-    const fieldset = el('fieldset', { class: 'group', 'data-group': group.id }, [el('legend', { text: group.title })]);
+    const fieldset = el('fieldset', { class: 'group', 'data-group': group.id }, [el('legend', { text: t(group.title) })]);
     const instances = criteria[group.id].length ? criteria[group.id] : [{}];
     const list = el('div');
     for (const values of instances) list.append(instanceRow(group, values));
     fieldset.append(list);
     if (group.repeat) {
-      const add = el('button', { type: 'button', class: 'add', text: '+ ' + group.add });
+      const add = el('button', { type: 'button', class: 'add', text: '+ ' + t(group.add) });
       add.addEventListener('click', () => list.append(instanceRow(group, {})));
       fieldset.append(add);
     }
@@ -177,7 +177,7 @@ function renderSidebar(criteria) {
 // A municipality or county as the type-ahead shows it: "Vigmostad (Vest-Agder)",
 // "Vest-Agder (county)"; Oslo and Bergen are counties of one municipality
 function placeLabel(type, code) {
-  if (type === 'c') return countyName(code) + ' (county)';
+  if (type === 'c') return t('{name} (county)', { name: countyName(code) });
   const county = countyName(code.slice(0, 2));
   const name = municipalityName(code);
   return county !== name ? name + ' (' + county + ')' : name;
@@ -197,13 +197,13 @@ function placesByLabel() {
 // one, and the municipalities of the FS places as suggestions. None chosen searches
 // all of Norway.
 function whereGroup(criteria) {
-  const fieldset = el('fieldset', { class: 'group', 'data-group': 'where' }, [el('legend', { text: 'Where to search' })]);
+  const fieldset = el('fieldset', { class: 'group', 'data-group': 'where' }, [el('legend', { text: t('Where to search') })]);
   const chips = el('div', { class: 'chips' });
   const chosen = [...criteria.where.c.map((code) => ['c', code]), ...criteria.where.m.map((code) => ['m', code])];
   const has = (type, code) => !!chips.querySelector(`.chip[data-type="${type}"][data-code="${code}"]`);
   const addChip = (type, code) => {
     if (has(type, code)) return;
-    const remove = el('button', { type: 'button', class: 'remove', title: 'Remove', 'aria-label': 'Remove ' + placeLabel(type, code), text: '×' });
+    const remove = el('button', { type: 'button', class: 'remove', title: t('Remove'), 'aria-label': t('Remove {what}', { what: placeLabel(type, code) }), text: '×' });
     const chip = el('span', { class: 'chip', 'data-type': type, 'data-code': code }, [placeLabel(type, code), remove]);
     remove.addEventListener('click', () => { chip.remove(); searchNow(); });
     chips.append(chip);
@@ -211,7 +211,7 @@ function whereGroup(criteria) {
   for (const [type, code] of chosen) addChip(type, code);
 
   const list = el('datalist', { id: 'da-places' }, [...placesByLabel().keys()].sort((a, b) => a.localeCompare(b, 'nb')).map((label) => el('option', { value: label })));
-  const input = el('input', { type: 'text', list: 'da-places', placeholder: 'County or municipality', 'aria-label': 'Add a county or municipality' });
+  const input = el('input', { type: 'text', list: 'da-places', placeholder: t('County or municipality'), 'aria-label': t('Add a county or municipality') });
   // A complete label picked from the list (or typed) adds the place
   const pick = () => {
     const place = placesByLabel().get(input.value.trim());
@@ -230,25 +230,25 @@ function whereGroup(criteria) {
   // Suggestions: the municipalities the FS places name, not yet chosen
   const suggested = [...new Set(profile(criteria).places.flatMap(municipalityCodes))].filter((code) => !criteria.where.m.includes(code));
   if (suggested.length) {
-    fieldset.append(el('div', { class: 'suggest muted' }, ['From the FamilySearch places: ', ...suggested.map((code) => {
+    fieldset.append(el('div', { class: 'suggest muted' }, [t('From the FamilySearch places:') + ' ', ...suggested.map((code) => {
       const button = el('button', { type: 'button', class: 'add', text: '+ ' + municipalityName(code) });
       button.addEventListener('click', () => { addChip('m', code); searchNow(); });
       return button;
     })]));
   }
-  fieldset.append(el('p', { class: 'help muted', text: chosen.length ? 'Every search is limited to these places.' : 'None chosen: all of Norway.' }));
+  fieldset.append(el('p', { class: 'help muted', text: chosen.length ? t('Every search is limited to these places.') : t('None chosen: all of Norway.') }));
   return fieldset;
 }
 
 // Record kinds: which searches to run
 function kindsGroup(criteria) {
-  const fieldset = el('fieldset', { class: 'group', 'data-group': 'kinds' }, [el('legend', { text: 'Record kinds' })]);
+  const fieldset = el('fieldset', { class: 'group', 'data-group': 'kinds' }, [el('legend', { text: t('Record kinds') })]);
   const boxes = el('div', { class: 'kinds' });
   for (const [kind, label] of KINDS) {
     const box = el('input', { type: 'checkbox', 'data-kind': kind });
     box.checked = !criteria.off.includes(kind);
     box.addEventListener('change', searchNow);
-    boxes.append(el('label', {}, [box, ' ' + label]));
+    boxes.append(el('label', {}, [box, ' ' + t(label)]));
   }
   fieldset.append(boxes);
   return fieldset;
@@ -259,14 +259,12 @@ function kindsGroup(criteria) {
 // Each search (render) gets a number; a newer search makes older ones stop updating
 let generation = 0;
 
-// DA's dates as FS writes them: "1845-04-06" → "6 April 1845", "1779-05" → "May 1779",
-// also before a place ("1779-05-13, Hægebostad"); anything else ("1801", "20??.09")
-// as it is
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-  'September', 'October', 'November', 'December'];
+// DA's dates as FS writes them: "1845-04-06" → "6 April 1845" ("6. april 1845" in
+// Norwegian: formatDate(), i18n.js), "1779-05" → "May 1779", also before a place
+// ("1779-05-13, Hægebostad"); anything else ("1801", "20??.09") as it is
 function displayDate(date) {
   return String(date || '').replace(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?(?=$|[,\s])/, (all, y, mo, d) =>
-    MONTHS[mo - 1] ? [d ? String(Number(d)) : '', MONTHS[mo - 1], y].filter(Boolean).join(' ') : all);
+    formatDate(y, mo, d) || all);
 }
 
 // A labelled line in the Events column, as FS's "Christening 15 February 1778"
@@ -277,51 +275,51 @@ function hitRow(hit) {
   const events = [];
   const date = displayDate(hit.date);
   if (date || hit.domicile) {
-    const line = date ? eventLine(hit.type, date) : el('div', {}, [el('strong', { text: hit.type })]);
+    const line = date ? eventLine(t(hit.type), date) : el('div', {}, [el('strong', { text: t(hit.type) })]);
     events.push(line);
     if (hit.domicile) events.push(el('div', { text: hit.domicile }));
   }
-  if (hit.born) events.push(eventLine('Born', displayDate(hit.born)));
-  if (hit.position) events.push(eventLine('Position', hit.position));
+  if (hit.born) events.push(eventLine(t('Born'), displayDate(hit.born)));
+  if (hit.position) events.push(eventLine(t('Position'), hit.position));
   const reasons = el('ul', { class: 'reasons' }, hit.reasons.map((r) => el('li', {
     class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : 'near',
     text: (r.ok === true ? '✓ ' : r.ok === false ? '✗ ' : '≈ ') + r.text
   })));
   // The record page was read (da_verify.js): say so, or why it couldn't be
   if (hit.checks) {
-    reasons.append(el('li', { class: 'checked muted', text: hit.checkError ? 'record not read: ' + hit.checkError
-      : hit.checks.length ? 'record checked' : 'record checked: no relatives to compare' }));
+    reasons.append(el('li', { class: 'checked muted', text: hit.checkError ? t('record not read: {error}', { error: tMessage(hit.checkError) })
+      : hit.checks.length ? t('record checked') : t('record checked: no relatives to compare') }));
   }
   // The record in the linker (linker.html), to review it as a source and attach it to
   // the FS person (the hit is their entry) and the relatives it names
   const treeref = new URLSearchParams(location.search).get('treeref');
   const link = hit.url ? el('a', { href: 'linker.html?' + new URLSearchParams(treeref ? { rec: hit.url, pid: treeref } : { rec: hit.url }),
-    target: '_blank', class: 'hit-attach', text: 'Review & Attach' }) : '';
+    target: '_blank', class: 'hit-attach', text: t('Review & Attach') }) : '';
   const source = hit.sourceUrl
-    ? el('a', { href: hit.sourceUrl, target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
+    ? el('a', { href: daPageUrl(hit.sourceUrl), target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
     : el('span', { class: 'hit-source', text: hit.source || '' });
   return el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') }, [
     el('div', { class: 'hit-person' }, [
-      el('a', { href: hit.url, target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
-      hit.role ? el('span', { class: 'hit-role', text: hit.role }) : '',
+      el('a', { href: daPageUrl(hit.url), target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
+      hit.role ? el('span', { class: 'hit-role', text: t(hit.role) }) : '',
       source,
       link
     ]),
     el('div', { class: 'hit-details' }, events),
     reasons,
-    el('span', { class: 'hit-score', title: 'Score', text: String(hit.score) })
+    el('span', { class: 'hit-score', title: t('Score'), text: String(hit.score) })
   ]);
 }
 
 // Column headings above the rows, as FS's table head
 const colHead = (labels) => el('div', { class: 'col-head', 'aria-hidden': 'true' },
-  labels.map(([text, cls]) => el('span', cls ? { class: cls, text } : { text })));
+  labels.map(([text, cls]) => el('span', cls ? { class: cls, text: t(text) } : { text: text && t(text) })));
 
 // One line per query: what it searched for, how many hits, the search on DA, and
 // (filled in when it has run) the list of its searches
 function queryRow(query) {
-  const status = el('span', { class: 'query-status muted', text: query.skip || 'Waiting…' });
-  const link = query.skip ? null : el('a', { href: daSearchUrl(query.params), target: '_blank', rel: 'noopener', class: 'query-open', text: 'Open on DA' });
+  const status = el('span', { class: 'query-status muted', text: query.skip || t('Waiting…') });
+  const link = query.skip ? null : el('a', { href: daPageUrl(daSearchUrl(query.params)), target: '_blank', rel: 'noopener', class: 'query-open', text: t('Open on DA') });
   const row = el('li', { class: 'query' + (query.skip ? ' skipped' : ''), 'data-query': query.id }, [
     el('span', { class: 'query-title', text: query.title }),
     el('span', { class: 'query-summary muted', text: query.summary }),
@@ -336,12 +334,12 @@ function queryRow(query) {
 
 // A query's searches, one line each: names, place, hits (or too many), on DA
 function stepList(details, searches) {
-  const count = (s) => (s.total === 0 ? 'none' : s.read ? s.total + ' hit' + (s.total === 1 ? '' : 's')
-    : s.total + ' hits, too many to read');
+  const count = (s) => (s.total === 0 ? t('none') : s.read ? t(s.total === 1 ? '{n} hit' : '{n} hits', { n: s.total })
+    : t('{n} hits, too many to read', { n: s.total }));
   details.replaceChildren(
-    el('summary', { text: searches.length + ' search' + (searches.length === 1 ? '' : 'es') }),
+    el('summary', { text: t(searches.length === 1 ? '{n} search' : '{n} searches', { n: searches.length }) }),
     el('ol', {}, searches.map((s) => el('li', { class: s.read ? 'used' : '' }, [
-      el('a', { href: daSearchUrl(s.params), target: '_blank', rel: 'noopener', text: s.step + ' · ' + s.place }),
+      el('a', { href: daPageUrl(daSearchUrl(s.params)), target: '_blank', rel: 'noopener', text: s.step + ' · ' + s.place }),
       el('span', { class: 'muted', text: ': ' + count(s) })
     ])))
   );
@@ -352,19 +350,18 @@ function stepList(details, searches) {
 // what it looks for (known children, census years); '' when it's fine
 function hintFor(query, result, hits) {
   const tooMany = result.searches.some((s) => s.total && !s.read);
-  if (hits && result.missing.length) return 'Not found: ' + result.missing.join(', ') + '.';
+  if (hits && result.missing.length) return t('Not found: {what}.', { what: result.missing.join(', ') });
   if (hits) return '';
   if (tooMany) {
-    return 'Too many hits to read (over ' + readLimit() + ' in each search): add a birth year, a relative or a farm, ' +
-      'or choose a municipality under Where to search.';
+    return t('Too many hits to read (over {n} in each search): add a birth year, a relative or a farm, or choose a municipality under Where to search.', { n: readLimit() });
   }
   const tries = [];
-  if (result.searches.some((s) => s.params.has('related_first_name'))) tries.push('check the relatives’ names, or untick them');
-  if (result.searches.some((s) => s.params.has('m[]') || s.params.has('c[]'))) tries.push('check the places (or those under Where to search)');
-  if (query.base.has('domicile') || result.searches.some((s) => s.params.has('domicile'))) tries.push('spell the farm as DA does');
-  tries.push('widen the years');
-  if (result.searches.some((s) => s.params.has('lastname'))) tries.push('try another spelling of the surname');
-  return 'Nothing found: ' + tries.join('; ') + '.';
+  if (result.searches.some((s) => s.params.has('related_first_name'))) tries.push(t('check the relatives’ names, or untick them'));
+  if (result.searches.some((s) => s.params.has('m[]') || s.params.has('c[]'))) tries.push(t('check the places (or those under Where to search)'));
+  if (query.base.has('domicile') || result.searches.some((s) => s.params.has('domicile'))) tries.push(t('spell the farm as DA does'));
+  tries.push(t('widen the years'));
+  if (result.searches.some((s) => s.params.has('lastname'))) tries.push(t('try another spelling of the surname'));
+  return t('Nothing found: {what}.', { what: tries.join('; ') });
 }
 
 // Read the record pages of the best hits in each group and score what they say
@@ -376,14 +373,14 @@ async function checkHits(run, merged, person, container, status) {
   while (run === generation && checked < MAX_CHECKS) {
     const hit = hitsToCheck(groupHits(merged, person), person).find((h) => !merged.get(h.id || h.url).checks);
     if (!hit) break;
-    status.textContent = 'Checking the records of the best hits (' + (checked + 1) + ')…';
+    status.textContent = t('Checking the records of the best hits ({n})…', { n: checked + 1 });
     const entry = merged.get(hit.id || hit.url);
     try {
       entry.checks = checkRecord(await fetchRecord(hit), person);
     } catch (error) {
       entry.checks = [];
       entry.checkError = error.message;
-      if (/refusing/.test(error.message)) {
+      if (error.refused) {
         status.textContent = error.message;
         status.classList.add('error');
         return;
@@ -394,7 +391,7 @@ async function checkHits(run, merged, person, container, status) {
     renderGroups(container, merged, person);
   }
   if (run === generation) {
-    status.textContent = checked ? 'Checked the records of the best ' + checked + ' hits against the FamilySearch relatives.' : '';
+    status.textContent = checked ? t('Checked the records of the best {n} hits against the FamilySearch relatives.', { n: checked }) : '';
   }
 }
 
@@ -411,7 +408,7 @@ function groupSection(group) {
   const first = page * PAGE_SIZE;
   const shown = group.hits.slice(first, first + PAGE_SIZE);
   const section = el('section', { class: 'group-hits' }, [
-    el('h3', {}, [group.title, el('span', { class: 'count', text: ' (' + group.hits.length + ')' })]),
+    el('h3', {}, [t(group.title), el('span', { class: 'count', text: ' (' + group.hits.length + ')' })]),
     colHead([['Name'], ['Events'], ['How it matches'], ['Score', 'score']]),
     el('ol', { class: 'hits' }, shown.map(hitRow))
   ]);
@@ -429,10 +426,11 @@ function groupSection(group) {
       b.addEventListener('click', () => go(to));
       return b;
     };
-    section.append(el('nav', { class: 'pager', 'aria-label': group.title + ' pages' }, [
-      button('‹ Previous 10', 'Previous ' + PAGE_SIZE + ' ' + group.title, page - 1, page > 0),
-      el('span', { class: 'muted', text: (first + 1) + '–' + (first + shown.length) + ' of ' + group.hits.length }),
-      button('Next 10 ›', 'Next ' + PAGE_SIZE + ' ' + group.title, page + 1, page < pages - 1)
+    const title = t(group.title);
+    section.append(el('nav', { class: 'pager', 'aria-label': t('{group} pages', { group: title }) }, [
+      button('‹ ' + t('Previous {n}', { n: PAGE_SIZE }), t('Previous {n}', { n: PAGE_SIZE }) + ' · ' + title, page - 1, page > 0),
+      el('span', { class: 'muted', text: t('{from}–{to} of {n}', { from: first + 1, to: first + shown.length, n: group.hits.length }) }),
+      button(t('Next {n}', { n: PAGE_SIZE }) + ' ›', t('Next {n}', { n: PAGE_SIZE }) + ' · ' + title, page + 1, page < pages - 1)
     ]));
   }
   return section;
@@ -447,13 +445,13 @@ async function renderResults(criteria) {
   groupPages.clear();
   const name = criteria.name[0] || {};
   const fullName = [name.givenName, name.surname].filter(Boolean).join(' ');
-  document.getElementById('results-title').textContent = fullName ? 'Results for ' + fullName : 'Results';
-  document.title = (fullName ? fullName + ' – ' : '') + 'Digital Arkivet search';
+  document.getElementById('results-title').textContent = fullName ? t('Results for {name}', { name: fullName }) : t('Results');
+  document.title = (fullName ? fullName + ' – ' : '') + t('Digital Arkivet search');
 
   const results = document.getElementById('results');
   const queries = buildQueries(criteria);
   if (queries.length === 0) {
-    results.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'Enter a given name or surname to search.' })]));
+    results.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: t('Enter a given name or surname to search.') })]));
     return;
   }
   const person = profile(criteria);
@@ -461,7 +459,7 @@ async function renderResults(criteria) {
   const groups = el('div', { class: 'groups' });
   const checkStatus = el('p', { class: 'check-status muted' });
   results.replaceChildren(
-    el('section', { class: 'searches' }, [el('h3', { text: 'Searches' }),
+    el('section', { class: 'searches' }, [el('h3', { text: t('Searches') }),
       colHead([['Record kind'], ['Searched for'], ['Found'], ['']]), el('ul', { class: 'queries' }, views.map((v) => v.row)), checkStatus]),
     groups
   );
@@ -472,19 +470,21 @@ async function renderResults(criteria) {
   for (const [i, view] of views.entries()) {
     if (run !== generation) return;
     if (view.query.skip) continue;
-    view.status.textContent = 'Searching…';
+    view.status.textContent = t('Searching…');
     try {
       const result = await runQuery(view.query);
       if (run !== generation) return;
       // The link opens the first search that found hits (or the first one)
       const used = result.searches.find((x) => x.read) || result.searches[0];
-      if (used) view.link.href = daSearchUrl(used.params);
+      if (used) view.link.href = daPageUrl(daSearchUrl(used.params));
       const ids = new Set(result.found.flatMap((f) => f.hits.map((h) => h.id || h.url)));
       const withHits = result.searches.filter((x) => x.read).length;
       const of = result.searches.length;
+      const tooMany = result.searches.some((x) => x.total);
       view.status.textContent = ids.size
-        ? ids.size + ' hit' + (ids.size === 1 ? '' : 's') + (of > 1 ? ' from ' + withHits + ' of ' + of + ' searches' : '')
-        : (result.searches.some((x) => x.total) ? 'Too many hits' : 'No hits') + (of > 1 ? ' in ' + of + ' searches' : '');
+        ? (of > 1 ? t(ids.size === 1 ? '{n} hit from {k} of {m} searches' : '{n} hits from {k} of {m} searches', { n: ids.size, k: withHits, m: of })
+          : t(ids.size === 1 ? '{n} hit' : '{n} hits', { n: ids.size }))
+        : of > 1 ? t(tooMany ? 'Too many hits in {m} searches' : 'No hits in {m} searches', { m: of }) : t(tooMany ? 'Too many hits' : 'No hits');
       stepList(view.steps, result.searches);
       const hint = hintFor(view.query, result, ids.size);
       view.hint.textContent = hint;
@@ -496,15 +496,15 @@ async function renderResults(criteria) {
       if (run !== generation) return;
       view.status.textContent = error.message;
       view.status.classList.add('error');
-      if (/refusing/.test(error.message)) {
+      if (error.refused) {
         refused = true;
-        for (const rest of views.slice(i + 1)) if (!rest.query.skip) rest.status.textContent = 'Not run';
+        for (const rest of views.slice(i + 1)) if (!rest.query.skip) rest.status.textContent = t('Not run');
         break;
       }
     }
   }
   if (run === generation && merged.size === 0) {
-    groups.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: 'No records found. Try removing details in the criteria, or a shorter surname.' })]));
+    groups.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: t('No records found. Try removing details in the criteria, or a shorter surname.') })]));
   }
   if (run === generation && merged.size && !refused) await checkHits(run, merged, person, groups, checkStatus);
 }
@@ -517,8 +517,8 @@ function render() {
   const treeref = params.get('treeref');
   const fsLink = document.getElementById('fs-person');
   if (treeref) {
-    fsLink.href = 'https://www.familysearch.org/en/tree/person/details/' + encodeURIComponent(treeref);
-    fsLink.textContent = 'Open ' + treeref + ' on FamilySearch';
+    fsLink.href = fsPageUrl('https://www.familysearch.org/en/tree/person/details/' + encodeURIComponent(treeref));
+    fsLink.textContent = t('Open {pid} on FamilySearch', { pid: treeref });
     fsLink.hidden = false;
   } else {
     fsLink.hidden = true;
@@ -535,4 +535,6 @@ document.getElementById('criteria').addEventListener('submit', (event) => {
   render();
 });
 window.addEventListener('popstate', render);
+localizePage();
+document.querySelector('.topbar').append(languageMenu());
 render();

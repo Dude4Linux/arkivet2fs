@@ -163,6 +163,23 @@ The page lists each step as it goes:
 Supported records: baptisms, confirmations, marriages, burials, censuses, emigrant
 protocols, moving lists (out- and in-migration) and probate.
 
+## Language
+
+The search page, the linker and the notifications are in English, Norwegian Bokmål
+or Nynorsk, as DA is. The first time, the extension uses your browser's language
+(Nynorsk for nn, Bokmål for nb or no, otherwise English). To change it, use the menu
+at the top of the search page or the linker. Both pages, and the notifications, then
+use that language.
+
+- **The source stays in English.** The title, citation and notes that go to
+  FamilySearch are in English, for every language, because the FS tree is shared
+  worldwide. The reason for attaching follows your language.
+- **DA pages in any language work.** The toolbar icon also works on Bokmål and
+  Nynorsk record pages. The extension reads DA's English version of the same page.
+  Links to DA open in your language.
+- **FS in Norwegian works too.** The "Digital Arkivet" entry also reads FS person
+  pages shown in Norwegian.
+
 ## Good to know
 
 - **Digitalarkivet limits requests.** The searches are spaced a second apart and
@@ -184,6 +201,8 @@ protocols, moving lists (out- and in-migration) and probate.
 | File | Purpose |
 |------|---------|
 | `manifest.json` | Extension configuration (Manifest V3) |
+| `_locales/` | The extension's name and description in English and Norwegian |
+| `i18n.js`, `i18n_strings.js` | The languages: choosing one, and the Bokmål and Nynorsk texts |
 | `fs_person.js` | The "Digital Arkivet" entry on FS person pages |
 | `background.js` | Toolbar icon, opening the search page and the linker, keeping the FS persons |
 | `farms.js` | Farm or family name? (Rygh, Kartverket) |
@@ -198,6 +217,10 @@ protocols, moving lists (out- and in-migration) and probate.
 | `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |
+
+The version is shown when you hover over the extension's toolbar icon, and on its
+card in `chrome://extensions`. It counts up as MAJOR.MINOR.PATCH: fixes raise the
+last number, new features the middle one.
 
 Developer notes are in `CLAUDE.md`. After changing the code, reload the extension on
 `chrome://extensions`.

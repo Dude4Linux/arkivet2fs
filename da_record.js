@@ -1097,20 +1097,47 @@ async function loadMoreResidents(doc, fetchText) {
   more.remove();
 }
 
+// The English page of a DA address: Bokmål pages have no language prefix, Nynorsk
+// /nn/, English /en/ ("https://www.digitalarkivet.no/view/255/pd..." →
+// ".../en/view/255/pd...")
+function englishPageUrl(href) {
+  const url = new URL(href);
+  if (/^\/en(\/|$)/.test(url.pathname)) return href;
+  url.pathname = '/en' + (url.pathname.replace(/^\/(nn|nb|no)(?=\/|$)/, '') || '/');
+  return url.href;
+}
+
 async function gatherData() {
   const fetchText = async function(url) {
     const response = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status);
     return response.text();
   };
-  // A copy of the open page, with all of a census residence's residents (the page
-  // itself stays as it is)
+  // The record is read from DA's English page (the labels and roles extractRecord()
+  // knows): on a Bokmål or Nynorsk page, the English page of the same address is
+  // fetched; if that fails, the open page is read as it is
   let page = document;
-  if (document.querySelector('#collapse-persons .load-more[data-url]')) {
+  let pageUrl = location.href;
+  const englishUrl = englishPageUrl(location.href);
+  if (englishUrl !== location.href) {
+    try {
+      const response = await fetch(englishUrl, { credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Digital Arkivet answered ' + response.status);
+      page = new DOMParser().parseFromString(await response.text(), 'text/html');
+      pageUrl = englishUrl;
+      await loadMoreResidents(page, fetchText);
+    } catch (err) {
+      console.warn('arkivet2fs: could not load the English page ' + englishUrl, err);
+      page = document;
+    }
+  }
+  // Else a copy of the open page, with all of a census residence's residents (the
+  // page itself stays as it is)
+  if (page === document && document.querySelector('#collapse-persons .load-more[data-url]')) {
     page = document.cloneNode(true);
     await loadMoreResidents(page, fetchText);
   }
-  const result = extractRecord(page, location.href);
+  const result = extractRecord(page, pageUrl);
   // The person whose page is open (the linker pairs the record's people from them)
   result.openPerson = result.people.find(function(p) { return p.current; }) || null;
   if (!result.error && result.principalUrl) {

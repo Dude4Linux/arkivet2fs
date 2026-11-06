@@ -1,5 +1,11 @@
-// Place tables and the farm check (personToQuery)
-importScripts('da_places.js', 'farms.js');
+// The languages (the notifications), place tables and the farm check (personToQuery)
+importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js');
+
+// The toolbar icon's tooltip: the extension's name and version (manifest.json's
+// "version"), set each time the service worker starts
+chrome.action.setTitle({
+  title: (chrome.i18n.getMessage('name') || 'DigitalArkivet to FamilySearch') + ' ' + chrome.runtime.getManifest().version
+});
 
 chrome.action.onClicked.addListener((tab) => {
   console.log('Extension icon clicked');
@@ -47,7 +53,7 @@ chrome.action.onClicked.addListener((tab) => {
     const key = 'draft:' + Date.now();
     chrome.storage.session.set({ [key]: data }).then(() => {
       chrome.tabs.create({ url: chrome.runtime.getURL('linker.html') + '?draft=' + encodeURIComponent(key), index: tab.index + 1, openerTabId: tab.id });
-    }).catch((error) => showErrorMessage('Could not open the linker: ' + error.message));
+    }).catch((error) => showErrorMessage('Could not open the linker: ' + error.message));  // ("Prefix: detail", tMessage())
   });
 });
 
@@ -257,15 +263,17 @@ async function personToQuery(person) {
   return q;
 }
 
-// Function to show error messages in a notification
-function showErrorMessage(errorMessage) {
+// Function to show error messages in a notification, in the user's language (the
+// one chosen on the extension's pages, else the browser's)
+async function showErrorMessage(errorMessage) {
+  await loadUiLanguage();
   chrome.notifications.create({
     type: "basic",
     iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-    title: "Error",
-    message: errorMessage,
+    title: t("Error"),
+    message: tMessage(errorMessage),
     buttons: [
-      { title: "OK" }
+      { title: t("OK") }
     ]
   }, (notificationId) => {
     if (chrome.runtime.lastError) {

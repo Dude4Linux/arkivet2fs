@@ -1,0 +1,10 @@
+{
+  "name": {
+    "message": "Digitalarkivet til FamilySearch",
+    "description": "The extension's name"
+  },
+  "description": {
+    "message": "Et verktøy som henter opplysninger fra Digitalarkivet og lager kilder til kildeboksen i FamilySearch.org",
+    "description": "The extension's description"
+  }
+}

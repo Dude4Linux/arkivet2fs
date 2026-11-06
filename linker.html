@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Digital Arkivet linker</title>
+  <title data-i18n>Digital Arkivet linker</title>
   <link rel="icon" href="icons/icon32.svg" type="image/svg+xml">
   <link rel="stylesheet" href="search.css">
   <link rel="stylesheet" href="linker.css">
@@ -11,36 +11,36 @@
 <body>
   <header class="topbar">
     <img src="icons/icon32.svg" alt="" width="28" height="28">
-    <h1>Digital Arkivet linker</h1>
-    <a id="da-link" class="fs-link" target="_blank" rel="noopener" hidden>Open the record on DA</a>
+    <h1 data-i18n>Digital Arkivet linker</h1>
+    <a id="da-link" class="fs-link" target="_blank" rel="noopener" hidden data-i18n>Open the record on DA</a>
   </header>
   <main class="linker-page">
-    <p id="status" class="muted">Reading the record…</p>
+    <p id="status" class="muted" data-i18n>Reading the record…</p>
     <div id="linker" hidden>
-      <p class="intro muted">Check the source and who it belongs to. Nothing is saved on FamilySearch until you click
-        <strong>Create source and attach</strong>.</p>
+      <p class="intro muted" data-i18n>Check the source and who it belongs to. Nothing is saved on FamilySearch until you click
+        <strong data-i18n>Create source and attach</strong>.</p>
 
       <section class="box">
-        <h2>Source</h2>
-        <label class="field">Title <input id="f-title" type="text"></label>
+        <h2 data-i18n>Source</h2>
+        <label class="field" data-i18n>Title <input id="f-title" type="text"></label>
         <div class="field-row">
-          <label class="field">Date <input id="f-date" type="text"></label>
-          <label class="field">Web page <input id="f-url" type="text"></label>
+          <label class="field" data-i18n>Date <input id="f-date" type="text"></label>
+          <label class="field" data-i18n>Web page <input id="f-url" type="text"></label>
         </div>
-        <label class="field">Citation <textarea id="f-citation" rows="5"></textarea></label>
-        <label class="field">Notes <textarea id="f-notes" rows="10"></textarea></label>
+        <label class="field" data-i18n>Citation <textarea id="f-citation" rows="5"></textarea></label>
+        <label class="field" data-i18n>Notes <textarea id="f-notes" rows="10"></textarea></label>
       </section>
 
       <section class="box">
-        <h2>People in the record</h2>
+        <h2 data-i18n>People in the record</h2>
         <div class="fs-person">
-          <label>FamilySearch person
-            <input id="fs-pid" type="text" list="fs-recent" placeholder="PID, e.g. XXXX-XXX" autocomplete="off">
+          <label data-i18n>FamilySearch person
+            <input id="fs-pid" type="text" list="fs-recent" placeholder="PID, e.g. XXXX-XXX" data-i18n-attr="placeholder" autocomplete="off">
           </label>
           <datalist id="fs-recent"></datalist>
           <span id="fs-name" class="muted"></span>
         </div>
-        <p class="muted small">Pair each person with a tree person to attach the source to them. A name edited here
+        <p class="muted small" data-i18n>Pair each person with a tree person to attach the source to them. A name edited here
           (a surname for a child recorded by given name only) goes into the title, citation and notes.</p>
         <p id="record-note" class="small" hidden></p>
         <p id="tree-status" class="muted small" hidden></p>
@@ -49,15 +49,17 @@
       </section>
 
       <div class="actions">
-        <button id="attach" type="button" class="primary">Create source and attach</button>
-        <button id="create-only" type="button" class="secondary">Create source only</button>
+        <button id="attach" type="button" class="primary" data-i18n>Create source and attach</button>
+        <button id="create-only" type="button" class="secondary" data-i18n>Create source only</button>
       </div>
       <section id="progress" class="box" hidden>
-        <h2>On FamilySearch</h2>
+        <h2 data-i18n>On FamilySearch</h2>
         <ul id="log" class="log"></ul>
       </section>
     </div>
   </main>
+  <script src="i18n.js"></script>
+  <script src="i18n_strings.js"></script>
   <script src="da_places.js"></script>
   <script src="da_search.js"></script>
   <script src="da_match.js"></script>
