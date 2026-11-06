@@ -42,9 +42,9 @@ The sidebar on the right holds the search criteria, laid out like FamilySearch's
 record search. You can edit any of them and click **Search**:
 
 - **Names:** given names and surname, one row per name; FS alternate names are added,
-  without nicknames such as "Big" or "Little" (two brothers Ole).
-  The names follow the patronymic convention. In "Tollef Johansen Skofteland",
-  Johansen is the surname. Skofteland is a farm only when a farm of that name lies
+  without nicknames such as "Big" or "Little" (two brothers Lars).
+  The names follow the patronymic convention. In "Tollef Johansen Rysstad",
+  Johansen is the surname. Rysstad is a farm only when a farm of that name lies
   near the person's places. Otherwise it's a family or place name and is searched as
   the surname.
 - **Events:** birth or christening, marriage, residences, emigration or immigration,
@@ -96,7 +96,7 @@ within half a year after it counts as the same year.
 After the searches, the extension opens the records of the best hits. It checks the
 people in them against the FS relatives: the parents of a baptized child, the couple of a
 marriage, a census household, an emigrant's destination. A relative with a close given
-name (Mari or Maria for Marit) is ≈ +2; another given name (Anne for Marit) is -3. A
+name (Astri for Astrid) is ≈ +2; another given name (Anne for Astrid) is -3. A
 baptism's date of birth is checked against FS's full birth date: the same day +3,
 another day -2. That separates namesakes:
 several men of the same name in one census, for example. Hits scoring below 0 are

@@ -19,7 +19,7 @@ When citing archival material found on the platform, include the following layer
 
 **Census Record**
 
-> 1865 Census for Norway, digital image, *National Archives of Norway, Digitalarkivet* (https://www.digitalarkivet.no/en/census/person/pf99000000000905 : accessed 7 Feb 2026); citing original record in the Regional State Archives. 
+> 1865 Census for Norway, digital image, *National Archives of Norway, Digitalarkivet* (https://www.digitalarkivet.no/en/census/person/pf99000000000010 : accessed 7 Feb 2026); citing original record in the Regional State Archives. 
 
 **Tips for Accuracy**
 

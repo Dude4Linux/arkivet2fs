@@ -1,0 +1,15 @@
+{
+  "name": "arkivet2fs-dev",
+  "private": true,
+  "description": "Development tools for the arkivet2fs extension (tests). Nothing here ships with the extension.",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  }
+}

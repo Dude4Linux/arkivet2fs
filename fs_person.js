@@ -49,7 +49,7 @@
   function familyMember(row) {
     if (!row) return null;
     // The sex is its own (visually hidden) text node; the row's text runs it into the
-    // name ("Per AslaksenMale1764–1822"), so look for the element that holds just that
+    // name ("Jon AslaksenMale1764–1822"), so look for the element that holds just that
     // (outside the name: a surname Mann isn't the sex).
     const genderEl = [...row.querySelectorAll('*')]
       .find(el => el.children.length === 0 && !el.closest('[data-testid="fullName"]') && sexOf(text(el)));
@@ -84,7 +84,7 @@
     }
 
     // Emigration and immigration: FS's own facts, and custom events of that title
-    // ("Immigration 1872"; in Norwegian Utvandring/Emigrasjon, Innvandring/Immigrasjon)
+    // ("Immigration 1866"; in Norwegian Utvandring/Emigrasjon, Innvandring/Immigrasjon)
     const moves = (type, title) => [...all(type), ...all('OTHER_EVENT')
       .filter(el => title.test(text(el.querySelector('[data-testid="conclusion-title"]'))))].map(conclusionValue);
 

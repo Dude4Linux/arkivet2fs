@@ -52,9 +52,10 @@ function relativesInRecord(record) {
     const theirs = roleKind(other);
     if (census) {
       // In a household: the head and the head's spouse are a child's parents (which is
-      // which isn't known), the head's spouse is the head's, and the children theirs
+      // which isn't known), the head's spouse is the head's, and the children theirs.
+      // A couple can both be heads: 1900's hf and hm, 1865's Husfader and Husmoder.
       if (mine === 'child' && (theirs === 'head' || theirs === 'spouse')) { found.father.push(other); found.mother.push(other); }
-      else if ((mine === 'head' && theirs === 'spouse') || (mine === 'spouse' && theirs === 'head')) found.spouse.push(other);
+      else if ((mine === 'head' && (theirs === 'spouse' || theirs === 'head')) || (mine === 'spouse' && theirs === 'head')) found.spouse.push(other);
       else if ((mine === 'head' || mine === 'spouse') && theirs === 'child') found.child.push(other);
     } else if (mine === 'child') {
       if (theirs === 'father') found.father.push(other);
@@ -96,7 +97,7 @@ function hasGivenName(person, given) {
 }
 
 // Does a record person's first given name come close to one of the FS relative's
-// (Mari or Maria for Marit: nameClose() in da_match.js)?
+// (Astri for Astrid: nameClose() in da_match.js)?
 function hasCloseName(person, given) {
   const first = (person.name || '').replace(/[%*,]/g, ' ').trim().split(/\s+/)[0] || '';
   return !!first && (given || '').split(/\s+/).some((g) => nameClose(first, g));
@@ -124,7 +125,7 @@ function ownBirthDate(record) {
 }
 
 // A record person whose patronymic isn't the FS relative's (Halvor Moen for FS Halvor
-// Olsen; Halvor Larsen Moen or Halvor Larssen agree, Knud alone says nothing)
+// Larsen; Halvor Larsen Moen or Halvor Larssen agree, Halvor alone says nothing)
 function patronymicDiffers(person, surname) {
   if (!isPatronymic(surname)) return false;
   const words = (person.name || '').replace(/%[^%]*%|[*,]/g, ' ').split(/\s+/).filter(Boolean).slice(1);
@@ -148,7 +149,7 @@ function isRelative(person, relative, record, close = false) {
 // The first given name of a record person ("Lars Halvorsen" → "Ole")
 const firstName = (person) => (person.name || '').replace(/[%*]/g, '').split(/\s+/)[0] || '';
 
-// "Knud in the record, not Ole", or with the same given name "Halvor Moen (b. 1735) in
+// "Halvor in the record, not Lars", or with the same given name "Halvor Moen (b. 1735) in
 // the record, not Halvor Larsen (b. 1762)"
 function notRelative(person, relatives, record) {
   if (!relatives.some((r) => hasGivenName(person, r.given) || hasCloseName(person, r.given))) {
@@ -163,7 +164,7 @@ function notRelative(person, relatives, record) {
 // The record compared with the person → reasons like scoreHit()'s: each FS parent,
 // spouse or child named in the record ✓ +3 (children +2, at most three; a parent or
 // spouse also by patronymic and birth year, isRelative()), with a close given name
-// ≈ +2 (Mari for Marit), a parent or spouse in the record with another given name
+// ≈ +2 (Astri for Astrid), a parent or spouse in the record with another given name
 // ✗ -3, another patronymic or year ✗ -2 (not a census household's parents), the
 // person's own date of birth against FS's full date (+3, +1 or -2),
 // unmarried in a census after FS's marriage ✗ -3, an emigrant's destination among the
@@ -193,7 +194,7 @@ function checkRecord(record, P) {
     else if (candidates.length && !census) differs(relation, candidates[0], [relative]);
   };
   // Another person where FS has a relative: -3 with another given name (Anne for
-  // Marit), -2 with the same or a close one (another patronymic or birth year)
+  // Astrid), -2 with the same or a close one (another patronymic or birth year)
   const differs = (relation, person, relatives) => {
     const named = relatives.some((r) => hasGivenName(person, r.given) || hasCloseName(person, r.given));
     add(named ? -2 : -3, relation + ' ' + notRelative(person, relatives, record), false);

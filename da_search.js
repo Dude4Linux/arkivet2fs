@@ -13,8 +13,8 @@
 //   "Anna Magdalena"), and every word must match: "Ann* Magdalin*" finds
 //   "Anne Magdalen" but not "Anne". Records often leave out a middle name, so only
 //   the own baptism also searches by the first two given names.
-// - Transcribed parents' names can be far off: Anna Lindeman's parents Johannes
-//   Lindeman and Gjertrud Johanne are "Johanne Olsen" and "Johanne Stubbe" on her
+// - Transcribed parents' names can be far off: a child's parents Johannes
+//   Lindeman and Oline Johanne can be "Johanne Olsen" and "Johanne Stigberg" on the
 //   baptism, so the baptism is also searched for by her given names alone.
 // - Most church records give no birth year for parents and godparents: filter on the
 //   event year, not birth_year.
@@ -63,7 +63,7 @@ const ROLES = {
 function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, ''); }
 
 function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
-// The father's name in a patronymic (Halvorsen → Knud, Olsdr. → Ol)
+// The father's name in a patronymic (Halvorsen → Halvor, Olsdr. → Ol)
 function patronymicBase(surname) { return (surname || '').replace(PATRONYMIC_ENDING, ''); }
 
 // Given name for a DA search: without its final vowel(s), with a trailing *, so
@@ -262,7 +262,7 @@ function emigrationYears(P) {
 }
 
 // Why the searches end at P.leftNorway, for the skip and score texts: "emigrating
-// (FS: 1866–1868)", or "leaving Norway (FS: La Crosse, Wisconsin, United States, 1880)"
+// (FS: 1866–1868)", or "leaving Norway (FS: Eau Claire, Wisconsin, United States, 1875)"
 // when FS's first event abroad is the earlier cutoff
 function leavingText(P) {
   if (P.emigration && !(P.abroad && P.abroad.year + 2 < P.emigration.to)) return t('emigrating (FS: {years})', { years: emigrationYears(P) });
@@ -316,7 +316,7 @@ const outsideNorway = (place) => !!place && !/\b(norway|norge|noreg)\s*$/i.test(
 // isn't run; `skip` says why or what's missing.
 //
 // No genders[] filter: DA drops every record without a gender (many censuses), e.g.
-// Anna Lindeman's 1870 census. Sex is used for scoring instead.
+// Maren Lindeman's 1870 census. Sex is used for scoring instead.
 function buildQueries(criteria) {
   const P = profile(criteria);
   const queries = [];

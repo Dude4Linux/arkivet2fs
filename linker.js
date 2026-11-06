@@ -34,7 +34,7 @@ function stripVariants(name) { return (name || '').replace(/%[^%]*%/g, ' ').repl
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The given names of an FS name: up to the patronymic, else all but the last word
-// ("Halvor Larsen Bakken" → "Knud", "Anna Magdaline Lindeman" → "Anna Magdaline")
+// ("Halvor Larsen Bakken" → "Halvor", "Maren Kristine Lindeman" → "Maren Kristine")
 function givenOf(name) {
   const words = (name || '').split(/\s+/).filter(Boolean);
   if (words.length < 2) return words.join(' ');
@@ -43,7 +43,7 @@ function givenOf(name) {
 }
 
 // A name in a title or citation: "1845, Ole, son of ...", "baptism of Ole, 3 January",
-// "Lars Halvorsen and Kari", "Lars Halvorsen household" (whole names only, so "Ole" isn't
+// "Lars Halvorsen and Kari", "Lars Halvorsen household" (whole names only, so "Lars" isn't
 // found in "Lars Halvorsen")
 function renamePhrase(text, oldName, newName) {
   if (!oldName || oldName === newName) return text;
@@ -169,7 +169,7 @@ function suggestPairs(record, people, self, fs) {
 // forms) whose age fits: the FS birth year ±3, and where FS has none, older or younger
 // than the relative by 15 years for a parent or child. In the relative's own household
 // the roles must fit too (the head's wife isn't paired with an FS daughter); a close
-// given name (Mari for Marit) is paired only with a fitting year and household role.
+// given name (Astri for Astrid) is paired only with a fitting year and household role.
 
 const treeYear = (t) => Number(((t && (t.lifespan || (t.birth || t.christening || {}).date)) || '').match(/\b1[5-9]\d\d\b/)?.[0]) || null;
 
@@ -184,7 +184,7 @@ function treeRelatives(tree) {
 }
 
 // 2: a record person has the tree person's given name (or a form of it); 1: a close
-// one (the record's name is a stem of FS's: Mari for Marit); 0: another name
+// one (the record's name is a stem of FS's: Astri for Astrid); 0: another name
 function givenNameFit(person, tree) {
   const given = givenOf(stripVariants(tree.name));
   if (hasGivenName(person, given)) return 2;
@@ -206,8 +206,8 @@ function recordSex(person) {
   return '';
 }
 
-// Two names with patronymics of different fathers (Imbjør Gulbrandsdatter isn't
-// Ingrid Larsdr; Ole Jakobsen isn't Lars Halvorsen). Spellings of one father's name
+// Two names with patronymics of different fathers (Ingri Gulbrandsdatter isn't
+// Ingrid Larsdr; Lars Jakobsen isn't Lars Halvorsen). Spellings of one father's name
 // agree: Halvardsen/Halvorsen, Olsson/Olsen, Torsdatter/Tordsdatter.
 function patronymicClash(recordName, treeName) {
   const pats = (name) => stripVariants(name).split(/\s+/).slice(1).filter(isPatronymic)

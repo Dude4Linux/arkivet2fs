@@ -1,0 +1,111 @@
+// da_match.js: names, years, and the scoring and grouping of DA's hits
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { load, fixture, plain, SHARED } = require('./harness.js');
+const { criteria } = require('./criteria.js');
+
+const w = load(SHARED);
+const P = w.profile(criteria({
+  name: [{ givenName: 'Lars', surname: 'Halvorsen' }], sex: [{ sex: 'Male' }],
+  birth: [{ birthLikeDate: '16 July 1846', 'birthLikeDate.from': '1845', 'birthLikeDate.to': '1847', birthLikePlace: 'Vågå, Oppland, Norway' }],
+  father: [{ fatherGivenName: 'Halvor', fatherSurname: 'Larsen' }],
+  mother: [{ motherGivenName: 'Astri', motherSurname: 'Larsdatter' }]
+}));
+
+function scored(name) {
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, w.parseResults(fixture(name)).hits);
+  return plain(w.groupHits(merged, P));
+}
+const reason = (hit, re) => hit.reasons.find((r) => re.test(r.text));
+
+test('yearPoints(): the same +2, one off +1, then -2, -4, -6', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 9, 10, 30].map(w.yearPoints), [2, 1, -2, -2, -4, -4, -6, -6]);
+});
+
+test('nameMatch(): spellings and forms of one name', () => {
+  for (const [a, b] of [['Anne', 'Anna'], ['Magdalen', 'Magdaline'], ['Peer', 'Per'], ['Ragnihld', 'Ragnild'],
+    ['Gurj', 'Guri'], ['Halvard', 'Halvor'], ['Ingbjør', 'Ingeborg'], ['Marit', 'Margit']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+  assert.equal(w.nameMatch('Lars', 'Hans'), false);
+});
+
+test('skeleton(): the consonants, spelled one way', () => {
+  assert.equal(w.skeleton('Ragnihld'), 'rgnld');
+  assert.equal(w.skeleton('Christine'), w.skeleton('Kristina'));
+});
+
+test('nameClose(): Astri or Bodil for Astrid, not Hans', () => {
+  assert.equal(w.nameClose('Astri', 'Astrid'), true);
+  assert.equal(w.nameClose('Hans', 'Astrid'), false);
+});
+
+test('mergeHits() keeps a record once, with every search that found it', () => {
+  const merged = new Map();
+  const { hits } = w.parseResults(fixture('da/search-baptism.html'));
+  const a = { reasons: [] }, b = { reasons: [] };
+  w.mergeHits(merged, a, hits);
+  w.mergeHits(merged, b, hits.slice(0, 1));
+  assert.equal(merged.size, 4);
+  assert.equal(merged.get(hits[0].id).queries.length, 2);
+});
+
+test('baptisms: the one in the FS birth year comes first', () => {
+  const groups = scored('da/search-baptism.html');
+  assert.deepEqual(groups.map((g) => g.title), ['Baptism']);
+  const [best, ...rest] = groups[0].hits;
+  assert.equal(best.id, 'pd99000000000018');
+  assert.ok(reason(best, /^baptised 1846$/).ok);
+  assert.ok(rest.every((h) => h.score < best.score));
+  assert.equal(reason(rest[0], /baptised 1844/).points, -2);
+});
+
+test('baptisms with the same score are in date order', () => {
+  const rest = scored('da/search-baptism.html')[0].hits.slice(1);
+  assert.deepEqual(rest.map((h) => h.date), ['1844-01-23', '1849-04-05', '1849-11-04']);
+});
+
+test('baptisms: of two in the FS birth year, one before the FS birth date is another child', () => {
+  // the parents' second son Lars, b. 10 April 1849 (the first, b. 1846, died young)
+  const P1849 = w.profile(criteria({
+    name: [{ givenName: 'Lars', surname: 'Halvorsen' }], sex: [{ sex: 'Male' }], birth: [{ birthLikeDate: '10 April 1849' }],
+    father: [{ fatherGivenName: 'Halvor', fatherSurname: 'Larsen' }], mother: [{ motherGivenName: 'Astri', motherSurname: 'Larsdatter' }]
+  }));
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, w.parseResults(fixture('da/search-baptism.html')).hits);
+  const hits = plain(w.groupHits(merged, P1849))[0].hits;
+  assert.equal(hits[0].date, '1849-11-04');
+  assert.ok(reason(hits[0], /^baptised 1849$/).ok);
+  const before = hits.find((h) => h.date === '1849-04-05');
+  assert.equal(reason(before, /before the birth/).points, -2);
+  assert.ok(before.score < hits[0].score);
+});
+
+test('census: a year from an age ("1847*") counts one year closer', () => {
+  const hits = scored('da/search-census.html')[0].hits;
+  const fromAge = hits.find((h) => h.id === 'pf99000000000235'); // 1847*
+  assert.equal(reason(fromAge, /^b\. 1847/).points, 2);
+  const threeOff = hits.find((h) => h.id === 'pf99000000000138'); // 1849*
+  assert.equal(reason(threeOff, /^b\. 1849/).points, -2);
+});
+
+test("census: a star on the place isn't the year's (\"1844, Vågå herred*\")", () => {
+  const hits = scored('da/search-census.html')[0].hits;
+  const hit = hits.find((h) => h.id === 'pf99000000000155');
+  assert.match(hit.born, /^1844, .*\*$/);
+  assert.equal(reason(hit, /^b\. 1844/).points, -2);
+});
+
+test('census: Halvardsen is a spelling of Halvorsen, the same father', () => {
+  const hits = scored('da/search-census.html')[0].hits;
+  const hit = hits.find((h) => h.id === 'pf99000000000246');
+  assert.equal(hit.name, 'Lars Halvardsen');
+  assert.ok(reason(hit, /Halvardsen for Halvorsen/).points > 0);
+});
+
+test('census: an FS place in the hit counts', () => {
+  const hits = scored('da/search-census.html')[0].hits;
+  assert.ok(hits.every((h) => reason(h, /^Vågå$/)), 'Vaage is an old name of Vågå');
+});

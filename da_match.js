@@ -78,7 +78,7 @@ function yearPoints(off) {
 }
 
 // A record's given name close to FS's, but not one of its forms: the record's is a
-// stem of FS's (Mari, Maria, Marie for Marit; nameMatch() the other way round), as
+// stem of FS's (Astri for Astrid; nameMatch() the other way round), as
 // church books often write it
 function nameClose(word, name) {
   return !nameMatch(word, name) && nameMatch(name, word);
@@ -127,7 +127,7 @@ function scoreHit(hit, P) {
     const word = names.find((w) => !used.has(w) && nameMatch(w, name));
     if (word) { add(1, word, true); used.add(word); }
   }
-  // A given name FS doesn't have speaks against such a record, a little (Anna
+  // A given name FS doesn't have speaks against such a record, a little (Maren
   // Kristina Caspara for Maren Kristine)
   if (allGiven && P.givenNames.length) {
     for (const w of names) {
@@ -165,7 +165,7 @@ function scoreHit(hit, P) {
   };
   // A baptism against FS's birth: the same year, or the next for a birth from
   // October; with both full dates, within half a year after the birth counts as the
-  // same year, and before the birth is ✗ (another child: two Oles of one Halvor Larsen)
+  // same year, and before the birth is ✗ (another child: two Larses of one Halvor Larsen)
   const baptised = (date, year) => {
     const b = P.birthDate;
     const d = String(date || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -183,9 +183,10 @@ function scoreHit(hit, P) {
 
   // Birth year, when the record gives one: against FS's year, or the sidebar's range.
   // DA's "1766*" is the year less an age (a census), itself a year uncertain (35 on
-  // census day: born 1765 or 1766), so it counts one year closer.
+  // census day: born 1765 or 1766), so it counts one year closer. The star must be
+  // the year's: DA also marks places it couldn't identify ("1844, Vågå herred*").
   const born = yearIn(hit.born);
-  const fromAge = /\*/.test(hit.born || '');
+  const fromAge = /\b\d{4}\*/.test(hit.born || '');
   const bornOff = born && P.birthYear ? born - P.birthYear : 0;
   if (born && P.birthYear) byYear(fromAge && bornOff ? bornOff - Math.sign(bornOff) : bornOff, born, t('b.'));
   else if (born && P.birth) byRange(born, P.birth.from, P.birth.to, t('b.'));

@@ -636,7 +636,7 @@ function extractRecord(document, pageUrl) {
   }
 
   // --- Helper: Describe the record entry by its principal person(s) ---
-  // e.g. "baptism of Hans Peder", "marriage of Peder Andersen and Johanne Andreasd.",
+  // e.g. "baptism of Peder Martin", "marriage of Peder Andersen and Johanne Andreasd.",
   // "Andreas Olsen household". Falls back to "entry for <open person>" for other record types.
   function describeEntry(type, people, pageName) {
     const principal = recordPrincipal(type, people);
@@ -653,9 +653,9 @@ function extractRecord(document, pageUrl) {
   // FamilySearch citations are plain text, so titles are quoted rather than italicized.
   //   Church: Norway, Oslo, Garnisonsmenigheten Parish, Garnisonskirken, "Church book from
   //           Garnisonsmenigheten parish 1828-1841 (0301M4)," Births and baptisms, p. 55, entry 6,
-  //           baptism of Hans Peder, 3 January 1836; database, National Archives of Norway,
-  //           Digitalarkivet, Permanent ID pd99000000000901 (https://www.digitalarkivet.no/en/pd99000000000901
-  //           : accessed 2 November 2026); scanned image kb99000000000902 (https://goto.digitalarkivet.no/kb99000000000902).
+  //           baptism of Peder Martin, 3 January 1836; database, National Archives of Norway,
+  //           Digitalarkivet, Permanent ID pd99000000000001 (https://www.digitalarkivet.no/en/pd99000000000001
+  //           : accessed 2 November 2026); scanned image kb99000000000002 (https://goto.digitalarkivet.no/kb99000000000002).
   //   Census: Norway, Oppland, Vestre Toten, "1891 census for 0529 Vestre Toten," census district
   //           01 Fjellsmarkas skolekrets, rural residence 009 Hager af Drager,
   //           Andreas Olsen household; database, ...
@@ -971,7 +971,7 @@ function extractRecord(document, pageUrl) {
 
     // FS title: "<year>, <principal> - <source title> - <record type>", following
     // FamilySearch's usual year-first style, e.g.
-    //   "1816, John, child of Pehr Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
+    //   "1816, John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
     //   "1891, Andreas Olsen household - 0529 Vestre Toten - Census"
     // "Church book from" / "1891 census for" are dropped to keep titles short (the
     // citation keeps the full source title), and the type is left off when the
@@ -992,7 +992,7 @@ function extractRecord(document, pageUrl) {
     const titleYear = (recordDate.match(/\d{4}/) || [''])[0];
     // Name the record's principal (the child of a baptism, not the father whose page
     // may be open). A child is often recorded by given name only ("John"); then the
-    // parent is added — "John, child of Pehr Aslaksen" — rather than guessing a surname.
+    // parent is added — "John, child of John Aslaksen" — rather than guessing a surname.
     const principal = recordPrincipal(recordTypeInfo.type, people);
     // When the open page isn't one of the principal's, point to the principal's page
     // so gatherData() can extract the record from that person's perspective

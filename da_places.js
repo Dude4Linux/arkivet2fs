@@ -293,8 +293,8 @@ function countyCodes(place) {
 }
 
 // An FS place that lies outside Norway by its last part: a country other than
-// Norway, a US state or a Canadian province ("Spencer, Clay, Iowa, United States",
-// "Spencer, Iowa"). A place without one (a farm, "Bakken, Vågå") isn't taken to be
+// Norway, a US state or a Canadian province ("Decorah, Winneshiek, Iowa, United States",
+// "Decorah, Iowa"). A place without one (a farm, "Bakken, Vågå") isn't taken to be
 // abroad, nor is a US town with a Norwegian name, which ends in its state.
 const ABROAD_PLACE = new RegExp('^(' + [
   'united states( of america)?', 'usa', 'u\\.s\\.a?\\.?', 'us', 'america', 'amerika', 'nord-amerika', 'north america',

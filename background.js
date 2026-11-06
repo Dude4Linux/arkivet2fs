@@ -122,10 +122,10 @@ const PATRONYMIC = /(s[eøo]n|datter|dotter|dtr\.?|sdr?\.?)$/i;
 
 // Split an FS full name into given name(s), surname, and what follows the surname.
 // Names in this tree are patronymic, often with the farm as an address: "Tollef
-// Johansen Skofteland" → given "Tollef", surname "Johansen", rest "Skofteland". The
+// Johansen Rysstad" → given "Tollef", surname "Johansen", rest "Rysstad". The
 // rest can also be a family or place-derived name (Lindeman), so personToQuery checks
 // it against the farm registers (farms.js). Without a patronymic, the last word is the
-// surname ("Anna Magdaline Lindeman").
+// surname ("Maren Kristine Lindeman").
 function splitName(full) {
   const words = (full || '').split(/\s+/).filter(Boolean);
   if (words.length < 2) return { given: words.join(' '), surname: '', rest: '' };
@@ -138,7 +138,7 @@ function splitName(full) {
 
 // The years in an FS date ("11 November 1764", "1764", "1726–Deceased")
 // A name without its nickname: a quoted word ('Stor'), or a leading Big, Little,
-// Old, Young (Stor, Lille, Gamle, Unge, ...) that tells two brothers Ole apart:
+// Old, Young (Stor, Lille, Gamle, Unge, ...) that tells two brothers Lars apart:
 // "Big 'Stor' Lars Halvorsen" → "Lars Halvorsen", "Little Lars Halvorson" → "Lars Halvorson"
 function withoutNickname(name) {
   return (name || '').replace(/(^|\s)(['"‘’“”])[^'"‘’“”]*\2(?=\s|$)/gu, ' ')

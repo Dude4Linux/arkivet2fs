@@ -19,8 +19,8 @@ FS SourceBox ◀──(Phase 3: toolbar icon, exists)── DA record page (user
 
 ## What we found
 
-Checked on https://www.familysearch.org/en/tree/person/details/XXXX-XXX (Per Aslaksen,
-1764–1822, the father on pd99000000000009, which we've used to test Phase 3).
+Checked on https://www.familysearch.org/en/tree/person/details/XXXX-XXX (Jon Aslaksen,
+1764–1822, the father on pd99000000000003, which we've used to test Phase 3).
 
 ### FS person page
 
@@ -39,7 +39,7 @@ Checked on https://www.familysearch.org/en/tree/person/details/XXXX-XXX (Per Asl
     `focusPersonHighlight`.
     - The card where the focus person is in the couple gives the spouse and children.
     - The card where the focus person is among the children gives the parents.
-- Names are shown whole ("Per Aslaksen"). The DOM doesn't split them into given name
+- Names are shown whole ("Jon Aslaksen"). The DOM doesn't split them into given name
   and surname, so we split them ourselves (see the name rules).
 - FS is a single-page app: moving between persons doesn't reload the page, and
   React re-renders the panel.
@@ -69,17 +69,17 @@ The search is `/en/search/persons/advanced` (GET).
     role, and the source title.
 - **Wildcards:** DA's help says "special search characters will result in 0 hits",
   but a **trailing `*`** works on first and last names, including the related
-  person's ("Per" + "Aslaks*" → 69 hits, and DA still adds Joen/John for the first
-  name; "Anna*" + "Lindem*" → 66). A `*` inside a word ("J*n", "Tol*fs*") or a `?`
+  person's ("Jon" + "Aslaks*" → 69 hits, and DA still adds Joen/John for the first
+  name; "Maren*" + "Lindem*" → 66). A `*` inside a word ("J*n", "Tol*fs*") or a `?`
   finds nothing useful.
-- **Given names match word by word:** "Anna" matches "Anna Kristine", but
-  "Anna Magdaline" finds nothing when DA spells it "Magdalene". Search on the first
+- **Given names match word by word:** "Maren" matches "Maren Kristine", but
+  "Maren Kristiane" finds nothing when DA spells it "Kristiana". Search on the first
   given name.
 - **`genders[]` drops records with no gender,** which many censuses are: with
-  `genders[]=k`, Anna's 1870 census (pf99000000000906) is missing. Don't filter on
+  `genders[]=k`, Maren's 1870 census (pf99000000000004) is missing. Don't filter on
   gender; use it for scoring.
 
-### Experiments (Per Aslaksen)
+### Experiments (Jon Aslaksen)
 
 | Query | Hits | Known record kept? |
 |---|---|---|
@@ -88,12 +88,12 @@ The search is `/en/search/persons/advanced` (GET).
 | … + `birth_year` 1762–66 | 4 | **no**: fathers and godparents rarely have a birth year |
 | … + `event_year` 1780–1822 | 42 | yes |
 | … + municipalities 1028, 1034 | 53 | yes |
-| … + related first name "Siri" | 21 | yes (FS spells her "Sirj") |
-| Per + Aslaksøn | 0 | name variants don't cover patronymic spellings |
-| **His baptism:** Jon, role barn, related first name Aslak, 1763–66 | 2 | top hit pd99000000000001, b. 1764-11-11, Hægebostad = FS christening |
-| **His burial:** Per Aslaksen, role avdød, 1821–23 | 1 | pg99000000000907, 1822-08-16 = FS burial |
-| **His son's baptism:** John, role barn, related Pehr Aslaksen, 1815–17 | 1 | pd99000000000011 |
-| **1801 census:** Per Aslaksen, `jt[]=13` | 3 | three men named Peer Aslaksen (b. 1764, 1766, 1779); the household check settles it: the b. 1766 one at Nedre Lunde has his wife Gurj Tollefsdatter, the b. 1779 one is a son of Aslak Tjøstolvsen, the third is an unmarried head |
+| … + related first name "Guri" | 21 | yes (FS spells her "Gurj") |
+| Jon + Aslaksøn | 0 | name variants don't cover patronymic spellings |
+| **His baptism:** Jon, role barn, related first name Aslak, 1763–66 | 2 | top hit pd99000000000005, b. 1764-11-11, Hægebostad = FS christening |
+| **His burial:** Jon Aslaksen, role avdød, 1821–23 | 1 | pg99000000000006, 1822-08-16 = FS burial |
+| **His son's baptism:** John, role barn, related John Aslaksen, 1815–17 | 1 | pd99000000000007 |
+| **1801 census:** Jon Aslaksen, `jt[]=13` | 3 | three men named Peer Aslaksen (b. 1764, 1766, 1779); the household check settles it: the b. 1766 one at Nedre Lunde has his wife Gurj Tollefsdatter, the b. 1779 one is a son of Aslak Tjøstolvsen, the third is an unmarried head |
 
 **Conclusion:** one broad name search is noisy. A small set of targeted queries, one
 per expected life event, finds the right records with 1–3 hits each.
@@ -215,11 +215,11 @@ cope with FS entries others made with a farm in the name.
     goes to the sidebar as a farm (DA `domicile` and scoring), not into `lastname`.
     Otherwise it's the surname, and the patronymic becomes another name, tried when
     the surname finds nothing. Lindeman is a farm only in Bremsnes (Romsdal), so for
-    Anna's family near Oslo and Fredrikstad it's a surname. When neither register
+    Maren's family near Oslo and Fredrikstad it's a surname. When neither register
     answers (5 s each), it's taken as a surname.
   - A name with no patronymic (a fixed family name like Lindeman) is used whole as
     the surname; when a farm of that name lies in the person's places, it's also a
-    farm ("Tollef Skofteland" in Hægebostad).
+    farm ("Tollef Rysstad" in Bygland).
 - **Generate patronymic spellings** when a query finds nothing, e.g. Tollefsdatter →
   Tollefsd., Tollefsdr.; Olsen → Olssen, Olsøn. A trailing `*` on the stem
   (Tollefs*, Ols*) covers the endings; spellings of the stem itself are separate
@@ -287,7 +287,7 @@ Each milestone is testable on its own.
    query; the results list with links.
 4. **Full query plan:** the remaining queries, merging, scoring and grouping.
    Done: `da_match.js` merges by permanent ID and scores with visible reasons;
-   tested on Per Aslaksen and Anna Lindeman, where the right record leads each
+   tested on Jon Aslaksen and Maren Lindeman, where the right record leads each
    group. Per-child baptism queries were left out (one parent query finds them
    all, with fewer requests); a "too young for the role" check separates namesakes.
 5. **Criteria panel:** editable criteria, reruns, "Open on DA" links.
@@ -311,9 +311,9 @@ Each milestone is testable on its own.
    municipalities; the status says which, and "Open on DA" opens the search used.
    A retry that still finds over 100 hits after narrowing isn't used.
    Farms (words after the patronymic in an FS name, or `q.farm`) get a "Records at
-   <farm>" query (DA's `domicile`). It found Anna's baptism (pd99000000000903,
-   parents mistranscribed) and her 1875 census (pf99000000000904); her confirmation
-   isn't among the 48 Anna Johannes* confirmed in Oslo and Aker, perhaps because she
+   <farm>" query (DA's `domicile`). It found Maren's baptism (pd99000000000008,
+   parents mistranscribed) and her 1875 census (pf99000000000009); her confirmation
+   isn't among the 48 Maren Johannes* confirmed in Oslo and Aker, perhaps because she
    was a foster daughter in Fredrikstad by 1875.
 7. **Emigration:** find how DA's emigration sources are searched (emigrant
    protocols, church-book departure lists: their `sc[]`/`lt[]` codes and roles), add
@@ -325,7 +325,7 @@ Each milestone is testable on its own.
    and a "Moving away" record kind. Phase 3 extracts both: an emigrant protocol's
    group of travellers (date from the group header), page and line go into the
    citation, its travel group (unrelated people) isn't listed as a family, and the
-   emigrant is the principal ("1882, Anna Lindemann - Oslo police district, …
+   emigrant is the principal ("1882, Maren Lindemann - Oslo police district, …
    Emigrant protocols, no. 9: 1882-1883 - Emigration"); a moving record takes its
    role from the person's own fields. Ages like "27 A." become "27 years", and town
    abbreviations (Fr.stad, Fr.hald, Chr.sand, Chr.sund) are place aliases.
@@ -338,15 +338,15 @@ Each milestone is testable on its own.
    with the FS relatives: a parent, spouse or child named there ✓ (+3, +2 for each
    child), another parent or spouse ✗ (-2; not for census parents), unmarried in a
    census after FS's marriage ✗ -3, an emigrant's destination among the FS places ✓ +2.
-   Results for the test tree: the 1801 Peer Aslaksen at Nedre Lunde (✓ spouse Sirj
+   Results for the test tree: the 1801 Peer Aslaksen at Nedre Lunde (✓ spouse Gurj
    Tollefsdatter) now leads the Census group, and his marriage to Gury Tollefsd. and
-   the children's baptisms with Siri rank above namesakes with wives Else or Aase.
-   Anna's 1870 Arendal census has her mother Johanne and sister Selma (✓ mother),
+   the children's baptisms with Guri rank above namesakes with wives Else or Aase.
+   Maren's 1870 Arendal census has her mother Johanne and sister Selma (✓ mother),
    and her emigration "✓ going to Denver Col.". Found on the way: in the 1801
    census every resident has an H.no., so `censusHousehold()` took one person as a
    household (now a household starts where the number changes, when all have one);
    1801 family positions are free text ("Hosbonde", "Hans kone", "Deres børn"); an
-   old final j is i in names (Sirj = Siri). DA transcribed Anna's father as
+   old final j is i in names (Gurj = Guri). DA transcribed Maren's father as
    "Johanne", so her baptism gets "✗ father Johanne, not Johannes" but still ranks first.
 9. **Docs:** update CLAUDE.md and the README.
    Done: `README.md` covers installing, the three steps (the FS entry, the search
@@ -453,8 +453,7 @@ tried in the browser on DA's and FS's Norwegian pages.
 ## Decisions
 
 1. **Results** appear on an extension search page, with an FS-style sidebar.
-2. **Test tree:** Anna Lindeman (the user's great-grandmother) and her Norwegian
-   ancestors on FS. All of them are known in both FS and DA, so each person's DA
+2. **Test tree:** a family on FS and its Norwegian ancestors. All of them are known in both FS and DA, so each person's DA
    records are the expected results. The aim is to attach DA records to the tree
    conveniently. Many duplicate FS records, but DA's often add useful details.
 3. **Names:** patronymic naming, farms as addresses (see the name rules).
