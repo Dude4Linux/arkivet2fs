@@ -120,3 +120,41 @@ test('tools/verify.sh: accepts a signed package, refuses a changed one', async (
   assert.throws(run, (e) => /BAD: .* does not match its signature/.test(e.stderr.toString()));
   fs.rmSync(dir, { recursive: true });
 });
+
+test('tools/release: a published release is downloaded to a temporary folder, checked, and the folder removed', async (t) => {
+  const [, s] = await tools;
+  let version = '';
+  try { version = execFileSync('openssl', ['version']).toString(); execFileSync('curl', ['--version'], { stdio: 'ignore' }); } catch { /* none */ }
+  if (!/^OpenSSL [3-9]/.test(version)) return t.skip('needs OpenSSL 3 and curl');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arkivet2fs-release-'));
+  const releases = path.join(dir, 'releases');
+  const files = path.join(releases, 'download', 'v9.9.9');
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(files, { recursive: true });
+  fs.mkdirSync(tmp);
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+  fs.writeFileSync(path.join(dir, 'test.pub'), publicKey.export({ type: 'spki', format: 'pem' }));
+  const pkg = { name: 'arkivet2fs-9.9.9-chromium.zip', data: crypto.randomBytes(5000) };
+  fs.writeFileSync(path.join(files, pkg.name), pkg.data);
+  for (const f of s.signatureFiles([pkg], privateKey)) fs.writeFileSync(path.join(files, f.name), f.data);
+  // without gh (ARKIVET2FS_RELEASES), only a published release is seen: the check alone
+  const run = (...args) => execFileSync('sh', [path.join(ROOT, 'tools', 'release'), 'v9.9.9', '--key', path.join(dir, 'test.pub'), ...args],
+    { stdio: 'pipe', env: { ...process.env, ARKIVET2FS_RELEASES: 'file://' + releases, TMPDIR: tmp } }).toString();
+
+  const out = run('--keep', path.join(dir, 'kept'));
+  assert.match(out, new RegExp(`Key: SHA-256 ${s.fingerprint(publicKey)}[^]*OK: ${pkg.name} is signed[^]*OK: SHA256SUMS is signed[^]*All good: v9.9.9`));
+  assert.doesNotMatch(out, /Sign|Publish/);
+  assert.deepEqual(fs.readdirSync(tmp), [], 'the temporary folder is removed');
+  assert.deepEqual(fs.readdirSync(path.join(dir, 'kept')).sort(), [pkg.name, pkg.name + '.sig']);
+  assert.ok(fs.readFileSync(path.join(dir, 'kept', pkg.name)).equals(pkg.data));
+
+  const changed = Buffer.from(pkg.data);
+  changed[2500] ^= 1;
+  fs.writeFileSync(path.join(files, pkg.name), changed);
+  assert.throws(() => run(), (e) => /BAD: .* does not match its signature/.test(e.stderr.toString()));
+  assert.deepEqual(fs.readdirSync(tmp), [], 'removed after a failure too');
+  fs.rmSync(path.join(files, 'SHA256SUMS.sig'));
+  assert.throws(() => run(), (e) => /can't download SHA256SUMS\.sig/.test(e.stderr.toString()));
+  assert.throws(() => run('v1'), (e) => /unknown argument v1/.test(e.stderr.toString()));
+  fs.rmSync(dir, { recursive: true });
+});

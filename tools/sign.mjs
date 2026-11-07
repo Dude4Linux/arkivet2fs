@@ -10,7 +10,8 @@
 //
 // For a draft release it downloads the packages release.yml built, builds the same tag
 // here, and signs only when the two are byte for byte the same. It then uploads a .sig
-// for each package, SHA256SUMS and SHA256SUMS.sig. Publishing the draft is left to you.
+// for each package, SHA256SUMS and SHA256SUMS.sig. tools/release runs this, then tests
+// and publishes the draft.
 // Another key file: --key <path> or ARKIVET2FS_SIGNING_KEY. Without a terminal the
 // passphrase comes from ARKIVET2FS_KEY_PASSPHRASE.
 import { execFileSync } from 'node:child_process';
@@ -157,7 +158,7 @@ async function signRelease(tag, keyFile, local) {
   }
   gh(['release', 'upload', tag, '--repo', REPO, ...written]);
   console.log(`Uploaded ${sigs.map((f) => f.name).join(', ')} to the draft ${tag}.`);
-  console.log(`Check the draft, then publish it: gh release edit ${tag} --repo ${REPO} --draft=false`);
+  console.log(`Next: test and publish it with sh tools/release ${tag}`);
 }
 
 async function main(argv) {

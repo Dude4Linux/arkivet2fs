@@ -34,8 +34,8 @@ jobs:
       - name: Syntax of every script
         run: |
           git ls-files -z '*.js' '*.mjs' | xargs -0 -n1 node --check
-          git ls-files -z '*.sh' | xargs -0 -n1 sh -n
-          git ls-files -z '*.sh' | xargs -0 shellcheck
+          git ls-files -z '*.sh' tools/release | xargs -0 -n1 sh -n
+          git ls-files -z '*.sh' tools/release | xargs -0 shellcheck -s sh
 
       # The fixtures are sanitized DA pages: their permanent IDs are made up (pd99...).
       # A real one (also inside an encoded address, %2Fpd0000...) means a page went in

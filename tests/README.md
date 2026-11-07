@@ -41,7 +41,7 @@ w.extractRecord(fixtureDoc(w, 'da/baptism-1846.html'), fixtureUrl('da/baptism-18
 | `farms.test.js` | Rygh's table, telling farms from family names |
 | `background.test.js` | DA addresses, FS names, an FS person as criteria |
 | `linker.test.js` | pairing the record's people with the FS family; renames |
-| `tools.test.js` | the release build (which files ship, a zip that's the same every time), signatures, `tools/verify.sh` |
+| `tools.test.js` | the release build (which files ship, a zip that's the same every time), signatures, `tools/verify.sh` and `tools/release` |
 | `search.test.js` | the search page end to end, against a fake DA |
 
 ## Fixtures

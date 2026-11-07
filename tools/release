@@ -1,0 +1,168 @@
+#!/bin/sh
+# The maintainer's steps for a release of arkivet2fs, once release.yml has drafted it:
+#
+#   1. Sign: node tools/sign.mjs vX.Y.Z (it asks for the signing key's passphrase).
+#   2. Test: download the draft into a temporary folder, check it with verify.sh (the
+#      signatures and SHA256SUMS) and GitHub's attestation, and unzip it there for you
+#      to load in Chrome and Brave.
+#   3. Publish, when you say so; then check the published files as a user gets them.
+#
+# Run it in a terminal, in the clone:
+#
+#   cd ~/DevOps/arkivet2fs
+#   sh tools/release [vX.Y.Z] [--keep DIR] [--key release.pub]
+#
+# The tag defaults to v + manifest.json's version. A step that's done is skipped. On a
+# published release only the check is run, which anyone can do (with curl when gh isn't
+# signed in). --keep DIR copies the checked packages and their signatures to DIR. The
+# key defaults to keys/release.pub of this clone; its fingerprint is in the README.
+# Needs OpenSSL 3, and curl or gh; signing and publishing need gh signed in, and Node.
+# The temporary folder is removed at the end.
+set -eu
+
+REPO=Dude4Linux/arkivet2fs
+root=$(cd "$(dirname "$0")/.." && pwd)
+
+die() { echo "release: $*" >&2; exit 1; }
+usage() { sed -n '2,20s/^# \{0,1\}//p' "$0"; }
+ask() { # question; true for yes
+  [ -t 0 ] || die "run it in a terminal to answer: $1"
+  printf '%s [y/N] ' "$1"
+  read -r answer || return 1
+  case $answer in [yY]*) return 0 ;; *) return 1 ;; esac
+}
+
+tag='' keep='' key=$root/keys/release.pub
+while [ $# -gt 0 ]; do
+  case $1 in
+    --keep) [ $# -ge 2 ] || die "--keep needs a folder"; keep=$2; shift 2 ;;
+    --key) [ $# -ge 2 ] || die "--key needs a file"; key=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    v[0-9]*.[0-9]*.[0-9]*) tag=$1; shift ;;
+    *) die "unknown argument $1 (see --help)" ;;
+  esac
+done
+if [ -z "$tag" ]; then
+  v=$(sed -n 's/.*"version": *"\([0-9][0-9.]*\)".*/\1/p' "$root/manifest.json" | head -n 1)
+  [ -n "$v" ] || die "no version in manifest.json"
+  tag=v$v
+fi
+[ -f "$key" ] || die "no public key $key (give its path with --key)"
+key=$(cd "$(dirname "$key")" && pwd)/$(basename "$key")
+
+# The tests read a release from a folder (ARKIVET2FS_RELEASES=file://...), with curl
+public=https://github.com/$REPO/releases
+base=${ARKIVET2FS_RELEASES:-$public}
+use_gh=''
+if [ -z "${ARKIVET2FS_RELEASES:-}" ] && command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+  use_gh=1
+elif ! command -v curl >/dev/null; then
+  die "needs curl, or gh signed in"
+fi
+
+# What's done: draft, signed, published (without gh only a published release is seen)
+draft='' signed=''
+if [ -n "$use_gh" ]; then
+  state=$(gh release view "$tag" --repo "$REPO" --json isDraft,assets \
+    --jq '"\(.isDraft) \([.assets[].name] | index("SHA256SUMS.sig") != null)"') ||
+    die "no release $tag on GitHub (push the tag, and release.yml drafts it)"
+  [ "${state% *}" = true ] && draft=1
+  [ "${state#* }" = true ] && signed=1
+fi
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/arkivet2fs-$tag.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 1' INT TERM HUP
+
+# check DIR how: downloads the release into $tmp/DIR (with gh, or with curl from
+# $from when how is curl) and checks each package. Sets $packages.
+check() {
+  dir=$tmp/$1
+  mkdir "$dir"
+  if [ "$2" = gh ]; then
+    gh release download "$tag" --repo "$REPO" --dir "$dir" || die "can't download $tag"
+  else
+    get() { curl -fsSL -o "$dir/$1" "$from/download/$tag/$1" || die "can't download $1 of $tag"; }
+    get SHA256SUMS
+    get SHA256SUMS.sig
+    # the packages are the zips SHA256SUMS lists (verify.sh then checks SHA256SUMS)
+    while read -r _ name; do
+      case $name in
+        *[!A-Za-z0-9._-]*|.*|'') die "SHA256SUMS lists an odd file name: $name" ;;
+        *.zip) get "$name"; get "$name.sig" ;;
+      esac
+    done < "$dir/SHA256SUMS"
+  fi
+  if [ ! -f "$dir/SHA256SUMS" ] || [ ! -f "$dir/SHA256SUMS.sig" ]; then
+    die "$tag has no SHA256SUMS and SHA256SUMS.sig (not signed yet?)"
+  fi
+  packages=$(cd "$dir" && ls -- *.zip 2>/dev/null) || die "$tag has no packages"
+  for name in $packages; do
+    (cd "$dir" && sh "$root/tools/verify.sh" "$name" "$key") || exit 1
+    if [ -n "$use_gh" ] && gh attestation --help >/dev/null 2>&1; then
+      gh attestation verify "$dir/$name" --repo "$REPO" >/dev/null 2>&1 ||
+        die "BAD: GitHub has no attestation that $name was built by $REPO. Don't install it."
+      echo "OK: GitHub attests that $name was built by $REPO's release workflow"
+    fi
+  done
+}
+
+keep_packages() {
+  [ -n "$keep" ] || return 0
+  mkdir -p "$keep"
+  for name in $packages; do cp "$dir/$name" "$dir/$name.sig" "$keep/"; done
+  echo "Kept in $keep: $(echo "$packages" | tr '\n' ' ')"
+}
+
+if [ -z "$draft" ]; then
+  # published: the check only, as a user gets the files
+  echo "== Check: $tag is published; downloading it to $tmp"
+  if [ -n "$use_gh" ]; then check published gh; else from=$base; check published curl; fi
+  keep_packages
+  echo "All good: $tag is signed by this key."
+  exit 0
+fi
+
+echo "== 1. Sign the draft $tag"
+if [ -n "$signed" ]; then
+  echo "Signed already (the draft has SHA256SUMS.sig); skipping."
+else
+  (cd "$root" && node tools/sign.mjs "$tag") || die "signing failed; the draft is unchanged"
+fi
+
+echo
+echo "== 2. Test: downloading the draft to $tmp"
+check draft gh
+command -v unzip >/dev/null || die "needs unzip for the load test"
+for name in $packages; do
+  case $name in
+    *-chromium.zip) mkdir "$tmp/test"; unzip -q "$tmp/draft/$name" -d "$tmp/test" ;;
+  esac
+done
+[ -d "$tmp/test/arkivet2fs" ] || die "no chromium package to test"
+cat <<EOF
+
+Load the package in Chrome and in Brave: on chrome://extensions (brave://extensions),
+turn off your usual copy of arkivet2fs, turn on Developer mode, "Load unpacked", and choose
+    $tmp/test/arkivet2fs
+Check that it loads without errors and that the icon's tooltip says v. ${tag#v}.
+Then remove it from both browsers again (and turn your copy back on): this folder is
+deleted when the script ends.
+
+EOF
+ask "Did it load and work in both browsers?" || die "not publishing; the draft stays as it is"
+keep_packages
+
+echo
+echo "== 3. Publish $tag"
+echo "Once published, its files can't be changed (immutable releases)."
+ask "Publish $tag now?" || die "not publishing; the draft stays as it is (run this again to publish)"
+gh release edit "$tag" --repo "$REPO" --draft=false >/dev/null || die "publishing failed"
+echo "Published: $public/tag/$tag"
+
+echo
+echo "== Check: the published files, as a user downloads them"
+from=$public use_gh=''
+command -v curl >/dev/null || die "no curl to check the published files"
+check published curl
+echo "All good: $tag is published and signed by this key."

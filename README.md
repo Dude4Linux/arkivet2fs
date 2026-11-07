@@ -41,23 +41,26 @@ where it is.
 
     7642e107e134dfb53e43e4932b32a23301b88b8d28a32b10abe367d16d36bc54
 
-You need OpenSSL 3 (`openssl version`). Put the release's four files in one folder (the
-package, its `.sig`, `SHA256SUMS` and `SHA256SUMS.sig`, from the release's **Assets**),
-and run `tools/verify.sh` from the repository on the package. With a clone of the
-repository in `~/arkivet2fs`, and X.Y.Z the release's version:
+You need OpenSSL 3 (`openssl version`), and curl or GitHub's `gh`. In a clone of the
+repository, one command downloads a release into a temporary folder, checks it and
+removes the folder again:
 
-    mkdir -p ~/Downloads/arkivet2fs-X.Y.Z && cd ~/Downloads/arkivet2fs-X.Y.Z
-    gh release download vX.Y.Z --repo Dude4Linux/arkivet2fs   # or save the four files here
-    sh ~/arkivet2fs/tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip
+    cd arkivet2fs        # your clone
+    sh tools/release vX.Y.Z --keep ~/Downloads/arkivet2fs-X.Y.Z
 
-The script takes the key from its clone (`keys/release.pub`); a copy of the script
-elsewhere needs the key's path after the package. It prints the key's fingerprint, which
-must be the one above, and two lines starting with `OK:`. A line starting with `BAD:`
-means the file isn't the one that was signed: don't install it.
+Without a version it checks the clone's own (in `manifest.json`). `--keep` (optional)
+copies the checked package to that folder, ready to unzip. The script prints the key's
+fingerprint, which must be the one above, then lines starting with `OK:` and `All good`.
+With `gh` signed in it also checks GitHub's record of where the package was built (its
+attestation). A line starting with `BAD:` means the file isn't the one that was signed:
+don't install it. (For the maintainer, the same script also signs, tests and publishes a
+draft release.)
 
-GitHub also records where each package was built:
-`gh attestation verify arkivet2fs-X.Y.Z-chromium.zip --repo Dude4Linux/arkivet2fs`
-says whether it came from this repository's release workflow.
+To check a package you downloaded yourself, put it in one folder with its `.sig`,
+`SHA256SUMS` and `SHA256SUMS.sig` (all from the release's **Assets**) and run
+`sh ~/path/to/the/clone/tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip` there. Both
+scripts take the key from their clone (`keys/release.pub`); a copy elsewhere needs the
+key's path (`verify.sh`: after the package; `release`: `--key`).
 
 ## Use
 
@@ -263,7 +266,7 @@ use that language.
 | `tests/` | The tests (`npm test`), on sanitized Digitalarkivet pages; see `tests/README.md` |
 | `.github/workflows/ci.yml` | Runs the tests and a build on GitHub for every push and pull request |
 | `.github/workflows/release.yml` | Drafts a release, with the package, for each version tag |
-| `tools/` | Building the package (`build.mjs`), signing a release (`sign.mjs`), checking a download (`verify.sh`) |
+| `tools/` | Building the package (`build.mjs`), signing a release (`sign.mjs`), checking a download (`verify.sh`); `release` signs, tests and publishes a draft release, or checks a published one |
 | `keys/release.pub` | The public key the releases are signed with |
 | `CHANGELOG.md` | What changed in each version |
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |

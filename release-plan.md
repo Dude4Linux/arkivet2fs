@@ -57,6 +57,7 @@ tools/
   build.mjs               dist/<browser>/ = the shared files + the merged manifest; zips it
   sign.mjs                SHA256SUMS + signatures (see "Signatures")
   verify.sh               lets a user check a download by hand (openssl)
+  release                 the maintainer's steps: sign, test, publish (or check a release)
 tests/                    the jsdom unit tests, rebuilt and kept in the repo
 keys/release.pub          the public signing key (also pinned in the extension)
 .github/workflows/
@@ -165,7 +166,7 @@ Done but for the mirror and the settings (marked *to do*).
 ### Phase 2: Chromium packages and signed releases
 
 - **Done: tooling:** `tools/build.mjs` (chromium target), `tools/sign.mjs`, `tools/verify.sh`,
-  `CHANGELOG.md`, and `release.yml` (tests in `tests/tools.test.js`; CI builds the
+  `tools/release` (the maintainer's three steps: sign, test, publish), `CHANGELOG.md`, and `release.yml` (tests in `tests/tools.test.js`; CI builds the
   package on every push). A tag builds, attests and drafts the release; `sign.mjs`
   signs it locally (decision 5), and you publish the draft.
 - **How it turned out:**
@@ -184,7 +185,11 @@ Done but for the mirror and the settings (marked *to do*).
     fingerprint in the README.
   - release.yml can also be run by hand for an existing tag, e.g. v1.1.3, made before
     the workflow.
-- *To do:* the key pair, and the first release.
+- **Done: the key pair, and the first release drafted:** v1.1.3, signed with
+  `sign.mjs`, and `tools/release v1.1.3` accepts it (signature, SHA256SUMS,
+  attestation).
+- *To do:* load the zip in Chrome and Brave, then publish the draft: `cd ~/DevOps/arkivet2fs`,
+  then `sh tools/release v1.1.3` (or with no version: the manifest's).
 - **Done: exclude from the zip:** what users don't need (docs for developers, tests, tools,
   platform/, keys/, `banner.*`, the icons' SVG sources but `icon32.svg`).
 - **Test:** a throwaway tag on a fork, or a draft release that's deleted afterwards, to
