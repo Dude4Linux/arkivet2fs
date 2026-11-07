@@ -1,7 +1,8 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **approved; Phases 0 and 2 done, Phase 1 nearly done** (the Forgejo mirror is
-left); v1.1.3, the first signed release, is published. Phase 3 (1.2.0) is written and tested offline; next: its test against a fork, then the release. All the decisions below are made.
+Status: **approved; Phases 0, 2 and 3 done, Phase 1 nearly done** (the Forgejo mirror is
+left); v1.1.3, the first signed release, and v1.2.0, with the update checker, are
+published. All the decisions below are made.
 Each phase ends with a test and a tagged release (or a test tag), so the next
 phase starts from something that works.
 
@@ -234,13 +235,14 @@ Done but for the mirror and the settings (marked *to do*).
   in the pages' headers, the nb/nn texts, and `tests/releases.test.js` (15 tests: a
   fake GitHub, a key made in the test, a good download saved, a broken signature and
   a changed file refused, nothing in a store install).
-- **Left:** the test against a real fork. `/releases/latest` never gives a
-  pre-release, so the fork's 1.2.1 must be an ordinary release, signed with the
-  release key (`sign.mjs` works on this repository only, so the fork's files are
-  signed by hand with the same key), and the checker pointed at it with `updateDev = {repo: '<you>/arkivet2fs'}` in the
-  service worker's console. Or, simpler: `updateDev = {version: '1.1.0'}` against the
-  real repository, so the published v1.1.3 shows as new and its real, signed package
-  is downloaded and checked.
+- **Done: tested in Chrome** with `updateDev = {version: '1.1.0'}` against the real
+  repository instead of a fork (`/releases/latest` never gives a pre-release, and
+  `sign.mjs` signs this repository's drafts only): the published v1.1.3 showed as new
+  (badge, notification, the page), and its real, signed package was downloaded,
+  checked and saved. Chrome 157's Ed25519 accepted v1.1.3's `SHA256SUMS.sig` and
+  refused a copy with one bit changed.
+- **Done: v1.2.0 published** (7 November 2026) with `sh tools/release v1.2.0`. Copies
+  from 1.2.0 on show the next release by themselves; 1.1.3 and older don't check.
 
 ### Phase 3b (optional): Chrome Web Store and Edge Add-ons
 
