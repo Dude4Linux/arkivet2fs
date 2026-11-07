@@ -1,7 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **approved; Phase 0 done, Phase 1 nearly done** (the Forgejo mirror and the
-GitHub settings are left). All the decisions below are made.
+Status: **approved; Phases 0 and 2 done, Phase 1 nearly done** (the Forgejo mirror is
+left); v1.1.3, the first signed release, is published. Next: Phase 3. All the decisions below are made.
 Each phase ends with a test and a tagged release (or a test tag), so the next
 phase starts from something that works.
 
@@ -9,7 +9,7 @@ phase starts from something that works.
 
 - One Chromium MV3 extension at the repo root: Chrome and Brave load the folder
   unpacked. There's no build step. The tests are in the repo (`tests/`, `npm test`:
-  82 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
+  91 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
   harness that lived in a temporary folder and was lost.
 - The repo is public on GitHub, `Dude4Linux/arkivet2fs`: one author (the noreply
   address), 5 tags (v1.0.0 – v1.1.3), the history rewritten once without the real
@@ -147,7 +147,7 @@ Done but for the mirror and the settings (marked *to do*).
   all five tags.
 - *To do:* **git-server becomes a read-only mirror of GitHub** (decided): a Forgejo pull mirror,
   so nothing is pushed there by hand any more. GitHub is the main repo.
-- *To do:* **Settings:** protect master and `v*` tags; Actions limited to read-only tokens except
+- **Done: settings:** protect master and `v*` tags; Actions limited to read-only tokens except
   in release.yml; issues on; private vulnerability reporting on (SECURITY.md points to it).
 - **Done: SECURITY.md** says how to report problems privately and what the extension
   does with the user's data.
@@ -188,8 +188,10 @@ Done but for the mirror and the settings (marked *to do*).
 - **Done: the key pair, and the first release drafted:** v1.1.3, signed with
   `sign.mjs`, and `tools/release v1.1.3` accepts it (signature, SHA256SUMS,
   attestation).
-- *To do:* load the zip in Chrome and Brave, then publish the draft: `cd ~/DevOps/arkivet2fs`,
-  then `sh tools/release v1.1.3` (or with no version: the manifest's).
+- **Done: v1.1.3 published** (7 November 2026) with `cd ~/DevOps/arkivet2fs` and
+  `sh tools/release v1.1.3` (or with no version: the manifest's): loaded in Chrome and
+  Brave, then published; the public files check out with curl alone too. Immutable
+  releases are on, so its files can't change.
 - **Done: exclude from the zip:** what users don't need (docs for developers, tests, tools,
   platform/, keys/, `banner.*`, the icons' SVG sources but `icon32.svg`).
 - **Test:** a throwaway tag on a fork, or a draft release that's deleted afterwards, to
