@@ -798,3 +798,31 @@ test('a new person: the row\'s select offers it, and choosing it opens the sideb
   assert.equal($('new-person').hidden, false);
   assert.match($('new-person').textContent, /From the record: Lars, /);
 });
+
+test('run(): a source of this title for another record is not written over or attached', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-OLE', name: 'Ole Olsen' }] }),
+    editSource: () => ({ ok: false, otherRecord: true, sourceId: 'TEST-S01', other: 'pd99000000000077', error: 'another record' }),
+    attach: () => { throw new Error('not attached to another record\'s source'); }
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo', 'editSource']);
+  assert.match($('log').textContent, /The source TEST-S01 in your SourceBox has this title but is of another record \(pd99000000000077\); nothing was changed\. Give this source another title/);
+  assert.deepEqual(plain(tabs.closed), []);
+});
+
+test('run(): a source Home shows by its title is checked and written over like one found', async () => {
+  const { chrome, asked } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S06', existing: true }),
+    editSource: () => ({ ok: false, otherRecord: true, sourceId: 'TEST-S06', other: '', error: 'another record' }),
+    attach: () => { throw new Error('not attached to another record\'s source'); }
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'createSource', 'editSource']);
+  assert.equal(asked[2][1].sourceId, 'TEST-S06');
+  assert.match($('log').textContent, /is of another record; nothing was changed/);
+});

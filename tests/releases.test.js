@@ -25,7 +25,14 @@ function releasesWindow(options) {
 // A key standing in for the release key, and a package signed with it
 const testKey = crypto.generateKeyPairSync('ed25519');
 const testPub = testKey.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
-const zip = Buffer.from('PK\u0003\u0004 a package of arkivet2fs 1.2.0, made up for the tests');
+// (stored as tools/build.mjs stores them, with the version in its manifest)
+const { makeZip } = require('../tools/build.mjs');
+const packageOf = (version, more = []) => makeZip([
+  { name: 'arkivet2fs/README.md', data: Buffer.from('A package of arkivet2fs, made up for the tests\n') },
+  ...more,
+  { name: 'arkivet2fs/manifest.json', data: Buffer.from(JSON.stringify({ manifest_version: 3, version }, null, 2)) }
+], Date.parse('2026-11-07T12:00:00Z') / 1000);
+const zip = packageOf('1.2.0');
 const zipSig = crypto.sign(null, zip, testKey.privateKey).toString('base64') + '\n';
 const zipSha = crypto.createHash('sha256').update(zip).digest('hex');
 
@@ -456,4 +463,19 @@ test('every text of the update checker is in Bokmål and Nynorsk', async () => {
     assert.deepEqual([...texts].filter((text) => !w.hasTranslation(text)), [], lang);
     assert.ok(!w.hasTranslation('A text no table has'));
   }
+});
+
+test('checkPackage(): an older signed package offered as a newer release is not saved', async () => {
+  const w = releasesWindow();
+  const older = packageOf('1.1.3');
+  const sig = crypto.sign(null, older, testKey.privateKey).toString('base64');
+  const asset = { size: older.length, digest: crypto.createHash('sha256').update(older).digest('hex') };
+  assert.equal(w.packageVersion(older), '1.1.3');
+  const answer = await w.checkPackage(older, sig, asset, testPub, '1.2.0');
+  assert.equal(answer.ok, false);
+  assert.match(answer.problem, /not the version the release gives/);
+  assert.equal((await w.checkPackage(older, sig, asset, testPub, '1.1.3')).ok, true);
+  // a package whose manifest can't be read has no version
+  assert.equal(w.packageVersion(Buffer.from('PK\u0003\u0004 not a package')), '');
+  assert.equal(w.packageVersion(Buffer.alloc(0)), '');
 });

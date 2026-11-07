@@ -178,13 +178,43 @@ async function verifySignature(data, sigText, key = releaseKey()) {
 // Checks a downloaded package against the release: its size, GitHub's SHA-256 digest
 // (when the release gives one) and the signature. → {ok, problem, sha256}: problem is
 // the English reason it's refused (t() translates it)
-async function checkPackage(data, sigText, asset, key) {
+async function checkPackage(data, sigText, asset, key, version) {
   const bytes = new Uint8Array(data);
   if (bytes.length !== asset.size) return { ok: false, problem: 'The download is not the size the release gives.' };
   const sha256 = await sha256Hex(bytes);
   if (asset.digest && sha256 !== asset.digest) return { ok: false, problem: 'The download is not the file the release lists (its SHA-256 differs).', sha256 };
   if (!await verifySignature(bytes, sigText, key)) return { ok: false, problem: 'The signature does not match: the file is not the one the maintainer signed.', sha256 };
+  // The signature doesn't name the version: an older signed package offered as a newer
+  // release is told by the version in its own manifest
+  if (version !== undefined && packageVersion(bytes) !== version) {
+    return { ok: false, problem: 'The package is not the version the release gives (an older signed package?).', sha256 };
+  }
   return { ok: true, problem: '', sha256 };
+}
+
+// The version in a package's arkivet2fs/manifest.json, '' when it can't be read. The
+// packages store their files uncompressed (tools/build.mjs makeZip()), so the local
+// file headers are read in turn; anything else (compressed, sizes after the data) is ''.
+function packageVersion(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const decoder = new TextDecoder();
+  for (let at = 0; at + 30 <= bytes.length && view.getUint32(at, true) === 0x04034b50;) {
+    const flags = view.getUint16(at + 6, true);
+    const method = view.getUint16(at + 8, true);
+    const size = view.getUint32(at + 18, true);
+    const nameEnd = at + 30 + view.getUint16(at + 26, true);
+    const start = nameEnd + view.getUint16(at + 28, true);
+    if ((flags & 8) || start + size > bytes.length) return '';
+    if (decoder.decode(bytes.subarray(at + 30, nameEnd)) === 'arkivet2fs/manifest.json') {
+      if (method !== 0) return '';
+      try {
+        const v = JSON.parse(decoder.decode(bytes.subarray(start, start + size))).version;
+        return typeof v === 'string' ? v : '';
+      } catch (e) { return ''; }
+    }
+    at = start + size;
+  }
+  return '';
 }
 
 // Downloads a release asset through GitHub's API (it redirects to its file host)

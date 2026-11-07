@@ -48,6 +48,14 @@ fixes, new features, changes that break what users have).
   family of a paired spouse (or another paired relative) when the record names
   relatives of theirs, as it does for a census. That also happens when you pair the
   bride (or another relative) yourself, and the others are then paired from her.
+- Safer updates and sources:
+  - A source in your SourceBox with the same title but of another record (a common
+    name, the same year and parish) is no longer written over or attached: the linker
+    stops and asks you to give this source another title.
+  - The Updates page also checks that the package is the version the release says, so
+    an older signed package can't be offered as a newer one.
+  - The linker reads records only from Digitalarkivet, and tags a source found by its
+    title only when one source on the person has that title.
 
 ## 1.3.2 - 2026-11-07
 

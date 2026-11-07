@@ -1740,6 +1740,19 @@ async function hiddenTab() {
   };
 }
 
+// A source already in the SourceBox, written over with the fields as reviewed here;
+// fs_attach.js leaves it as it is when it names another record (a title shared by two)
+async function updateSource(tabId, sourceId, source) {
+  const edited = await step(tabId, 'editSource', { sourceId, source, reason: t('Updated from the record on Digitalarkivet.') });
+  if (edited.otherRecord) {
+    throw new Error(t('The source {id} in your SourceBox has this title but is of another record{other}; nothing was changed. Give this source another title (add a name or the date) and try again.',
+      { id: sourceId, other: edited.other ? ' (' + edited.other + ')' : '' }));
+  }
+  if (!edited.ok) throw new Error(t('The source could not be updated: {error}', { error: edited.error }));
+  log(edited.changed.length ? t('Source updated: {fields}.', { fields: edited.changed.map((f) => t(f)).join(', ') })
+    : t('The source on FamilySearch already has these fields.'), 'ok');
+}
+
 // The sources of these titles in the SourceBox, and who each is attached to (in the
 // tab, which goes to each page in turn)
 async function lookUpSources(tabId, titles, active = false) {
@@ -1826,17 +1839,19 @@ async function run(attach) {
         log(t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId }) +
           (known.ids.length > 1 ? ' ' + t('The SourceBox has {n} sources with this title; the first is used.', { n: known.ids.length }) : ''), 'ok');
         // Written over with the fields as reviewed here
-        const edited = await step(tabId, 'editSource', { sourceId, source, reason: t('Updated from the record on Digitalarkivet.') });
-        if (!edited.ok) throw new Error(t('The source could not be updated: {error}', { error: edited.error }));
-        log(edited.changed.length ? t('Source updated: {fields}.', { fields: edited.changed.map((f) => t(f)).join(', ') })
-          : t('The source on FamilySearch already has these fields.'), 'ok');
+        await updateSource(tabId, sourceId, source);
       } else {
         const created = await step(tabId, 'createSource', source);
         if (!created.ok) throw new Error(created.error);
         sourceId = created.sourceId;
-        log(created.existing ? t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId })
-          : t('Source created ({id}).', { id: sourceId }) +
+        if (created.existing) {
+          // Found by its title on Home: written over too, once it's this record's
+          log(t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId }), 'ok');
+          await updateSource(tabId, sourceId, source);
+        } else {
+          log(t('Source created ({id}).', { id: sourceId }) +
             (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');
+        }
       }
       const has = new Set(known.persons.map((p) => p.pid.toUpperCase()));
       const persons = [...known.persons];

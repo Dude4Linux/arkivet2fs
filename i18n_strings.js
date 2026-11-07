@@ -484,7 +484,9 @@ function i18nTable() {
     // --- The steps on FamilySearch (linker.js, fs_attach.js) ----------------------------
     'Opening the SourceBox on FamilySearch…': ['Åpner kildeboksen i FamilySearch…', 'Opnar kjeldeboksen i FamilySearch…'],
     'Updated from the record on Digitalarkivet.': ['Oppdatert fra oppføringen i Digitalarkivet.', 'Oppdatert frå oppføringa i Digitalarkivet.'],
+    'Not a Digital Arkivet address: {url}': ['Ikke en adresse hos Digitalarkivet: {url}', 'Ikkje ei adresse hos Digitalarkivet: {url}'],
     'The source could not be updated: {error}': ['Kilden kunne ikke oppdateres: {error}', 'Kjelda kunne ikkje oppdaterast: {error}'],
+    'The source {id} in your SourceBox has this title but is of another record{other}; nothing was changed. Give this source another title (add a name or the date) and try again.': ['Kilden {id} i kildeboksen din har denne tittelen, men gjelder en annen post{other}; ingenting ble endret. Gi denne kilden en annen tittel (legg til et navn eller datoen) og prøv igjen.', 'Kjelda {id} i kjeldeboksen din har denne tittelen, men gjeld ein annan post{other}; ingenting vart endra. Gi denne kjelda ein annan tittel (legg til eit namn eller datoen) og prøv igjen.'],
     'Source updated: {fields}.': ['Kilden er oppdatert: {fields}.', 'Kjelda er oppdatert: {fields}.'],
     'The source on FamilySearch already has these fields.': ['Kilden i FamilySearch har allerede disse feltene.', 'Kjelda i FamilySearch har alt desse felta.'],
     'The SourceBox already has a source with this title; using it ({id}).': ['Kildeboksen har allerede en kilde med denne tittelen; bruker den ({id}).', 'Kjeldeboksen har alt ei kjelde med denne tittelen; brukar henne ({id}).'],
@@ -564,6 +566,7 @@ function i18nTable() {
     'The latest release has no package for this browser.': ['Den nyeste utgaven har ingen pakke for denne nettleseren.', 'Den nyaste utgåva har ingen pakke for denne nettlesaren.'],
     'The download is not the size the release gives.': ['Nedlastingen har ikke den størrelsen utgaven oppgir.', 'Nedlastinga har ikkje den storleiken utgåva oppgjev.'],
     'The download is not the file the release lists (its SHA-256 differs).': ['Nedlastingen er ikke filen utgaven viser (SHA-256 er en annen).', 'Nedlastinga er ikkje fila utgåva viser (SHA-256 er ein annan).'],
+    'The package is not the version the release gives (an older signed package?).': ['Pakken er ikke versjonen utgivelsen oppgir (en eldre signert pakke?).', 'Pakken er ikkje versjonen utgivinga oppgir (ein eldre signert pakke?).'],
     'The signature does not match: the file is not the one the maintainer signed.': ['Signaturen stemmer ikke: filen er ikke den vedlikeholderen signerte.', 'Signaturen stemmer ikkje: fila er ikkje den vedlikehaldaren signerte.'],
     'arkivet2fs updates': ['Oppdateringer av arkivet2fs', 'Oppdateringar av arkivet2fs'],
     'This copy': ['Denne kopien', 'Denne kopien'],

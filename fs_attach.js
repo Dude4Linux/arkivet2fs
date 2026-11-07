@@ -164,6 +164,18 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true, sourceId: row.id, missing };
   }
 
+  // The DA permanent IDs a source names: any in its web page (the record's address),
+  // and those after "Permanent ID" in the citation and notes (not the scan's IDs,
+  // which records of the same page share)
+  function recordIds(url, ...texts) {
+    const ids = new Set();
+    for (const m of (url || '').matchAll(/(?<![a-z0-9])([a-z]{2}\d{14,})(?![0-9])/gi)) ids.add(m[1].toLowerCase());
+    for (const text of texts) {
+      for (const m of (text || '').matchAll(/Permanent ID:?\s*([a-z]{2}\d{14,})(?![0-9])/gi)) ids.add(m[1].toLowerCase());
+    }
+    return ids;
+  }
+
   // Edit a source already in the SourceBox: its row's Edit (in the row's menu, clicked
   // as it is; a source Home doesn't show is searched for by its title), then the same
   // form as Create Source with a change reason. Only fields that differ are written; a
@@ -182,6 +194,17 @@ if (!window.__arkivet2fsAttach) {
     button.click();
     await waitFor(() => byTestId('source-save-button'), 'the Edit Source form');
     await sleep(800);
+    // Only the source of this record is written over: titles can repeat (a common
+    // name, the same year and parish), and the source may be attached to others
+    const fieldText = (key) => { const f = document.querySelector(FIELDS[key]); return f ? f.value : ''; };
+    const ours = recordIds(source.url, source.citation);
+    const theirs = recordIds(fieldText('url'), fieldText('citation'), fieldText('notes'));
+    if (ours.size && ![...theirs].some((id) => ours.has(id))) {
+      const cancel = byTestId('source-cancel-button');
+      if (cancel) cancel.click();
+      return { ok: false, otherRecord: true, sourceId, other: [...theirs][0] || '',
+        error: 'The source of this title in the SourceBox is of another record' + (theirs.size ? ' (' + [...theirs][0] + ')' : '') + '; nothing was changed.' };
+    }
     const changed = [];
     const missing = [];
     for (const [key, selector] of Object.entries(FIELDS)) {
@@ -262,8 +285,10 @@ if (!window.__arkivet2fsAttach) {
     for (let n = view; n; n = n.parentElement) {
       if (n.querySelector(HEADING)) return n;
     }
-    const heading = [...document.querySelectorAll(HEADING)].find((h) => clean(h.textContent).includes(clean(title)));
-    if (!heading) return null;
+    // By the title only when one panel has it (tags on another source are no use)
+    const headings = [...document.querySelectorAll(HEADING)].filter((h) => clean(h.textContent).includes(clean(title)));
+    if (headings.length !== 1) return null;
+    const heading = headings[0];
     let n = heading;
     while (n.parentElement && n.parentElement.querySelectorAll(HEADING).length === 1) n = n.parentElement;
     return n;
@@ -399,6 +424,8 @@ if (!window.__arkivet2fsAttach) {
   async function findPerson({ relation, anchor, other, person }) {
     anchor = (anchor || '').toUpperCase();
     other = (other || '').toUpperCase();
+    const pid = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
+    if (!pid.test(anchor) || (other && !pid.test(other))) throw new Error('Not a FamilySearch PID: ' + (pid.test(anchor) ? other : anchor));
     if (!new RegExp('/tree/person/details/' + anchor + '(/|$)', 'i').test(location.pathname)) {
       throw new Error('FamilySearch did not open the tree person ' + anchor + '. Please sign in to FamilySearch and try again.');
     }

@@ -92,7 +92,7 @@ async function downloadRelease() {
   try {
     const [data, sig] = await Promise.all([downloadAsset(release.zip, fetch), downloadAsset(release.sig, fetch)]);
     say('download-status', t('Checking the signature…'), 'muted');
-    const result = await checkPackage(data, new TextDecoder().decode(sig), release.zip);
+    const result = await checkPackage(data, new TextDecoder().decode(sig), release.zip, undefined, release.version);
     if (!result.ok) {
       say('download-status', t('Not saved: {problem}', { problem: t(result.problem) }), 'bad');
       return;

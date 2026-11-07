@@ -743,6 +743,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // cached for the session (unless `store` is false: da_verify.js keeps a record's
 // extract instead of its page)
 async function fetchResultPage(url, store = true) {
+  // Only DA's pages (record addresses come from the page's address and from DA's own links)
+  let host = '';
+  try { const u = new URL(url); if (u.protocol === 'https:') host = u.hostname; } catch (e) { /* not an address */ }
+  if (!/(^|\.)digitalarkivet\.no$/.test(host)) throw new Error(t('Not a Digital Arkivet address: {url}', { url: String(url).slice(0, 200) }));
   try {
     const cached = sessionStorage.getItem('da:' + url);
     if (cached) return cached;

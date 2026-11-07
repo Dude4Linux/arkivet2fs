@@ -248,3 +248,15 @@ test('parseResults(): a page of a larger search (81 hits, 50 on the page)', () =
   assert.equal(hits.length, 50);
   assert.ok(hits.every((h) => /^[a-z]{2}\d{14,}$/.test(h.id)));
 });
+
+test('fetchResultPage(): only Digital Arkivet\'s pages are fetched', async () => {
+  const asked = [];
+  const w = load(['i18n.js', 'i18n_strings.js', 'da_search.js'], { fetch: (url) => { asked.push(url); return Promise.reject(new Error('offline')); } });
+  for (const url of ['https://example.com/en/view/255/pd99000000000001', 'http://www.digitalarkivet.no/en/view/255/pd99000000000001',
+    'https://digitalarkivet.no.example.com/x', 'javascript:alert(1)', '/en/view/255/pd99000000000001']) {
+    await assert.rejects(w.fetchResultPage(url, false), /Not a Digital Arkivet address/, url);
+  }
+  assert.deepEqual(asked, []);
+  await assert.rejects(w.fetchResultPage('https://www.digitalarkivet.no/en/view/255/pd99000000000001', false), /offline/);
+  assert.equal(asked.length, 1);
+});

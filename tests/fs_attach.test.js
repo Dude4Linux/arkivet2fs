@@ -281,3 +281,44 @@ test('cancelAdd(): FS\'s dialog cancelled, nothing created', async () => {
   assert.equal(filled.cancelled, true);
   assert.equal(filled.created, undefined);
 });
+
+// A title can belong to two records (a common name, the same year and parish): the
+// source on FS is only written over when it names this record's permanent ID
+test('editSource(): a source of this title for another record is left as it is', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, ON_FS);  // FS's source is of pd99000000000001
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01',
+    source: { title: TITLE, url: 'https://www.digitalarkivet.no/view/255/pd99000000000002', citation: 'New citation', notes: 'New notes' } });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.otherRecord, true);
+  assert.equal(answer.other, 'pd99000000000001');
+  assert.equal(fs.saved, null);
+  assert.equal(fs.cancelled, 1);
+});
+
+test('editSource(): without a web page on FS, the permanent ID in its citation counts', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, { ...ON_FS, 'web-page': '',
+    citation: 'Digitalarkivet, Permanent ID pd99000000000001 (https://www.digitalarkivet.no/en/pd99000000000001 : accessed 7 November 2026); scanned image kb99000000000009' });
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01',
+    source: { title: TITLE, url: ON_FS['web-page'], citation: 'New citation' } });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(fs.saved.citation, 'New citation');
+});
+
+test('editSource(): a scanned image both records share doesn\'t make them one', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, { ...ON_FS, 'web-page': '',
+    citation: 'Digitalarkivet, Permanent ID pd99000000000003; scanned image kb99000000000009 (https://www.digitalarkivet.no/kb99000000000009)' });
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01',
+    source: { title: TITLE, url: ON_FS['web-page'], citation: 'Digitalarkivet, Permanent ID pd99000000000001; scanned image kb99000000000009' } });
+  assert.equal(answer.otherRecord, true);
+  assert.equal(fs.saved, null);
+});
+
+test('findPerson(): only a PID goes into the page check', async () => {
+  const { step } = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-HAL', '');
+  const answer = await step('findPerson', { relation: 'child', anchor: '.*', person: LARS });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /Not a FamilySearch PID/);
+});
