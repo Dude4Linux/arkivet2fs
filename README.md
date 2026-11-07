@@ -36,17 +36,28 @@ click the reload button on the extension's card in `chrome://extensions`. Chrome
 an unpacked extension's stored persons and drafts by its folder, so keep the folder
 where it is.
 
-**To check a download** (optional): each package has a signature (`.sig`) made with
-the maintainer's key, `keys/release.pub` in the repository, whose SHA-256 fingerprint
-is
+**To check a download** (optional): each package is signed with the maintainer's key,
+`keys/release.pub` in the repository, whose SHA-256 fingerprint is
 
     7642e107e134dfb53e43e4932b32a23301b88b8d28a32b10abe367d16d36bc54
 
-With the package, its `.sig`, `SHA256SUMS` and `SHA256SUMS.sig` in one folder, and
-OpenSSL 3, run `sh tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip` in a clone of the
-repository (or give the path of `release.pub` after the package). GitHub also attests
-where each package was built: `gh attestation verify arkivet2fs-X.Y.Z-chromium.zip
---repo Dude4Linux/arkivet2fs`.
+You need OpenSSL 3 (`openssl version`). Put the release's four files in one folder (the
+package, its `.sig`, `SHA256SUMS` and `SHA256SUMS.sig`, from the release's **Assets**),
+and run `tools/verify.sh` from the repository on the package. With a clone of the
+repository in `~/arkivet2fs`, and X.Y.Z the release's version:
+
+    mkdir -p ~/Downloads/arkivet2fs-X.Y.Z && cd ~/Downloads/arkivet2fs-X.Y.Z
+    gh release download vX.Y.Z --repo Dude4Linux/arkivet2fs   # or save the four files here
+    sh ~/arkivet2fs/tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip
+
+The script takes the key from its clone (`keys/release.pub`); a copy of the script
+elsewhere needs the key's path after the package. It prints the key's fingerprint, which
+must be the one above, and two lines starting with `OK:`. A line starting with `BAD:`
+means the file isn't the one that was signed: don't install it.
+
+GitHub also records where each package was built:
+`gh attestation verify arkivet2fs-X.Y.Z-chromium.zip --repo Dude4Linux/arkivet2fs`
+says whether it came from this repository's release workflow.
 
 ## Use
 
