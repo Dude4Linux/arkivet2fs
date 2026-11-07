@@ -106,7 +106,8 @@ function findSelf(people, fs, trusted) {
 
 // Suggested pairs {key: pid}: the FS person, and the relatives the record names (by
 // relativesInRecord() from the FS person's entry) with an FS relative's given name
-// (children also by birth year ±2). A single father, mother or spouse in a church
+// (children by the best fitting given name and birth year ±2, and the sex where both
+// tell it: givenFit(), childSex()). A single father, mother or spouse in a church
 // book with another name isn't paired (a second wife, a namesake), but named in the
 // hint, since DA's transcriptions of names can be far off; in a census, where the
 // head and spouse could be either parent, only names count.
@@ -148,16 +149,36 @@ function suggestPairs(record, people, self, fs) {
     if (match) pair(match, s, t('spouse, same given name'));
   }
   if (spouses.length === 1 && !census && found.spouse.length === 1) other(back(found.spouse[0]), spouses[0], 'spouse');
+  // Each record child with the FS child that fits best: the first given name before a
+  // later one (Johan Peder is FS's Johan Peder, not his sister Marte Johanne), then
+  // the year; never one of the other sex
   const children = (fs.families || []).flatMap((f) => f.children || []).filter((c) => c.pid);
   for (const child of found.child) {
     const year = birthYearOf(child, record);
-    const tree = children.find((c) => {
+    const sex = childSex(back(child), record);
+    let best = null;
+    for (const c of children) {
+      if (used.has(c.pid) || (sex && c.gender && c.gender !== sex)) continue;
       const born = Number(((c.lifespan || '').match(/^\d{4}/) || [])[0]) || null;
-      return hasGivenName(child, givenOf(c.name)) && (!born || !year || Math.abs(born - year) <= 2);
-    });
-    if (tree) pair(back(child), tree, t(year ? 'child, same given name and birth year' : 'child, same given name'));
+      const fit = givenFit(child, givenOf(c.name));
+      if (!fit || (born && year && Math.abs(born - year) > 2)) continue;
+      const off = born && year ? Math.abs(born - year) : 3;
+      if (!best || fit > best.fit || (fit === best.fit && off < best.off)) best = { c, fit, off };
+    }
+    if (best) pair(back(child), best.c, t(year ? 'child, same given name and birth year' : 'child, same given name'));
   }
   return { pairs, why };
+}
+
+// A record child's sex: the gender field when the record's fields are the child's own
+// (the principal's page of a baptism), else the patronymic or family position
+function childSex(person, record) {
+  const fields = record.fields || {};
+  if (person && person.primary && /^(barn|child)$/i.test(fields.role || '')) {
+    if (/^m/i.test(fields.gender || '')) return 'Male';
+    if (/^(k|f)/i.test(fields.gender || '')) return 'Female';
+  }
+  return person ? recordSex(person) : '';
 }
 
 // --- A census residence ---------------------------------------------------------------

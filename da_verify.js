@@ -96,6 +96,18 @@ function hasGivenName(person, given) {
   return names.length > 0 && words.some((w) => names.some((n) => nameMatch(w, n)));
 }
 
+// How well a record person's given names fit an FS relative's: 2 the first given
+// names agree, 1 another one does (Johan for FS's Marte Johanne: skeleton() makes
+// Johan and Johanne one name), 0 none. Among a couple's children the first given name
+// tells them apart, so a child is paired with the FS child that fits best.
+function givenFit(person, given) {
+  const words = (person.name || '').replace(/[%*,]/g, ' ').split(/\s+/).filter(Boolean);
+  const names = (given || '').split(/\s+/).filter(Boolean);
+  if (!words.length || !names.length) return 0;
+  if (nameMatch(words[0], names[0])) return 2;
+  return words.some((w) => names.some((n) => nameMatch(w, n))) ? 1 : 0;
+}
+
 // Does a record person's first given name come close to one of the FS relative's
 // (Astri for Astrid: nameClose() in da_match.js)?
 function hasCloseName(person, given) {
@@ -233,19 +245,29 @@ function checkRecord(record, P) {
   }
 
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
-  let children = 0;
-  for (const child of P.children) {
-    if (children >= 3) break;
-    const match = inRecord.child.find((p) => {
-      if (child.given && !hasGivenName(p, child.given)) return false;
+  // Each record child counts once, for the FS child that fits it best (the first given
+  // name, then the year), so a baptism of Johan isn't also FS's Marte Johanne's
+  const fits = [];
+  P.children.forEach((child, i) => {
+    if (!child.given && !child.year) return;
+    for (const p of inRecord.child) {
+      const fit = child.given ? givenFit(p, child.given) : 0.5;
       const year = birthYearOf(p, record);
-      return !child.year || !year || Math.abs(year - child.year) <= 2;
-    });
-    if (match && (child.given || child.year)) {
-      add(2, t('{relation} {name} in the record', { relation: t('child'),
-        name: match.name + (birthYearOf(match, record) ? ' (' + t('b.') + ' ' + birthYearOf(match, record) + ')' : '') }), true, 'child');
-      children++;
+      if (!fit || (child.year && year && Math.abs(year - child.year) > 2)) continue;
+      fits.push({ i, p, fit, off: child.year && year ? Math.abs(year - child.year) : 3 });
     }
+  });
+  fits.sort((a, b) => b.fit - a.fit || a.off - b.off || a.i - b.i);
+  const matched = [];
+  for (const f of fits) {
+    if (!matched.some((m) => m.i === f.i || m.p === f.p)) matched.push(f);
+  }
+  matched.sort((a, b) => a.i - b.i);
+  let children = 0;
+  for (const { p: match } of matched.slice(0, 3)) {
+    add(2, t('{relation} {name} in the record', { relation: t('child'),
+      name: match.name + (birthYearOf(match, record) ? ' (' + t('b.') + ' ' + birthYearOf(match, record) + ')' : '') }), true, 'child');
+    children++;
   }
   // A child's baptism naming another child than the FS child born that year: that
   // year's ✓ in the hit's score (scoreHit) was only the year

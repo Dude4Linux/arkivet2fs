@@ -92,6 +92,19 @@ test("checkRecord(): a mother's patronymic abbreviated or spelled otherwise is s
   assert.ok(mother('Astri Olsdat.').points < 0, 'another father');
 });
 
+test("checkRecord(): a baptism's child counts once, for the FS child whose first given name it has", () => {
+  const r = open(record('baptism-1846'), 1);
+  r.people[0].name = 'Johan Peder';
+  const P = w.profile(criteria({
+    name: [{ givenName: 'Halvor', surname: 'Larsen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1808', 'birthLikeDate.to': '1812' }],
+    child: [{ childGivenName: 'Marte Johanne', childSurname: 'Halvorsdatter', childBirthYear: '1845' },
+      { childGivenName: 'Johan Peder', childSurname: 'Halvorsen', childBirthYear: '1846' }]
+  }));
+  const kids = plain(w.checkRecord(r, P)).filter((x) => /^child /.test(x.text));
+  assert.deepEqual(kids.map((x) => x.text), ['child Johan Peder (b. 1846) in the record']);
+});
+
 test("patronymicDiffers(): Johannesdat. for Johansdr, Gudbrandsen for Gulbrandsen; not Moen", () => {
   assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdat.' }, 'Johansdr'), false);
   assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdottr' }, 'Johansdr'), false);

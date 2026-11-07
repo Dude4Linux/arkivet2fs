@@ -4,6 +4,15 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.3.2 - 2026-11-07
+
+- On the linker page, a child's baptism is paired with the right child of the family.
+  A boy baptized Johan Peder was paired with his elder sister Marte Johanne, because
+  Johan and Johanne count as spellings of one name and she came first. Now the child
+  whose first given name the record has comes first, and a child FamilySearch has as
+  the other sex isn't paired at all. The search page's record check counts each
+  baptized child once, for that same child.
+
 ## 1.3.1 - 2026-11-07
 
 - A patronymic the church book abbreviates, such as Johannesdat., Larsdatt. or

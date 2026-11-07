@@ -40,6 +40,38 @@ test('suggestPairs(): a baptism; a parent with another given name is only named'
   assert.match(why[astri.key], /^FamilySearch mother is Astrid Larsdatter, another name/);
 });
 
+// The father's children's baptisms: the record's child (Johan, a boy) is FS's Johan
+// Peder, not his elder sister Marte Johanne, whose second name has Johan's consonants
+const HALVOR_FAMILY = (children) => ({
+  pid: 'TEST-HAL', name: 'Halvor Larsen', gender: 'Male', birth: { date: '1810' }, families: [{
+    spouse: { pid: 'TEST-AST', name: 'Astri Larsdatter', lifespan: '1815-1890' }, children
+  }]
+});
+const MARTE = { pid: 'TEST-MAR', name: 'Marte Johanne Halvorsdatter', gender: 'Female', lifespan: '1845-1920' };
+const JOHAN = { pid: 'TEST-JOH', name: 'Johan Peder Halvorsen', gender: 'Male', lifespan: '1846-1925' };
+function fatherView(children, gender = 'm') {
+  const r = record('baptism-1846');
+  r.people[0].name = 'Johan Peder';
+  r.fields = { ...r.fields, 'given name': 'Johan Peder', gender };
+  const people = w.recordPeople(r);
+  people.forEach((p) => { p.current = p.name === 'Halvor Larsen'; });
+  const fs = HALVOR_FAMILY(children);
+  return { people, ...w.suggestPairs(r, people, w.findSelf(people, fs, true), fs) };
+}
+
+test("suggestPairs(): a child is the FS child whose first given name it has, not a sibling's second", () => {
+  const { people, pairs } = fatherView([MARTE, JOHAN]);
+  assert.equal(byName(people, pairs)['Johan Peder'], 'TEST-JOH');
+});
+
+test('suggestPairs(): no FS child of the other sex, even with a given name in common', () => {
+  const { people, pairs } = fatherView([MARTE]);
+  assert.equal(byName(people, pairs)['Johan Peder'], undefined);
+  assert.equal(w.givenFit({ name: 'Johan Peder' }, 'Marte Johanne'), 1);
+  assert.equal(w.givenFit({ name: 'Johan Peder' }, 'Johan Peder'), 2);
+  assert.equal(w.givenFit({ name: 'Johan Peder' }, 'Lars'), 0);
+});
+
 test('suggestResidencePairs(): the household and the mother in the other one', () => {
   const r = record('census-1900');
   const people = w.recordPeople(r);
