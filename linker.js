@@ -660,7 +660,7 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-const state = { record: null, parallel: null, people: [], fs: null, trees: {}, rows: [], running: false, trusted: false };
+const state = { record: null, parallel: null, people: [], fs: null, trees: {}, rows: [], running: false, trusted: false, fsCheck: null, books: [''] };
 const $ = (id) => document.getElementById(id);
 
 function relationLabel(tree) {
@@ -679,6 +679,7 @@ function personRow(person, family, suggestion, why) {
   const select = el('select', { 'aria-label': t('Tree person for {name}', { name: row.name }) });
   const otherPid = el('input', { type: 'text', class: 'pid', placeholder: t('PID, e.g. XXXX-XXX'), hidden: true, 'aria-label': t('FamilySearch ID') });
   const hint = el('div', { class: 'why muted', text: why || '' });
+  const fsStatus = el('div', { class: 'fs-status', hidden: true });  // attached on FS already?
   // The tree persons to choose from, and the suggested one
   const fill = (suggested) => {
     select.replaceChildren(el('option', { value: '', text: t('— don\'t attach —') }),
@@ -702,7 +703,7 @@ function personRow(person, family, suggestion, why) {
   const reason = el('textarea', { rows: '2', class: 'reason', 'aria-label': t('Reason for attaching') });
   reason.value = defaultReason(state.record, person);
 
-  const attachCell = el('div', { class: 'attach' }, [select, otherPid, hint]);
+  const attachCell = el('div', { class: 'attach' }, [select, otherPid, hint, fsStatus]);
   const detail = el('div', { class: 'attach-detail' }, [el('div', { class: 'label muted', text: t('Tags') }), tags,
     el('div', { class: 'label muted', text: t('Reason') }), reason]);
   const node = el('li', { class: 'person' + (person.current ? ' anchor' : '') }, [
@@ -715,10 +716,19 @@ function personRow(person, family, suggestion, why) {
   row.reason = () => reason.value.trim();
   row.tree = () => family.find((tree) => tree.pid === select.value) || null;
   row.label = () => nameInput.value.trim() || role;
+  row.showCheck = () => {
+    const check = rowCheckText(state.fsCheck, row.pid());
+    fsStatus.hidden = !check;
+    if (check) { fsStatus.textContent = check.text; fsStatus.className = 'fs-status ' + check.kind; }
+    // Highlighted as FS's Source Linker does: attached to every source here, or to some
+    node.classList.toggle('linked', !!check && check.linked === 'all');
+    node.classList.toggle('partly', !!check && check.linked === 'some');
+  };
 
   const refresh = () => {
     otherPid.hidden = select.value !== 'other';
     node.classList.toggle('off', !row.pid() && select.value !== 'other');
+    row.showCheck();
     detail.hidden = !row.pid() && select.value !== 'other';
     suggest.replaceChildren(...surnameSuggestions({ ...person, name: nameInput.value }, state.people, state.record, row.tree()).map((s) =>
       el('button', { type: 'button', class: 'chip', title: t('Use {what}', { what: s.label }) }, [document.createTextNode(s.name), el('span', { class: 'muted', text: ' ' + s.label })])));
@@ -730,9 +740,9 @@ function personRow(person, family, suggestion, why) {
       });
     }
   };
-  select.addEventListener('change', () => { touched = true; hint.textContent = ''; refresh(); });
-  otherPid.addEventListener('input', () => { touched = true; refresh(); });
-  nameInput.addEventListener('change', () => { rename(row, nameInput.value.trim()); refresh(); });
+  select.addEventListener('change', () => { touched = true; hint.textContent = ''; refresh(); showFsCheck(); });
+  otherPid.addEventListener('input', () => { touched = true; refresh(); showFsCheck(); });
+  nameInput.addEventListener('change', () => { rename(row, nameInput.value.trim()); refresh(); showFsCheck(); });
   // New tree persons to choose from (relatives' families read from FS), and a new
   // suggestion unless the user has chosen
   row.update = (newFamily, newSuggestion, newWhy) => {
@@ -828,6 +838,7 @@ async function showPeople() {
   });
   list.replaceChildren(...items);
   showHouseholds();
+  showFsCheck();
   const family = treeFamily(state.fs);
   $('fs-name').textContent = state.fs ? state.fs.name + (family.length > 1 ? ' ' + t(family.length === 2 ? 'and {n} relative' : 'and {n} relatives', { n: family.length - 1 }) : '')
     : pid ? t('family not known here (open the search from this person\'s FamilySearch page to have it)') : '';
@@ -917,6 +928,7 @@ async function readResidence(need, generation) {
     const pool = treePool(state.fs, state.trees);
     for (const row of state.rows) row.update(pool, next.pairs[row.person.key], next.why[row.person.key]);
     showHouseholds();
+    showFsCheck();
     need = next.need.filter((p) => !state.trees[p]);
   }
   const shown = state.rows.filter((r) => state.related.has(r.person.household));
@@ -957,15 +969,14 @@ async function readTreePersons(pids) {
   if (!toRead.length) return out;
   let tab = null;
   try {
-    const here = await chrome.tabs.getCurrent();
-    tab = await chrome.tabs.create({ url: 'about:blank', active: false, index: here ? here.index + 1 : undefined });
+    tab = await hiddenTab();
     for (const pid of toRead) {
       let answer = await readInTab(tab.id, pid);
-      // A background tab FS hasn't drawn: show it for a moment
+      // A hidden tab FS hasn't drawn: show it for a moment
       if (!answer.person) {
-        await chrome.tabs.update(tab.id, { active: true });
+        await tab.show();
         answer = await readInTab(tab.id, pid);
-        if (here) await chrome.tabs.update(here.id, { active: true });
+        await tab.back();
       }
       if (answer.person && answer.person.pid === pid) {
         out[pid] = answer.person;
@@ -977,7 +988,7 @@ async function readTreePersons(pids) {
   } catch (e) {
     console.warn('arkivet2fs: reading FS persons', e);
   } finally {
-    if (tab) chrome.tabs.remove(tab.id).catch(() => {});
+    if (tab) tab.close();
   }
   return out;
 }
@@ -988,9 +999,11 @@ async function sessionTree(pid) {
 
 // Open the person's details page in the tab and ask fs_person.js for the person
 async function readInTab(tabId, pid) {
-  const loaded = waitForLoad(tabId);
-  await chrome.tabs.update(tabId, { url: personDetailsUrl(pid) });
-  await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 30000))]);
+  try {
+    await Promise.race([navigate(tabId, personDetailsUrl(pid), false), new Promise((resolve) => setTimeout(resolve, 30000))]);
+  } catch (e) {
+    return { error: e.message || String(e) };
+  }
   for (let tries = 0; tries < 10; tries++) {
     try {
       const answer = await Promise.race([
@@ -1153,8 +1166,9 @@ function log(text, kind = '') {
 }
 
 function waitForLoad(tabId) {
-  return new Promise((resolve) => {
-    const listener = (id, info) => {
+  let listener;
+  const loaded = new Promise((resolve) => {
+    listener = (id, info) => {
       if (id === tabId && info.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(listener);
         resolve();
@@ -1162,6 +1176,8 @@ function waitForLoad(tabId) {
     };
     chrome.tabs.onUpdated.addListener(listener);
   });
+  loaded.cancel = () => chrome.tabs.onUpdated.removeListener(listener);
+  return loaded;
 }
 
 async function openTab(url) {
@@ -1171,11 +1187,28 @@ async function openTab(url) {
   return tab.id;
 }
 
-async function navigate(tabId, url) {
-  const loaded = waitForLoad(tabId);
-  await chrome.tabs.update(tabId, { url, active: true });
-  await loaded;
+// A tab to a page, and its load. Chrome sometimes refuses to start the navigation
+// ("Navigation rejected.", nothing more said, while FS's page is busy), so it's tried
+// again a moment later. `active` brings the tab forward in its window (run()'s tab: a
+// tab in the background has its timers throttled); a hidden tab is alone in its window.
+async function navigate(tabId, url, active = true) {
+  for (let attempt = 1; ; attempt++) {
+    const loaded = waitForLoad(tabId);
+    try {
+      await chrome.tabs.update(tabId, active ? { url, active: true } : { url });
+    } catch (e) {
+      loaded.cancel();
+      if (attempt >= NAVIGATE_TRIES) throw e;
+      console.warn('arkivet2fs: navigating to ' + url + ' failed (' + (e.message || e) + '); trying again');
+      await sleep(attempt * 1000);
+      continue;
+    }
+    await loaded;
+    return;
+  }
 }
+
+const NAVIGATE_TRIES = 3;
 
 // One step in the FS tab (fs_attach.js), answered within two minutes; only while the
 // tab is still on FamilySearch (the user may have taken it elsewhere)
@@ -1242,6 +1275,7 @@ function fillParallel(main, parallel) {
   $('source-heading').textContent = t('Source: {book}', { book: mainName });
   $('parallel-heading').textContent = t('Also in {book}', { book: otherName });
   showComparison(rows, mainName, otherName);
+  state.books = [mainName, otherName];
   $('parallel').hidden = false;
 }
 
@@ -1270,6 +1304,189 @@ function fsMessage(text) {
   return tMessage(text);
 }
 
+// --- What FS already has ------------------------------------------------------------
+// As FS's own Source Linker flags a record already attached: the SourceBox is searched
+// for the source's title (and the other church book's), in all folders, and each one
+// found is read on its Attached To page (fs_attach.js findSource, attachedTo). In
+// state.fsCheck: {sources: [{title, book, id, ids, persons: [{pid, name}]}]} (`id` null:
+// not in the SourceBox; `ids`: all of that title), {checking: true}, or {error}. The
+// source's note says so, each row whether its tree person has the source already, and
+// "Create source and attach" uses the source and attaches only those who lack it.
+
+const attachedToUrl = (id) => 'https://www.familysearch.org/en/tree/sources/attachedTo/' + encodeURIComponent(id);
+
+// The paired PIDs (valid ones, once each)
+function pairedPids(rows) {
+  return [...new Set((rows || []).map((r) => (r.pid() || '').toUpperCase()).filter((p) => PID_PATTERN.test(p)))];
+}
+
+// Who a source found in the SourceBox is attached to, against the people paired here
+function attachedText(source, paired) {
+  const on = new Set(source.persons.map((p) => p.pid.toUpperCase()));
+  const n = paired.filter((pid) => on.has(pid)).length, m = paired.length;
+  const names = (persons) => persons.map((p) => (p.name ? p.name + ' ' : '') + '(' + p.pid + ')').join(', ');
+  const parts = [];
+  if (!source.persons.length) parts.push(t('It is not attached to anyone yet.'));
+  else if (!m) parts.push(t('It is attached to {names}.', { names: names(source.persons) }));
+  else {
+    if (n === m) parts.push(t(m === 1 ? 'It is already attached to the person paired here.' : 'It is already attached to all {m} people paired here.', { m }));
+    else if (!n) parts.push(t(m === 1 ? 'It is not attached to the person paired here yet.' : 'It is not attached to the {m} people paired here yet.', { m }));
+    else parts.push(t('It is attached to {n} of the {m} people paired here; the others will be attached.', { n, m }));
+    const others = source.persons.filter((p) => !paired.includes(p.pid.toUpperCase()));
+    if (others.length) parts.push(t('Also attached to {names}, not paired here.', { names: names(others) }));
+  }
+  if (source.ids.length > 1) parts.push(t('The SourceBox has {n} sources with this title; the first is used.', { n: source.ids.length }));
+  return parts.join(' ');
+}
+
+// A row's tree person and the sources found: {text, kind, linked} or null (nothing to say);
+// linked is 'all' (attached to every source here), 'some' (to one of two, or one of two
+// not in the SourceBox yet) or 'none'
+function rowCheckText(check, pid) {
+  pid = (pid || '').toUpperCase();
+  if (!check || !check.sources || !PID_PATTERN.test(pid)) return null;
+  const found = check.sources.filter((s) => s.id);
+  if (!found.length) return null;
+  const on = found.map((s) => s.persons.some((p) => p.pid.toUpperCase() === pid));
+  if (check.sources.length === 1) {
+    return on[0] ? { text: t('Already has this source on FamilySearch'), kind: 'ok', linked: 'all' }
+      : { text: t('Not attached to this source yet'), kind: 'muted', linked: 'none' };
+  }
+  if (found.length === check.sources.length && on.every(Boolean)) return { text: t('Already has both sources on FamilySearch'), kind: 'ok', linked: 'all' };
+  return { text: found.map((s, i) => t(on[i] ? '{book}: already attached' : '{book}: not attached yet', { book: s.book })).join('; '),
+    kind: on.some(Boolean) ? 'ok' : 'muted', linked: on.some(Boolean) ? 'some' : 'none' };
+}
+
+// A translated text with a link in place of one of its values
+function withLink(text, params, key, href) {
+  const [before, after] = t(text, { ...params, [key]: '\u0000' }).split('\u0000');
+  return [document.createTextNode(before), el('a', { href, target: '_blank', rel: 'noopener', text: params[key] }), document.createTextNode(after || '')];
+}
+
+// What the check found, on each source's box and on the rows: a box whose source is in
+// the SourceBox is tinted (as the rows of people who have it), with a link to the
+// source's Attached To page whose tooltip tells who has it; a note only while checking
+// again, when the check failed, or when the title has changed since
+function showFsCheck() {
+  const check = state.fsCheck;
+  const paired = pairedPids(state.rows);
+  const known = [];  // per source: whether it's in the SourceBox
+  [['source', 'fs-check', 'fs-link', 'f-title'], ['parallel', 'fs-check-g', 'fs-link-g', 'g-title']].forEach(([boxId, noteId, linkId, titleId], i) => {
+    const box = $(boxId), note = $(noteId), link = $(linkId);
+    const source = check && check.sources && check.sources[i];
+    const changed = !!source && $(titleId).value.trim() !== source.title;
+    const found = !!source && !!source.id && !changed;
+    if (i === 0 || state.parallel) known.push(found);
+    box.classList.toggle('in-sourcebox', found);
+    link.hidden = !found;
+    if (found) {
+      link.href = fsPageUrl(attachedToUrl(source.id));
+      link.title = t('Already in your SourceBox ({id}).', { id: source.id }) + ' ' + attachedText(source, paired);
+    }
+    let text = null, kind = 'muted';
+    if (check && check.checking && !$('linker').hidden) text = t('Checking your SourceBox on FamilySearch…');
+    else if (check && check.error && i === 0) { text = t('Not checked on FamilySearch: {error}', { error: check.error }); kind = 'bad'; }
+    else if (changed) { text = t('The title has changed since the SourceBox was checked.'); kind = 'near'; }
+    note.hidden = !text;
+    if (!text) return;
+    note.className = 'fs-check small ' + kind;
+    const again = el('button', { type: 'button', class: 'link small', text: t('Check the SourceBox again') });
+    again.addEventListener('click', () => checkOnFamilySearch());
+    note.replaceChildren(document.createTextNode(text), ...(check.checking ? [] : [again]));
+  });
+  const [withAttach, only] = actionLabels(known);
+  $('attach').textContent = $('intro-action').textContent = t(withAttach);
+  $('create-only').textContent = t(only);
+  for (const row of state.rows || []) row.showCheck();
+}
+
+// The buttons' words: a source already in the SourceBox is updated, not created
+function actionLabels(known) {
+  if (known.length && known.every(Boolean)) return ['Update source and attach', 'Update source only'];
+  if (known.some(Boolean)) return ['Create or update sources and attach', 'Create or update sources only'];
+  return ['Create source and attach', 'Create source only'];
+}
+
+// A tab out of the user's way, for reading FS (a new tab in the tab strip distracts):
+// alone in an unfocused popup window with the linker window's own position and size.
+// The window manager stacks a window that doesn't take the focus just below the
+// focused one (GNOME's does), so the linker covers it. Not minimized, and not moved off
+// the screen: Chrome doesn't draw a minimized window, or a tab in the background, so
+// FS's SourceBox list never loads there, and GNOME pulls a window back on screen. A
+// covered window is still drawn on Linux; where Chrome stops drawing it (Windows and
+// macOS track covered windows), show() raises it for the step tried again, back()
+// raises the linker again; close() removes it.
+async function hiddenTab() {
+  const here = await chrome.tabs.getCurrent();
+  const options = { url: 'about:blank', type: 'popup', focused: false };
+  let win;
+  try {
+    const own = here && await chrome.windows.get(here.windowId);
+    win = await chrome.windows.create(own && own.state === 'normal'
+      ? { ...options, left: own.left, top: own.top, width: own.width, height: own.height } : options);
+  } catch (e) {
+    win = await chrome.windows.create(options);  // bounds refused: where Chrome puts it
+  }
+  const tab = (win.tabs && win.tabs[0]) || (await chrome.tabs.query({ windowId: win.id }))[0];
+  return {
+    id: tab.id,
+    show: () => { console.info('arkivet2fs: FamilySearch is read in a window on top for a moment'); return chrome.windows.update(win.id, { focused: true }).catch(() => {}); },
+    back: async () => { if (here) await chrome.windows.update(here.windowId, { focused: true }).catch(() => {}); },
+    close: () => chrome.windows.remove(win.id).catch(() => {})
+  };
+}
+
+// The sources of these titles in the SourceBox, and who each is attached to (in the
+// tab, which goes to each page in turn)
+async function lookUpSources(tabId, titles, active = false) {
+  const out = [];
+  for (const [i, title] of titles.entries()) {
+    await navigate(tabId, SOURCEBOX_URL, active);
+    out.push({ ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' });
+  }
+  return out;
+}
+
+async function lookUpSource(tabId, title, active = true) {
+  const found = await step(tabId, 'findSource', { title });
+  if (!found.ok) throw new Error(found.error);
+  const ids = found.sources.map((s) => s.id);
+  if (!ids.length) return { title, id: null, ids, persons: [] };
+  await navigate(tabId, attachedToUrl(ids[0]), active);
+  const read = await step(tabId, 'attachedTo', { sourceId: ids[0] });
+  if (!read.ok) throw new Error(read.error);
+  return { title, id: ids[0], ids, persons: read.persons };
+}
+
+// The check before anything is saved: in a hidden tab (shown for a moment if FS didn't
+// draw it there), closed after
+async function checkOnFamilySearch() {
+  if (state.running) return;
+  const titles = [$('f-title').value.trim()];
+  if (state.parallel) titles.push($('g-title').value.trim());
+  if (!titles.every(Boolean)) return;
+  const generation = state.checkGeneration = (state.checkGeneration || 0) + 1;
+  state.fsCheck = { checking: true };
+  showFsCheck();
+  let result, tab = null;
+  try {
+    tab = await hiddenTab();
+    try {
+      result = { sources: await lookUpSources(tab.id, titles) };
+    } catch (e) {
+      await tab.show();
+      try { result = { sources: await lookUpSources(tab.id, titles) }; } finally { await tab.back(); }
+    }
+  } catch (e) {
+    result = { error: e.message || String(e) };
+  } finally {
+    if (tab) tab.close();
+  }
+  if (generation !== state.checkGeneration) return;
+  state.fsCheck = result;
+  showFsCheck();
+}
+
 async function run(attach) {
   if (state.running) return;
   let plan;
@@ -1286,19 +1503,50 @@ async function run(attach) {
     if (plan.parallel) {
       sources.push({ source: plan.parallel, pairs: plan.pairs.map((p) => ({ ...p, tags: [], residence: false })), book: $('parallel-heading').textContent });
     }
+    const checked = [];
     for (const [i, { source, pairs, book }] of sources.entries()) {
       if (i > 0) await navigate(tabId, SOURCEBOX_URL);
       if (book) log(book);
-      const created = await step(tabId, 'createSource', source);
-      if (!created.ok) throw new Error(created.error);
-      log(created.existing ? t('The SourceBox already has a source with this title; using it ({id}).', { id: created.sourceId })
-        : t('Source created ({id}).', { id: created.sourceId }) +
-          (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');
+      // The source as the SourceBox has it, in any folder, and who has it already
+      let known;
+      try {
+        known = await lookUpSource(tabId, source.title);
+      } catch (e) {
+        log(t('The SourceBox could not be searched for the title: {error}', { error: e.message || String(e) }), 'near');
+        known = { id: null, ids: [], persons: [] };
+      }
+      await navigate(tabId, SOURCEBOX_URL);
+      let sourceId = known.id;
+      if (sourceId) {
+        log(t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId }) +
+          (known.ids.length > 1 ? ' ' + t('The SourceBox has {n} sources with this title; the first is used.', { n: known.ids.length }) : ''), 'ok');
+        // Written over with the fields as reviewed here
+        const edited = await step(tabId, 'editSource', { sourceId, source, reason: t('Updated from the record on Digitalarkivet.') });
+        if (!edited.ok) throw new Error(t('The source could not be updated: {error}', { error: edited.error }));
+        log(edited.changed.length ? t('Source updated: {fields}.', { fields: edited.changed.map((f) => t(f)).join(', ') })
+          : t('The source on FamilySearch already has these fields.'), 'ok');
+      } else {
+        const created = await step(tabId, 'createSource', source);
+        if (!created.ok) throw new Error(created.error);
+        sourceId = created.sourceId;
+        log(created.existing ? t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId })
+          : t('Source created ({id}).', { id: sourceId }) +
+            (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');
+      }
+      const has = new Set(known.persons.map((p) => p.pid.toUpperCase()));
+      const persons = [...known.persons];
+      checked.push({ title: source.title, book: state.books[i] || '', id: sourceId, ids: known.ids.length ? known.ids : [sourceId], persons });
       const attached = [];
       for (const pair of pairs) {
-        const result = await step(tabId, 'attach', { sourceId: created.sourceId, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence });
+        // Partly attached before: only those who lack it, and their tags stay as they are
+        if (has.has(pair.pid.toUpperCase())) {
+          log(t('{name} ({pid}) already has this source on FamilySearch; left as it is.', { name: pair.label, pid: pair.pid }), 'ok');
+          continue;
+        }
+        const result = await step(tabId, 'attach', { sourceId, title: source.title, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence });
         if (!result.ok) { log(t('Not attached to {name} ({pid}): {error}', { name: pair.label, pid: pair.pid, error: result.error }), 'bad'); continue; }
         log(t('Attached to {name} ({pid}).', { name: pair.label, pid: pair.pid }), 'ok');
+        persons.push({ pid: pair.pid, name: pair.label });
         // Tagged in FS's own dialog after attaching, or later on the Sources tab
         if (result.tagged) { if (pair.tags.length || pair.residence) logTags(pair, result.tagged); }
         else attached.push(pair);
@@ -1306,11 +1554,15 @@ async function run(attach) {
       for (const pair of attached) {
         if (!pair.tags.length && !pair.residence) continue;
         await navigate(tabId, personSourcesUrl(pair.pid));
-        const result = await step(tabId, 'tag', { sourceId: created.sourceId, title: source.title, tags: pair.tags, residence: pair.residence });
+        const result = await step(tabId, 'tag', { sourceId, title: source.title, tags: pair.tags, residence: pair.residence });
         if (result.ok) logTags(pair, result);
         else log(t('Tags for {name} not set: {error}', { name: pair.label, error: result.error }), 'bad');
       }
     }
+    // What FS has now, for the notes and rows
+    state.fsCheck = { sources: checked };
+    state.checkGeneration = (state.checkGeneration || 0) + 1;
+    showFsCheck();
     if (!attach) log(t(sources.length > 1 ? 'The sources are in your SourceBox; attach them there when you like.' : 'The source is in your SourceBox; attach it there when you like.'));
     log(t('Done.'), 'ok');
   } catch (e) {
@@ -1330,6 +1582,7 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const status = $('status');
   try {
+    if (params.get('rec')) status.textContent = t('Reading the record on DigitalArkivet…');
     let loaded = params.get('draft') ? await loadDraft(params.get('draft')) : params.get('rec') ? await loadFromDA(params.get('rec')) : null;
     if (!loaded) throw new Error(t('No record given. Open the linker from a search hit, or with the extension icon on a DA record.'));
     // The same entry in the parish's other church book (a search hit's `also`):
@@ -1337,6 +1590,7 @@ async function main() {
     let parallel = null;
     if (params.get('rec') && params.get('also')) {
       try {
+        status.textContent = t('Reading the entry in the other church book…');
         const both = await loadParallel(loaded, params.get('also'));
         loaded = both.main;
         parallel = both.parallel;
@@ -1363,7 +1617,11 @@ async function main() {
       if (last && findSelf(state.people, last, false)) pid = last.pid;
     }
     $('fs-pid').value = pid;
+    status.textContent = t('Pairing the people with the FamilySearch family…');
     await setPerson(pid);
+    // Shown when the SourceBox has told what FS has already
+    status.textContent = t('Checking your SourceBox on FamilySearch…');
+    await checkOnFamilySearch();
     status.hidden = true;
     $('linker').hidden = false;
   } catch (e) {
@@ -1379,6 +1637,7 @@ if (typeof chrome !== 'undefined' && chrome.storage) {
   });
   $('attach').addEventListener('click', () => run(true));
   $('create-only').addEventListener('click', () => run(false));
+  for (const id of ['f-title', 'g-title']) $(id).addEventListener('change', () => showFsCheck());
   $('other-households').addEventListener('click', () => { state.showAll = !state.showAll; showHouseholds(); });
   localizePage();
   document.querySelector('.topbar').append(languageMenu());

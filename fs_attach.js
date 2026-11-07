@@ -1,7 +1,13 @@
 // The DA Linker's hands on FamilySearch (linker.js injects this into an FS tab and
 // sends one step at a time; each answers {ok, ...} or {ok: false, error}):
+//   findSource   — in the SourceBox: search all folders for the title, and give the
+//                  sources of exactly that title (reads only)
+//   attachedTo   — on a source's Attached To page: the persons it is attached to
+//                  (reads only)
 //   createSource — in the SourceBox: Create Source, fill the form, Save, and find the
 //                  new source's row (its ID, from data-testid="row-<ID>-title")
+//   editSource   — in the SourceBox: the source's Edit, write the linker's fields over
+//                  those that differ, a change reason, Save (Cancel when none differ)
 //   attach       — in the SourceBox: the row's Attach, "By ID" with the PID, the
 //                  reason, Attach
 //   tag          — on the person's Sources tab: open the source's row, Add Tags, add
@@ -54,6 +60,65 @@ if (!window.__arkivet2fsAttach) {
     }
   }
 
+  // The SourceBox's search (all folders; Home shows only its newest sources): search
+  // for the text and give the rows it shows. The list empties while it loads, then
+  // shows the hits or "No sources found."
+  async function searchSourceBox(text) {
+    const field = await waitFor(() => {
+      const f = byTestId('source-box-filter-field');
+      return f && (f.matches('input') ? f : f.querySelector('input'));
+    }, 'the SourceBox search');
+    const before = sourceRows().map((r) => r.id).join();
+    setValue(field, text);
+    await sleep(200);
+    (await waitFor(() => byTestId('source-box-search-button'), 'the SourceBox search')).click();
+    const none = () => /No sources found/i.test(document.body.textContent);
+    const done = () => {
+      const rows = sourceRows();
+      return (rows.length && rows.map((r) => r.id).join() !== before) || (!rows.length && none());
+    };
+    try {
+      await waitFor(done, 'the SourceBox search', 15000);
+      // Still so a moment later: the list didn't only empty to load
+      await sleep(700);
+      if (!done()) await waitFor(done, 'the SourceBox search', 10000);
+    } catch (e) {
+      if (!sourceRows().length) throw e;  // else the hits are the rows that were there
+    }
+    return sourceRows();
+  }
+
+  // The sources with this title, wherever they are in the SourceBox: [{id, title}]
+  async function findSource({ title }) {
+    checkSourceBox();
+    const wanted = clean(title);
+    if (!wanted) throw new Error('The source needs a title.');
+    const rows = await searchSourceBox(wanted);
+    return { ok: true, sources: rows.filter((r) => r.title === wanted) };
+  }
+
+  // Who the source is attached to, from its Attached To page: {title, persons: [{pid,
+  // name, lifespan}]}. The persons come after the heading; a source attached to no one
+  // shows none.
+  async function attachedTo({ sourceId }) {
+    if (!/\/sources\/attachedto\//i.test(location.pathname)) {
+      throw new Error('FamilySearch did not open the source\'s Attached To page. Please sign in to FamilySearch and try again.');
+    }
+    const heading = await waitFor(() => byTestId('attach-to-title'), 'the source\'s Attached To page', 30000);
+    const persons = () => [...document.querySelectorAll('[data-testid^="attach-to-"][data-testid$="-person"]')];
+    try { await waitFor(() => persons().length, 'the attached persons', 5000); } catch (e) { /* attached to no one */ }
+    await sleep(500);
+    return {
+      ok: true,
+      sourceId,
+      title: clean(heading.textContent),
+      persons: persons().map((node) => {
+        const pid = clean(byTestId('pid', node)?.textContent) || node.getAttribute('data-testid').replace(/^attach-to-/, '').replace(/-person$/, '');
+        return { pid: pid.toUpperCase(), name: clean(byTestId('fullName', node)?.textContent), lifespan: clean(byTestId('lifespan', node)?.textContent) };
+      }).filter((p) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(p.pid))
+    };
+  }
+
   const FIELDS = {
     date: 'input[data-testid="source-date-field"]',
     title: 'input[data-testid="source-title-field"]',
@@ -62,8 +127,8 @@ if (!window.__arkivet2fsAttach) {
     notes: 'textarea[data-testid="source-notes-field"]'
   };
 
-  // Create the source, or use the one already in the SourceBox with this title (a
-  // second run after a failed attach shouldn't make a copy)
+  // Create the source, or use the one already in the SourceBox with this title (the
+  // linker looks first with findSource; this sees only the rows Home shows)
   async function createSource(source) {
     checkSourceBox();
     const create = await waitFor(() => byTestId('source-box-create-source-button'), 'the Create Source button');
@@ -94,10 +159,60 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true, sourceId: row.id, missing };
   }
 
-  // Attach the source to a person by PID, with a reason
-  async function attach({ sourceId, pid, reason, tags, residence }) {
+  // Edit a source already in the SourceBox: its row's Edit (in the row's menu, clicked
+  // as it is; a source Home doesn't show is searched for by its title), then the same
+  // form as Create Source with a change reason. Only fields that differ are written; a
+  // field the linker has empty keeps what FS has. Nothing differs: Cancel, so the
+  // source's history on FS gets no change.
+  async function editSource({ sourceId, source, reason }) {
     checkSourceBox();
-    const button = await waitFor(() => byTestId('row-' + sourceId + '-attach-button'), 'the source in the SourceBox');
+    const findButton = () => byTestId('row-' + sourceId + '-edit-button');
+    let button;
+    try {
+      button = await waitFor(findButton, 'the source in the SourceBox', 6000);
+    } catch (e) {
+      await searchSourceBox(clean(source.title));
+      button = await waitFor(findButton, 'the source in the SourceBox');
+    }
+    button.click();
+    await waitFor(() => byTestId('source-save-button'), 'the Edit Source form');
+    await sleep(800);
+    const changed = [];
+    const missing = [];
+    for (const [key, selector] of Object.entries(FIELDS)) {
+      const field = document.querySelector(selector);
+      const want = (source[key] || '').trim();
+      if (!field) { if (want) missing.push(key); continue; }
+      if (!want || field.value.replace(/\r\n/g, '\n').trim() === want) continue;
+      setValue(field, source[key]);
+      changed.push(key);
+    }
+    if (!changed.length) {
+      const cancel = byTestId('source-cancel-button');
+      if (cancel) cancel.click();
+      return { ok: true, sourceId, changed, missing };
+    }
+    const why = document.querySelector('textarea[data-testid="source-change-reason-field"]');
+    if (why && reason) setValue(why, reason);
+    await sleep(300);
+    byTestId('source-save-button').click();
+    await waitGone(() => byTestId('source-save-button'), 'the saved source (the form stayed open; is a field invalid?)');
+    return { ok: true, sourceId, changed, missing };
+  }
+
+  // Attach the source to a person by PID, with a reason
+  // (a source Home doesn't show, in a folder or older, is found by its title)
+  async function attach({ sourceId, title, pid, reason, tags, residence }) {
+    checkSourceBox();
+    const findButton = () => byTestId('row-' + sourceId + '-attach-button');
+    let button;
+    try {
+      button = await waitFor(findButton, 'the source in the SourceBox', title ? 6000 : 20000);
+    } catch (e) {
+      if (!title) throw e;
+      await searchSourceBox(clean(title));
+      button = await waitFor(findButton, 'the source in the SourceBox');
+    }
     button.click();
     const tab = await waitFor(() => byTestId('find-options-by-id-tab'), 'the Attach dialog');
     tab.click();
@@ -215,7 +330,7 @@ if (!window.__arkivet2fsAttach) {
     return { changed, notes };
   }
 
-  const STEPS = { createSource, attach, tag };
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const step = request && request.linker && STEPS[request.linker];

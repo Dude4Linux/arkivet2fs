@@ -264,3 +264,233 @@ test('loadParallel(): the ministerialbok\'s entry is the main record, whichever 
   assert.equal(both.parallel.book.book, 'Klokkerbok B-10');
   await assert.rejects(win.loadParallel(opened, 'https://example.org/pd1'), /Not a Digitalarkivet address/);
 });
+
+// --- What FS already has (the SourceBox check) -------------------------------------
+
+const SOURCE = (persons, ids = ['TEST-S01']) => ({ title: 'T', book: '', id: ids[0] || null, ids, persons });
+const pid = (p) => ({ pid: p, name: '' });
+
+test('attachedText(): a source found in the SourceBox, against the people paired here', () => {
+  const paired = ['TEST-LAR', 'TEST-HAL'];
+  assert.equal(w.attachedText(SOURCE([]), paired), 'It is not attached to anyone yet.');
+  assert.equal(w.attachedText(SOURCE([pid('TEST-LAR'), pid('TEST-HAL')]), paired), 'It is already attached to all 2 people paired here.');
+  assert.equal(w.attachedText(SOURCE([pid('TEST-LAR')]), ['TEST-LAR']), 'It is already attached to the person paired here.');
+  // partly attached: the others will be
+  assert.equal(w.attachedText(SOURCE([pid('TEST-LAR')]), paired), 'It is attached to 1 of the 2 people paired here; the others will be attached.');
+  assert.equal(w.attachedText(SOURCE([{ pid: 'TEST-OLA', name: 'Ola Nordmann' }]), paired),
+    'It is not attached to the 2 people paired here yet. Also attached to Ola Nordmann (TEST-OLA), not paired here.');
+  assert.equal(w.attachedText(SOURCE([{ pid: 'TEST-OLA', name: 'Ola Nordmann' }]), []), 'It is attached to Ola Nordmann (TEST-OLA).');
+  assert.match(w.attachedText(SOURCE([], ['TEST-S01', 'TEST-S09']), paired), /The SourceBox has 2 sources with this title; the first is used\.$/);
+});
+
+test('rowCheckText(): whether a row\'s tree person has the source, or each of two', () => {
+  const one = { sources: [SOURCE([pid('TEST-LAR')])] };
+  assert.equal(w.rowCheckText(one, 'test-lar').text, 'Already has this source on FamilySearch');
+  assert.equal(w.rowCheckText(one, 'TEST-HAL').text, 'Not attached to this source yet');
+  assert.equal(w.rowCheckText(one, 'TEST-LAR').linked, 'all');
+  assert.equal(w.rowCheckText(one, 'TEST-HAL').linked, 'none');
+  assert.equal(w.rowCheckText(one, ''), null);
+  assert.equal(w.rowCheckText({ sources: [SOURCE([], [])] }, 'TEST-LAR'), null);  // not in the SourceBox
+  assert.equal(w.rowCheckText({ checking: true }, 'TEST-LAR'), null);
+  const two = { sources: [{ ...SOURCE([pid('TEST-LAR')]), book: 'Ministerialbok A-13' }, { ...SOURCE([], ['TEST-S02']), book: 'Klokkerbok B-10' }] };
+  assert.equal(w.rowCheckText(two, 'TEST-LAR').text, 'Ministerialbok A-13: already attached; Klokkerbok B-10: not attached yet');
+  assert.equal(w.rowCheckText(two, 'TEST-LAR').linked, 'some');
+  assert.equal(w.rowCheckText(two, 'TEST-HAL').linked, 'none');
+  const halfNew = { sources: [two.sources[0], { title: 'T2', book: 'Klokkerbok B-10', id: null, ids: [], persons: [] }] };
+  assert.equal(w.rowCheckText(halfNew, 'TEST-LAR').linked, 'some');  // the second source is still to be made
+  two.sources[1].persons.push(pid('TEST-LAR'));
+  assert.equal(w.rowCheckText(two, 'TEST-LAR').text, 'Already has both sources on FamilySearch');
+  assert.equal(w.rowCheckText(two, 'TEST-LAR').linked, 'all');
+});
+
+// A linker page with the baptism's child and father paired
+function checkedPage(chrome) {
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  win.Element.prototype.scrollIntoView = () => {};  // not in jsdom
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/baptism-1846.html'), fixtureUrl('da/baptism-1846.html'));
+  Object.assign(state, { record: r, people: win.recordPeople(r) });
+  win.fillSource(r);
+  const pairs = { Lars: 'TEST-LAR', 'Halvor Larsen': 'TEST-HAL' };
+  state.rows = state.people.map((p) => win.personRow(p, win.treePool(LARS_1846, {}), pairs[p.name]));
+  win.document.getElementById('people').replaceChildren(...state.rows.map((r) => r.node));
+  return { win, state, $: (id) => win.document.getElementById(id) };
+}
+
+test('showFsCheck(): a source in the SourceBox tints its box, and the rows of people who have it', () => {
+  const { win, state, $ } = checkedPage();
+  const title = $('f-title').value;
+  // checking while the page is held back: no note (the status line tells)
+  state.fsCheck = { checking: true };
+  win.showFsCheck();
+  assert.equal($('fs-check').hidden, true);
+
+  state.fsCheck = { sources: [{ title, book: '', id: 'TEST-S01', ids: ['TEST-S01'], persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] }] };
+  win.showFsCheck();
+  $('linker').hidden = false;  // as main() shows it after the check
+  assert.equal($('attach').textContent, 'Update source and attach');  // the source is there: written over, not created
+  assert.equal($('create-only').textContent, 'Update source only');
+  assert.equal($('intro-action').textContent, 'Update source and attach');
+  assert.equal($('parallel').hidden, true);  // one church book
+  assert.equal($('source').classList.contains('in-sourcebox'), true);
+  assert.equal($('fs-check').hidden, true);  // no note: the tint tells
+  assert.equal($('fs-link').hidden, false);
+  assert.equal($('fs-link').href, 'https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S01');
+  assert.equal($('fs-link').title, 'Already in your SourceBox (TEST-S01). It is attached to 1 of the 2 people paired here; the others will be attached.');
+  const status = (name) => state.rows.find((r) => r.person.name === name).node.querySelector('.fs-status');
+  assert.equal(status('Lars').textContent, 'Already has this source on FamilySearch');
+  assert.equal(status('Halvor Larsen').textContent, 'Not attached to this source yet');
+  assert.equal(status('Astri Larsdatter').hidden, true);  // not paired
+  const node = (name) => state.rows.find((r) => r.person.name === name).node;
+  assert.equal(node('Lars').classList.contains('linked'), true);  // highlighted, as FS's Source Linker does
+  assert.equal(node('Halvor Larsen').classList.contains('linked'), false);
+  assert.equal(node('Astri Larsdatter').classList.contains('linked'), false);
+
+  state.fsCheck = { checking: true };  // checking again: a note
+  win.showFsCheck();
+  assert.equal($('fs-check').textContent, 'Checking your SourceBox on FamilySearch…');
+
+  state.fsCheck = { sources: [{ title, book: '', id: 'TEST-S01', ids: ['TEST-S01'], persons: [] }] };
+  $('f-title').value = title + ' (edited)';
+  win.showFsCheck();
+  assert.equal($('source').classList.contains('in-sourcebox'), false);  // not known for this title
+  assert.equal($('fs-link').hidden, true);
+  assert.equal($('fs-check').textContent, 'The title has changed since the SourceBox was checked.Check the SourceBox again');
+  assert.equal($('fs-check').querySelector('button').textContent, 'Check the SourceBox again');
+
+  state.fsCheck = { sources: [{ title: $('f-title').value, book: '', id: null, ids: [], persons: [] }] };
+  win.showFsCheck();
+  assert.equal($('source').classList.contains('in-sourcebox'), false);
+  assert.equal($('fs-check').hidden, true);
+  assert.equal(status('Lars').hidden, true);
+  assert.equal(node('Lars').classList.contains('linked'), false);
+  assert.equal($('attach').textContent, 'Create source and attach');
+
+  state.fsCheck = { error: 'Please sign in to FamilySearch and try again.' };
+  win.showFsCheck();
+  assert.equal($('fs-check').className, 'fs-check small bad');
+  assert.match($('fs-check').textContent, /^Not checked on FamilySearch: Please sign in/);
+});
+
+test('showFsCheck(): each of two church books\' sources is tinted on its own', () => {
+  const { win, state, $ } = checkedPage();
+  state.parallel = { record: state.record };
+  $('g-title').value = 'Another title';
+  $('parallel').hidden = false;  // as fillParallel() shows it
+  state.fsCheck = { sources: [{ title: $('f-title').value, book: 'A', id: null, ids: [], persons: [] },
+    { title: 'Another title', book: 'B', id: 'TEST-S02', ids: ['TEST-S02'], persons: [] }] };
+  win.showFsCheck();
+  assert.equal($('parallel').hidden, false);
+  assert.equal($('source').classList.contains('in-sourcebox'), false);
+  assert.equal($('parallel').classList.contains('in-sourcebox'), true);
+  assert.equal($('fs-link').hidden, true);
+  assert.equal($('fs-link-g').href, 'https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S02');
+  assert.equal($('attach').textContent, 'Create or update sources and attach');  // one of each
+});
+
+// A fake FS behind chrome.tabs: the steps fs_attach.js would answer, logged in `asked`
+function fakeFs(answers, rejected = []) {
+  const asked = [];
+  const rejections = new Set(rejected);  // addresses Chrome refuses to go to, the first time
+  const listeners = new Set();
+  const urls = {};
+  const loaded = (id) => setTimeout(() => listeners.forEach((fn) => fn(id, { status: 'complete' })), 0);
+  const windows = [];
+  const chrome = {
+    windows: {
+      async get(id) { return { id, state: 'normal', left: 100, top: 50, width: 1200, height: 900 }; },
+      async create(options) { windows.push({ ...options, open: true }); urls[3] = options.url; loaded(3); return { id: 9, tabs: [{ id: 3 }] }; },
+      async update() {},
+      async remove() { windows.forEach((w) => { w.open = false; }); }
+    },
+    tabs: {
+      async getCurrent() { return { id: 1, index: 0, windowId: 8 }; },
+      async create({ url }) { urls[2] = url; loaded(2); return { id: 2 }; },
+      async update(id, { url }) {
+        if (url && rejections.has(url)) { rejections.delete(url); throw new Error('Navigation rejected.'); }  // once
+        if (url) { urls[id] = url; loaded(id); }
+        return { id };
+      },
+      async get(id) { return { id, url: urls[id] }; },
+      async remove() {},
+      async sendMessage(id, { linker, args }) { asked.push([linker, args]); return answers[linker](args, urls[id]); },
+      onUpdated: { addListener: (fn) => listeners.add(fn), removeListener: (fn) => listeners.delete(fn) }
+    },
+    scripting: { async executeScript() { return []; } }
+  };
+  return { chrome, asked, windows, rejections };
+}
+
+test('checkOnFamilySearch(): reads FS in an unfocused popup window behind the linker\'s, closed after', async () => {
+  const { chrome, asked, windows, rejections } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] })
+  }, ['https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S01']);
+  const { win, state, $ } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo']);  // the refused navigation was tried again
+  assert.equal(rejections.size, 0);  // it was refused once
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0].type, 'popup');  // no new tab in the user's tab strip
+  assert.equal(windows[0].focused, false);  // so it goes below the linker's window
+  assert.equal(windows[0].state, undefined);  // not minimized: Chrome wouldn't draw FS's list there
+  // the linker window's own place and size, so that window covers it
+  assert.deepEqual([windows[0].left, windows[0].top, windows[0].width, windows[0].height], [100, 50, 1200, 900]);
+  assert.equal(windows[0].open, false);  // closed
+  assert.equal(state.fsCheck.sources[0].id, 'TEST-S01');
+  assert.equal($('source').classList.contains('in-sourcebox'), true);
+});
+
+test('run(): a source partly attached before is used, and attached only to those who lack it', async () => {
+  const { chrome, asked } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] }),
+    createSource: () => { throw new Error('no new source when one has the title'); },
+    editSource: () => ({ ok: true, sourceId: 'TEST-S01', changed: ['citation', 'notes'], missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } })
+  });
+  const { win, state, $ } = checkedPage(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name, args]) => name + (args.pid ? ' ' + args.pid : ''))), ['findSource', 'attachedTo', 'editSource', 'attach TEST-HAL']);
+  // written over with the fields reviewed here, with a reason for FS's change log
+  assert.equal(asked[2][1].sourceId, 'TEST-S01');
+  assert.equal(asked[2][1].source.title, $('f-title').value);
+  assert.equal(asked[2][1].source.citation, $('f-citation').value);
+  assert.equal(asked[2][1].reason, 'Updated from the record on Digitalarkivet.');
+  assert.equal(asked[3][1].sourceId, 'TEST-S01');
+  assert.equal(asked[3][1].title, $('f-title').value);  // found by title when Home doesn't show it
+  const log = $('log').textContent;
+  assert.match(log, /already has a source with this title; using it \(TEST-S01\)/);
+  assert.match(log, /Source updated: citation, notes\./);
+  assert.match(log, /Lars \(TEST-LAR\) already has this source on FamilySearch; left as it is\./);
+  assert.match(log, /Attached to Halvor Larsen \(TEST-HAL\)\./);
+  // what FS has now
+  assert.deepEqual(plain(state.fsCheck.sources[0].persons.map((p) => p.pid)), ['TEST-LAR', 'TEST-HAL']);
+  assert.match($('fs-link').title, /already attached to all 2 people paired here/);
+  assert.equal($('source').classList.contains('in-sourcebox'), true);
+});
+
+test('run(): a source that could not be updated is not attached', async () => {
+  const { chrome, asked } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    editSource: () => ({ ok: false, error: 'Timed out waiting for the Edit Source form.' }),
+    attach: () => { throw new Error('not attached after a failed update'); }
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo', 'editSource']);
+  assert.match($('log').textContent, /The source could not be updated: Timed out waiting for the Edit Source form\./);
+});
+
+test('run(): a title not in the SourceBox is created there', async () => {
+  const { chrome, asked } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } })
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name, args]) => name + (args.pid ? ' ' + args.pid : ''))), ['findSource', 'createSource', 'attach TEST-LAR', 'attach TEST-HAL']);
+  assert.match($('log').textContent, /Source created \(TEST-S05\)/);
+});

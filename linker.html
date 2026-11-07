@@ -18,11 +18,15 @@
     <p id="status" class="muted" data-i18n>Reading the record…</p>
     <div id="linker" hidden>
       <p class="intro muted" data-i18n>Check the source and who it belongs to. Nothing is saved on FamilySearch until you click
-        <strong data-i18n>Create source and attach</strong>.</p>
+        <strong id="intro-action" data-i18n>Create source and attach</strong>.</p>
 
-      <section class="box">
-        <h2 id="source-heading" data-i18n>Source</h2>
+      <section id="source" class="box">
+        <div class="box-head">
+          <h2 id="source-heading" data-i18n>Source</h2>
+          <a id="fs-link" class="small" target="_blank" rel="noopener" hidden data-i18n>Attached To</a>
+        </div>
         <p id="source-note" class="small" hidden></p>
+        <p id="fs-check" class="small" hidden></p>
         <label class="field" data-i18n>Title <input id="f-title" type="text"></label>
         <div class="field-row">
           <label class="field" data-i18n>Date <input id="f-date" type="text"></label>
@@ -33,9 +37,13 @@
       </section>
 
       <section id="parallel" class="box" hidden>
-        <h2 id="parallel-heading"></h2>
+        <div class="box-head">
+          <h2 id="parallel-heading"></h2>
+          <a id="fs-link-g" class="small" target="_blank" rel="noopener" hidden data-i18n>Attached To</a>
+        </div>
         <p class="muted small" data-i18n>The parish kept two church books, and both have this entry. Each becomes a source of its own,
           attached to the same people; only the first gets the tags. The differences between them are in both sources' notes.</p>
+        <p id="fs-check-g" class="small" hidden></p>
         <table id="compare" class="compare"></table>
         <label class="field" data-i18n>Title <input id="g-title" type="text"></label>
         <div class="field-row">

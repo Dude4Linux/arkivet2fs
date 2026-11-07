@@ -56,6 +56,19 @@ button.link { margin-top: 12px; padding: 0; border: 0; background: none; color: 
 .person.off { opacity: 0.75; }
 .person .role { font-size: 13px; margin-top: 4px; }
 .person .why { font-size: 12.3px; margin-top: 4px; }
+/* Attached on FS already, as FS's Source Linker shows it: tinted, with a green edge; partly
+   (one of two sources) only the edge */
+:root { --linked: #e4f2e8; }
+@media (prefers-color-scheme: dark) { :root { --linked: #1d3325; } }
+.person.linked { background: var(--linked); box-shadow: inset 4px 0 0 var(--ok), var(--shadow); }
+.person.partly { box-shadow: inset 4px 0 0 var(--ok), var(--shadow); }
+.person .fs-status { font-size: 12.3px; margin-top: 4px; }
+.person .fs-status.ok::before { content: "✓ "; }
+.fs-check { margin: 0 0 10px; }
+.fs-check button.link { margin: 0 0 0 4px; }
+/* A source already in the SourceBox: the same tint, each source box on its own */
+.box.in-sourcebox { background: var(--linked); box-shadow: inset 4px 0 0 var(--ok); }
+.box-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .person .pid { margin-top: 6px; }
 .person .label { font-size: 12.3px; margin-bottom: 2px; }
 .person .tags { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; margin-bottom: 8px; }

@@ -4,6 +4,28 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.4.0 - 2026-11-07
+
+- The linker checks your SourceBox when it opens, the way FamilySearch's Source
+  Linker flags a record you've used before. Until it's done the page says what it's
+  doing (reading the record on Digitalarkivet, pairing the people, checking the
+  SourceBox) and shows the source and the people when it knows. A
+  source already there, in any folder, is shown in green, with a link to its Attached
+  To page that tells how many of the people paired here have it; each person's row
+  says whether they have it, and those who have it are highlighted in green, as in the
+  Source Linker. The check reads FamilySearch in a window of its own behind the
+  linker's, not a new tab among yours.
+- Reading relatives' families from FamilySearch for a census uses that window too.
+- When the source is already in your SourceBox, the button says **Update source and
+  attach**: it writes the title, date, web page, citation and notes as reviewed here
+  over the source on FamilySearch (fields left empty here are kept), then attaches it.
+- A source attached to some of the people before is now finished properly:
+  **Update source and attach** uses it and attaches it only to those who don't have
+  it yet, leaving the others and their tags as they are. Before, each attach to
+  someone who already had the source failed after a long wait.
+- A source with the same title is found in any SourceBox folder, not only among the
+  newest sources on Home, so a second run makes no copy.
+
 ## 1.3.2 - 2026-11-07
 
 - On the linker page, a child's baptism is paired with the right child of the family.

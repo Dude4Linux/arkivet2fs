@@ -153,7 +153,8 @@ dimmed.
 
 Click **Review & Attach** on a hit, or open a DA record and click the extension's
 toolbar icon. The linker page opens with the source, ready to review. Nothing is saved
-on FamilySearch until you click **Create source and attach**.
+on FamilySearch until you click **Create source and attach** (**Update source and
+attach** when the source is already in your SourceBox).
 
 The source's fields can be edited:
 
@@ -214,6 +215,19 @@ says is lost. You pair the people once, and both sources are attached to them; t
 tags go on the ministerialbok's source only. An entry found in one book only is a
 single source as before.
 
+When the linker opens, it first looks in your SourceBox on FamilySearch, as FS's own
+Source Linker flags a record you've attached before; until it's done, the page says
+what it's doing, and the source and the people appear when it knows. It reads
+FamilySearch in a window of its own placed right behind the linker's, out of the way of
+your tabs (Chrome doesn't draw a minimized window, and FamilySearch's SourceBox doesn't
+load in one), searches every folder for the source's title, reads who
+the source is attached to, and closes the window again (it only reads). A source already in your SourceBox is shown in green, with
+an **Attached To** link to its page on FamilySearch (point at it to see how many of the
+people paired here have it); with two church books, each source is marked on its own.
+A person who has the source is highlighted in green too, as in FS's Source Linker (with
+two church books, a green edge only for one who has just one of them), and their row
+says so. If you change the title, or the check failed, **Check the SourceBox again**.
+
 The family comes from the FS person you started the search from. From the toolbar
 icon, the linker uses the last person you searched for when their name is in the
 record. Otherwise, type the FS ID at the top.
@@ -222,12 +236,20 @@ record. Otherwise, type the FS ID at the top.
 The page lists each step as it goes:
 
 1. It creates the source in your SourceBox. If a source with the same title is
-   already there, it uses that one instead.
-2. It attaches the source to each chosen person by ID, with your reason.
+   already there, in any folder, it uses that one instead and updates it: the title,
+   date, web page, citation and notes as you reviewed them here replace FamilySearch's
+   (a field left empty here keeps FamilySearch's), with "Updated from the record on
+   Digitalarkivet." as the reason for the change. The button then reads **Update source
+   and attach** (**Create or update sources and attach** with two church books, one
+   source there and one not).
+2. It attaches the source to each chosen person by ID, with your reason. Someone who
+   already has the source is left as they are, so a source attached to some of the
+   people before is attached only to the rest.
 3. It adds the ticked tags. Tags already there are kept. A residence is tagged only
    when the person has exactly one.
 
-**Create source only** puts the source in your SourceBox without attaching it.
+**Create source only** (**Update source only**) puts the source in your SourceBox, or
+updates it there, without attaching it.
 
 Supported records: baptisms, confirmations, marriages, burials, censuses, emigrant
 protocols, moving lists (out- and in-migration) and probate.
@@ -287,7 +309,7 @@ use that language.
 | `da_record.js` | Reading a DA record: citation, title, notes, people |
 | `da_verify.js` | Checking hits' records against the FS relatives |
 | `linker.html`, `linker.js`, `linker.css` | The linker: reviewing the source and pairing the record's people with tree persons |
-| `fs_attach.js` | The linker's steps on FamilySearch: create the source, attach it, add tags |
+| `fs_attach.js` | The linker's steps on FamilySearch: find the source and who has it, create it, attach it, add tags |
 | `icons/` | The extension's icons (`icon*.svg` are the sources of the PNGs) and the README banner (`banner.html` → `banner.png`) |
 | `citation.md` | The citation format |
 | `plan.md` | Design notes and milestones for the FS → DA search |
