@@ -157,3 +157,127 @@ test('editSource(): a source Home doesn\'t show is found with the search', async
   assert.equal(answer.ok, true, answer.error);
   assert.equal(fs.saved.id, 'TEST-S01');
 });
+
+// --- A new person: FS's Add Person dialog -----------------------------------------
+// A made-up person page: the couple's family card with its Add Child; the dialog's form
+// (template, names, sex and status, the date and place comboboxes, which suggest a
+// standard form of what's typed), Next, then FS's possible matches and Create Person.
+const STANDARD = { 'Vågå, Oppland, Norway': 'Vågå, Oppland, Norway Municipality, 1781 - 2019', '16 July 1846': '16 July 1846' };
+
+function personPage({ matches = [], afterCreate = 'card' } = {}) {
+  const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-HAL',
+    '<section data-testid="section-card-family">' +
+    '<div data-testid="family-TEST-HAL_TEST-AST"><div data-testid="couple-persons"><a href="/tree/person/details/TEST-HAL">Halvor Larsen</a>' +
+    '<a href="/tree/person/details/TEST-AST">Astri Larsdatter</a></div><button data-testid="add-child">Add Child</button></div>' +
+    '<button data-testid="add-spouse">Add Spouse</button><button data-testid="add-parent">Add Parent</button></section>');
+  const { w } = page;
+  const d = w.document;
+  const filled = {};
+  const combo = (name, n) => `<input name="${name}" role="combobox" aria-controls="downshift-${n}-menu"><ul id="downshift-${n}-menu"></ul>`;
+  d.querySelector('[data-testid="add-child"]').addEventListener('click', () => {
+    const dialog = d.createElement('div');
+    dialog.setAttribute('data-testid', 'add-find-flow');
+    dialog.innerHTML = '<h2>Add Child</h2><select name="template"><option value="en">English</option><option value="no">Norwegian</option></select>' +
+      '<input data-testid="first-name"><input data-testid="last-name">' +
+      ['male', 'female', 'unknown'].map((v) => `<input type="radio" name="sex" value="${v}">`).join('') +
+      ['deceased', 'living'].map((v) => `<input type="radio" name="status" value="${v}">`).join('') +
+      combo('birthDate', 1) + combo('birthPlace', 2) + combo('deathDate', 3) + combo('deathPlace', 4) +
+      '<div data-testid="find-footer"><button data-testid="cancel-button">Cancel</button><button data-testid="next-button">Next</button></div>';
+    d.body.append(dialog);
+    dialog.querySelector('select').addEventListener('change', (e) => { filled.template = e.target.value; });
+    for (const input of dialog.querySelectorAll('[role="combobox"]')) {
+      input.addEventListener('input', () => {
+        const list = d.getElementById(input.getAttribute('aria-controls'));
+        const standard = STANDARD[input.value];
+        list.innerHTML = standard ? `<li role="option">${standard}</li>` : '';
+        const option = list.querySelector('[role="option"]');
+        if (option) option.addEventListener('click', () => { input.value = standard; list.innerHTML = ''; });
+      });
+    }
+    dialog.querySelector('[data-testid="cancel-button"]').addEventListener('click', () => { filled.cancelled = true; dialog.remove(); });
+    dialog.querySelector('[data-testid="next-button"]').addEventListener('click', () => {
+      for (const name of ['first-name', 'last-name']) filled[name] = dialog.querySelector(`[data-testid="${name}"]`).value;
+      filled.sex = (dialog.querySelector('input[name="sex"]:checked') || {}).value;
+      filled.status = (dialog.querySelector('input[name="status"]:checked') || {}).value;
+      for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) filled[name] = dialog.querySelector(`input[name="${name}"]`).value;
+      dialog.innerHTML = '<div data-testid="find-results">' + (matches.length ? `<h3>Possible Matches Found (${matches.length})</h3>` +
+        matches.map((m) => `<div><div data-testid="person"><span data-testid="fullName">${m.name}</span><span data-testid="lifespan">${m.lifespan}</span>` +
+          `<button data-testid="pid">${m.pid}</button><div data-testid="birth-event">Birth ${m.born}</div></div>` +
+          `<div data-testid="spouses"><div data-testid="person"><span data-testid="fullName">${m.spouse}</span><button data-testid="pid">TEST-SP1</button></div></div>` +
+          '<button data-testid="add-person-match-button">Add Match</button></div>').join('') : '<h3>No Match Found</h3>') +
+        '<button data-testid="cancel-button">Cancel</button><button data-testid="create-new-button">Create Person</button></div>';
+      dialog.querySelector('[data-testid="cancel-button"]').addEventListener('click', () => { filled.cancelled = true; dialog.remove(); });
+      dialog.querySelector('[data-testid="create-new-button"]').addEventListener('click', () => {
+        filled.created = true;
+        if (afterCreate === 'more') { dialog.innerHTML = '<h3>Add a relationship type</h3><button data-testid="cancel-button">Cancel</button>'; return; }
+        setTimeout(() => {
+          dialog.remove();
+          const child = d.createElement('div');
+          child.setAttribute('data-testid', 'child-person');
+          child.innerHTML = '<a href="/tree/person/details/TEST-NEW">Lars Halvorsen</a>';
+          d.querySelector('[data-testid="family-TEST-HAL_TEST-AST"]').append(child);
+        }, 5);
+      });
+    });
+  });
+  return { ...page, filled };
+}
+
+const LARS = { given: 'Lars', surname: 'Halvorsen', sex: 'male', birthDate: '16 July 1846', birthPlace: 'Vågå, Oppland, Norway', deathDate: '', deathPlace: '' };
+
+test('findPerson(): fills FS\'s Add Child form in the couple\'s card, picks FS\'s standard place, and gives back no match', async () => {
+  const { step, filled } = personPage();
+  const answer = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(filled.template, 'no');
+  assert.equal(filled['first-name'], 'Lars');
+  assert.equal(filled['last-name'], 'Halvorsen');
+  assert.equal(filled.sex, 'male');
+  assert.equal(filled.status, 'deceased');
+  assert.equal(filled.birthDate, '16 July 1846');
+  assert.equal(filled.birthPlace, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
+  assert.equal(filled.deathDate, '');
+  assert.deepEqual(plain(answer.matches), []);
+  const place = answer.fields.find((f) => f.name === 'birthPlace');
+  assert.equal(place.picked, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
+  assert.equal(filled.created, undefined, 'nothing is created');
+});
+
+test('findPerson(): FS\'s possible matches, each with PID, lifespan, events and spouses', async () => {
+  const { step } = personPage({ matches: [{ name: 'Lars Halvorsen', lifespan: '1846–1920', pid: 'TEST-LA2', born: '16 July 1846', spouse: 'Marte Johanne' }] });
+  const answer = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  assert.deepEqual(plain(answer.matches), [{ pid: 'TEST-LA2', name: 'Lars Halvorsen', lifespan: '1846–1920', events: ['Birth 16 July 1846'], spouses: ['Marte Johanne'] }]);
+});
+
+test('findPerson(): only on the tree person\'s page (else sign in)', async () => {
+  const { step } = attachPage('https://ident.familysearch.org/en/identity/login', '');
+  const answer = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', person: LARS });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /sign in/);
+});
+
+test('createPerson(): the new person\'s PID once FS shows them in the family', async () => {
+  const { step, filled } = personPage();
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  const answer = await step('createPerson', {});
+  assert.equal(filled.created, true);
+  assert.deepEqual(plain(answer), { ok: true, pid: 'TEST-NEW' });
+});
+
+test('createPerson(): a dialog step it doesn\'t know is left to the user', async () => {
+  const { w, step } = personPage({ afterCreate: 'more' });
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  let now = 0;
+  w.Date.now = () => (now += 1000);  // FS's dialog stays open past the wait
+  const answer = await step('createPerson', {});
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /asks for more in its dialog .*: Add a relationship type/);
+});
+
+test('cancelAdd(): FS\'s dialog cancelled, nothing created', async () => {
+  const { step, filled } = personPage();
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  assert.equal((await step('cancelAdd', {})).ok, true);
+  assert.equal(filled.cancelled, true);
+  assert.equal(filled.created, undefined);
+});

@@ -1,6 +1,7 @@
 /* The DA Linker (linker.html), on top of search.css's colours and FS look: the
    source's fields in a grey box, then one row per person of the record (name and
-   role | tree person | tags and reason), then the buttons and the progress log. */
+   role | tree person; the record's facts beside FS's; tags and reason), then the
+   buttons and the progress log. */
 .linker-page { max-width: 1100px; margin: 0 auto; padding: 16px 20px 60px; }
 .linker-page .muted { color: var(--muted); }
 .linker-page .small { font-size: 13px; }
@@ -40,8 +41,8 @@
 .people { list-style: none; margin: 10px 0 0; padding: 0; }
 .person {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.6fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
   padding: 12px;
   margin-bottom: 8px;
   border-radius: 6px;
@@ -70,6 +71,20 @@ button.link { margin-top: 12px; padding: 0; border: 0; background: none; color: 
 .box.in-sourcebox { background: var(--linked); box-shadow: inset 4px 0 0 var(--ok); }
 .box-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .person .pid { margin-top: 6px; }
+/* The record person beside the tree person, as FS's Source Linker shows them */
+.person .facts-wrap, .person .attach-detail { grid-column: 1 / -1; }
+.person .attach-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.person .attach-detail[hidden] { display: none; }
+.facts { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.facts th:first-child { width: 110px; }
+.facts th, .facts td { text-align: left; vertical-align: top; padding: 3px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.facts thead th { font-weight: 600; font-size: 12.3px; color: var(--muted); }
+.facts tbody th { font-weight: 400; color: var(--muted); white-space: nowrap; }
+.facts .mark.same { color: var(--ok); }
+.facts .mark.near { color: var(--muted); }
+.facts .mark.differs { color: var(--bad); font-weight: 600; }
+.facts tr.differs td { background: var(--chip); }
+.facts tr.note td, .facts tr.note th { border-bottom: 0; font-size: 12.3px; }
 .person .label { font-size: 12.3px; margin-bottom: 2px; }
 .person .tags { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 14px; margin-bottom: 8px; }
 .person .tags label { display: inline-flex; align-items: center; gap: 4px; }
@@ -97,7 +112,8 @@ body.running .actions button { opacity: 0.5; pointer-events: none; }
 
 @media (max-width: 760px) {
   .linker-page { padding: 12px 16px 40px; }
-  .person, .field-row { grid-template-columns: 1fr; }
+  .person, .field-row, .person .attach-detail { grid-template-columns: 1fr; }
+  .facts th:first-child { width: 80px; }
 }
 
 /* An entry in both of a parish's church books: the two side by side, differences marked */
@@ -107,3 +123,31 @@ body.running .actions button { opacity: 0.5; pointer-events: none; }
 .compare tbody th { font-weight: 400; color: var(--muted); white-space: nowrap; }
 .compare tr.differs td { background: var(--chip); font-weight: 600; }
 .compare tr.differs th::before { content: '≠ '; color: var(--bad); }
+
+/* A new person on FamilySearch: the sidebar's form, then FS's possible matches */
+.sidebar {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 10;
+  width: 380px; max-width: 100%; margin: 0; border-radius: 0; overflow-y: auto;
+  background: var(--panel); box-shadow: var(--shadow); padding: 16px;
+}
+.sidebar[hidden] { display: none; }
+body.with-sidebar .linker-page { margin-right: 396px; }
+@media (max-width: 900px) { body.with-sidebar .linker-page { margin-right: auto; } }
+.sidebar .side-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sidebar .side-head button.link { margin: 0; font-size: 22px; text-decoration: none; }
+.sidebar .muted { color: var(--muted); }
+.sidebar .small { font-size: 13px; }
+.sidebar .bad { color: var(--bad); }
+.sidebar .near { color: var(--text); }
+.sidebar .radios { display: flex; gap: 14px; color: var(--text); font-size: 14px; margin-top: 4px; }
+.sidebar .radios label { display: inline-flex; align-items: center; gap: 4px; }
+.sidebar .radios input { width: auto; height: auto; margin: 0; accent-color: var(--accent); }
+.sidebar select { width: 100%; }
+.sidebar .suggest { margin: -4px 0 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.sidebar .suggest:empty { display: none; }
+.sidebar .suggest .chip { border: 0; cursor: pointer; color: var(--text); padding: 4px 11px; }
+.sidebar h3 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; }
+.sidebar .matches { list-style: none; margin: 0; padding: 0; }
+.sidebar .matches li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sidebar .matches button { margin-top: 6px; height: 32px; }
+.sidebar .actions { margin: 14px 0 0; }

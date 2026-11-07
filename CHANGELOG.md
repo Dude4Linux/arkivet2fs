@@ -25,6 +25,29 @@ fixes, new features, changes that break what users have).
   someone who already had the source failed after a long wait.
 - A source with the same title is found in any SourceBox folder, not only among the
   newest sources on Home, so a second run makes no copy.
+- Each person's row shows what the record says of them beside what FamilySearch has of
+  the tree person, fact by fact (name, sex, birth, the record's event, residence,
+  occupation), with ✓, ≈ and ✗ for what agrees, is close or differs, as FamilySearch's
+  Source Linker does. The tree person's facts are read from FamilySearch in the
+  background once the page is shown.
+- When the work on FamilySearch is done, its tab is closed and you're back on the
+  linker. If a step failed, the tab stays open where it stopped.
+- Someone in the record who isn't in the tree yet can be created on FamilySearch from
+  the linker: **New person on FamilySearch…** in the row's list opens a form at the
+  side, filled in from the record (given names, the patronymic as the surname, sex,
+  birth and death with FamilySearch's place names, and the relationship to someone
+  paired here, as the record tells it). **Find on FamilySearch** fills in
+  FamilySearch's own Add Child, Add Spouse or Add Parent form in a tab and lists the
+  people FamilySearch thinks may be the same; pair the row with one of them, or
+  **Create person**, which creates the person and pairs the row with them. Nothing is
+  saved on FamilySearch before you choose.
+- A deceased person's role ("avdød") no longer reads as a woman's.
+- On a marriage, the groom's and the bride's fathers are paired with the tree's fathers
+  (before, they weren't suggested at all), and the bride's father, who is in the wife's
+  family rather than yours, is now among the choices: the linker reads the FamilySearch
+  family of a paired spouse (or another paired relative) when the record names
+  relatives of theirs, as it does for a census. That also happens when you pair the
+  bride (or another relative) yourself, and the others are then paired from her.
 
 ## 1.3.2 - 2026-11-07
 

@@ -1052,6 +1052,7 @@ function extractRecord(document, pageUrl) {
       principalUrl: principalUrl,
       sourceTitle: sourceInfo.sourceTitle,
       sourceUrl: sourceInfo.sourceUrl,
+      county: sourceInfo.county,
       error: idValidation.valid ? null : idValidation.error
     };
   } catch (err) {

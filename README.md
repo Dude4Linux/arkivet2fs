@@ -182,6 +182,31 @@ Below the source, each person in the record has a row:
   with children also matched by birth year. A relative with another name in the
   record is mentioned, not chosen, so a second wife or a namesake isn't attached by
   mistake.
+- **The record beside the tree.** Under the name and the tree person, a table puts
+  what the record says of the person (name, sex, birth, the record's event, residence,
+  occupation) beside what FamilySearch has of the tree person, fact by fact, as FS's
+  Source Linker does: ✓ where they agree, ≈ where they're close (Astri for Astrid, a
+  birth year a year or two off), and ✗, highlighted, where they differ. Ages count as
+  years about, so 17 in the 1865 census fits a birth in 1848 or 1849. FamilySearch's
+  side starts with the family card's years and fills in from the tree person's own
+  page, read in the background once the page is shown (it only reads).
+- **New person on FamilySearch.** For someone in the record who isn't in the tree
+  yet, choose **New person on FamilySearch…** in the tree person list. A form opens
+  at the side, filled in from the record: the given names and the patronymic as the
+  surname (a farm name after it is left out, since it's an address; add it back if it's
+  a family name), sex, birth and death, with places written as FamilySearch names them
+  ("Vaage" becomes "Vågå, Oppland, Norway"), and the relationship to someone paired
+  here as the record tells it (a baptized child of the paired father and mother, a
+  wife of the paired husband, ...). Check and change what you like, then **Find on
+  FamilySearch**: FamilySearch's own Add Child, Add Spouse or Add Parent form is filled
+  in on the tree person's page in a tab, with FamilySearch's standard dates and places,
+  and FamilySearch looks for people who may be the same. They're listed at the side.
+  **Pair with this person** pairs the row with one of them (nothing is changed on
+  FamilySearch); **Create person** creates the person on FamilySearch as that relative,
+  pairs the row with them and closes the tab. Nothing is saved before you click one of
+  them; **Cancel** closes the form and FamilySearch's dialog. A christening or burial,
+  which FamilySearch's form doesn't take, is listed in the form for you to add on the
+  new person's page; the source's tags can add them too.
 - **Tags** (Name, Sex, Birth, Christening, Death, Burial, Residence) and the
   **reason** for attaching. Both are filled in by role; for example, a baptized child
   gets Name, Sex, Birth and Christening.
@@ -247,6 +272,9 @@ The page lists each step as it goes:
    people before is attached only to the rest.
 3. It adds the ticked tags. Tags already there are kept. A residence is tagged only
    when the person has exactly one.
+
+When every step has gone through, the FamilySearch tab is closed and you're back on the
+linker, with the steps listed. If a step failed, the tab stays open where it stopped.
 
 **Create source only** (**Update source only**) puts the source in your SourceBox, or
 updates it there, without attaching it.

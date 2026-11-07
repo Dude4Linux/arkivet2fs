@@ -13,6 +13,11 @@
 //   tag          — on the person's Sources tab: open the source's row, Add Tags, add
 //                  the vital tags (and a residence) asked for, Save (FS may instead
 //                  open its tag dialog right after attaching; attach sets them there)
+//   findPerson   — on a tree person's page: Add Child (of the couple), Add Spouse or
+//                  Add Parent, fill FS's form with the new person, Next, and give the
+//                  possible matches FS lists (nothing is saved; the dialog stays open)
+//   createPerson — in that dialog: Create Person, and the new person's PID
+//   cancelAdd    — in that dialog: Cancel
 // Nothing here runs by itself: the user starts it on the linker page, after reviewing.
 // Injected again for each step and page, so it installs its listener only once.
 
@@ -330,7 +335,157 @@ if (!window.__arkivet2fsAttach) {
     return { changed, notes };
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag };
+  // --- A new person in the tree ----------------------------------------------------
+  // FS's Add Child / Add Spouse / Add Parent dialog (data-testid="add-find-flow"): the
+  // name, sex, status and the birth and death fields (comboboxes that take one of FS's
+  // standard dates and places), Next, then FS's possible matches ("Possible Matches
+  // Found (N)", each with Add Match) or "No Match Found", and Create Person.
+
+  const addDialog = () => byTestId('add-find-flow');
+
+  // The button that opens the dialog: a child in the couple's family card (the card's
+  // data-testid names both: family-<PID>_<PID>), else with the other parent unknown
+  function addButton(relation, anchor, other) {
+    if (relation === 'child') {
+      if (other) {
+        const card = [...document.querySelectorAll('[data-testid^="family-"]')].find((c) => {
+          const ids = c.getAttribute('data-testid').replace(/^family-/, '').toUpperCase().split('_');
+          return ids.includes(anchor) && ids.includes(other);
+        });
+        return card ? byTestId('add-child', card) : null;
+      }
+      return document.querySelector('[data-testid^="add-child-unknown"]');
+    }
+    return byTestId(relation === 'spouse' ? 'add-spouse' : 'add-parent');
+  }
+
+  // A combobox (date, place): the text typed, then FS's first suggestion picked, which
+  // makes it standard ("Vågå, Oppland, Norway", the municipality 1781–2019). Without
+  // one the text stays as typed. No blur before picking: it closes the list.
+  async function comboField(form, name, value) {
+    const input = form.querySelector('input[name="' + name + '"]');
+    if (!input || !value) return { name, value: input ? input.value : '' };
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const options = () => {
+      const list = document.getElementById(input.getAttribute('aria-controls') || '');
+      return list ? [...list.querySelectorAll('[role="option"]')] : [];
+    };
+    let found = [];
+    try { found = await waitFor(() => { const o = options(); return o.length ? o : null; }, 'suggestions', 5000); } catch (e) { /* none */ }
+    if (!found.length) return { name, value, picked: '' };
+    const picked = clean(found[0].textContent);
+    found[0].click();
+    await sleep(300);
+    return { name, value: input.value, picked };
+  }
+
+  // The possible matches FS lists: [{pid, name, lifespan, events, spouses}]
+  function addMatches(dialog) {
+    return [...dialog.querySelectorAll('[data-testid="add-person-match-button"]')].map((button) => {
+      let box = button.parentElement;
+      while (box && box !== dialog && !box.querySelector('[data-testid="pid"]')) box = box.parentElement;
+      const persons = [...(box || dialog).querySelectorAll('[data-testid="person"]')];
+      const main = persons.find((p) => !p.closest('[data-testid="spouses"]')) || persons[0];
+      const text = (id, root) => clean((byTestId(id, root) || {}).textContent);
+      const spouses = persons.filter((p) => p !== main && p.closest('[data-testid="spouses"]')).map((p) => text('fullName', p));
+      const events = [...(box || dialog).querySelectorAll('[data-testid$="-event"]')]
+        .filter((e) => !e.closest('[data-testid="spouses"]')).map((e) => clean(e.textContent));
+      return { pid: text('pid', main), name: text('fullName', main), lifespan: text('lifespan', main), events, spouses };
+    }).filter((m) => m.pid);
+  }
+
+  async function findPerson({ relation, anchor, other, person }) {
+    anchor = (anchor || '').toUpperCase();
+    other = (other || '').toUpperCase();
+    if (!new RegExp('/tree/person/details/' + anchor + '(/|$)', 'i').test(location.pathname)) {
+      throw new Error('FamilySearch did not open the tree person ' + anchor + '. Please sign in to FamilySearch and try again.');
+    }
+    const button = await waitFor(() => addButton(relation, anchor, other), 'the family section to add the person in');
+    button.click();
+    const dialog = await waitFor(() => { const d = addDialog(); return d && byTestId('first-name', d) ? d : null; }, 'the Add Person form');
+    // Norway's name template (the same fields), when FS offers it
+    const template = dialog.querySelector('select[name="template"]');
+    if (template && [...template.options].some((o) => o.value === 'no') && template.value !== 'no') {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(template, 'no');
+      template.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(500);
+    }
+    const form = addDialog();
+    setValue(await waitFor(() => byTestId('first-name', form), 'the name fields'), person.given);
+    setValue(byTestId('last-name', form), person.surname);
+    const radio = (name, value) => {
+      const r = form.querySelector('input[name="' + name + '"][value="' + value + '"]');
+      if (r && !r.checked) r.click();
+      return !!r;
+    };
+    radio('sex', person.sex || 'unknown');
+    radio('status', 'deceased');
+    const fields = [];
+    for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) fields.push(await comboField(form, name, person[name]));
+    await sleep(300);
+    const heading = clean(((form.querySelector('h1, h2, h3, [role="heading"]') || {}).textContent) || '');
+    (await waitFor(() => byTestId('next-button', addDialog()), 'the Next button')).click();
+    // The results: Create Person comes with them (after the matches have loaded)
+    await waitFor(() => byTestId('create-new-button', addDialog() || document), 'the possible matches', 30000);
+    await sleep(800);
+    return { ok: true, heading, fields, matches: addMatches(addDialog()) };
+  }
+
+  // Every PID the page names outside the dialog (links, the PID chips, family cards)
+  function pagePids() {
+    const pids = new Set();
+    const dialog = addDialog();
+    for (const a of document.querySelectorAll('a[href*="/tree/person/"]')) {
+      if (dialog && dialog.contains(a)) continue;
+      const m = (a.getAttribute('href') || '').match(/\/tree\/person\/(?:details\/)?([A-Z0-9]{4}-[A-Z0-9]{2,4})\b/i);
+      if (m) pids.add(m[1].toUpperCase());
+    }
+    for (const el of document.querySelectorAll('[data-testid="pid"], [data-testid^="family-"]')) {
+      if (dialog && dialog.contains(el)) continue;
+      const text = el.getAttribute('data-testid') === 'pid' ? el.textContent : el.getAttribute('data-testid');
+      for (const m of (text || '').matchAll(/[A-Z0-9]{4}-[A-Z0-9]{2,4}/gi)) pids.add(m[0].toUpperCase());
+    }
+    return pids;
+  }
+
+  async function createPerson() {
+    const dialog = addDialog();
+    const create = dialog && byTestId('create-new-button', dialog);
+    if (!create) throw new Error('FamilySearch no longer shows its Add Person form.');
+    const before = pagePids();
+    const page = location.pathname;
+    create.click();
+    // The dialog closes and the family card shows the new person (or FS opens their page)
+    const start = Date.now();
+    while (Date.now() - start < 30000) {
+      await sleep(250);
+      if (location.pathname !== page) {
+        const m = location.pathname.match(/\/tree\/person\/(?:details\/)?([A-Z0-9]{4}-[A-Z0-9]{2,4})\b/i);
+        if (m && !before.has(m[1].toUpperCase())) return { ok: true, pid: m[1].toUpperCase() };
+      }
+      const open = addDialog();
+      if (open && !byTestId('create-new-button', open) && Date.now() - start > 8000) {
+        // A step this code doesn't know: left to the user, in FS's own dialog
+        throw new Error('FamilySearch asks for more in its dialog (finish it there, then type the new PID on the linker page): ' + clean(open.textContent).slice(0, 200));
+      }
+      if (!open) {
+        const added = [...pagePids()].filter((pid) => !before.has(pid));
+        if (added.length === 1) return { ok: true, pid: added[0] };
+      }
+    }
+    throw new Error('FamilySearch did not show the new person in time. Look for them on the FamilySearch tab, and type their PID on the linker page.');
+  }
+
+  async function cancelAdd() {
+    const dialog = addDialog();
+    const cancel = dialog && byTestId('cancel-button', dialog);
+    if (cancel) cancel.click();
+    return { ok: true };
+  }
+
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, cancelAdd };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const step = request && request.linker && STEPS[request.linker];

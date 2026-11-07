@@ -44,6 +44,22 @@ test("relativesInRecord(): the father's page sees his wife and child", () => {
   assert.deepEqual(names(found.child), ['Lars']);
 });
 
+// A marriage names the couple's fathers: each is the groom's or the bride's father
+const MARRIAGE = () => ({ recordTypeInfo: { type: 'marriage' }, recordDate: '1870-10-20', fields: {}, people: [
+  { id: 'pv99000000000001', name: 'Lars Halvorsen', role: 'brudgom', roleEnglish: 'Groom', current: true },
+  { id: 'pv99000000000002', name: 'Kjersti Olsdatter', role: 'brur', roleEnglish: 'Bride' },
+  { id: 'pv99000000000003', name: 'Halvor Larsen', role: 'brudgommens far', roleEnglish: "Groom's father" },
+  { id: 'pv99000000000004', name: 'Ole Olsen', role: 'bruras far', roleEnglish: "Bride's father" }] });
+
+test("relativesInRecord(): a marriage's groom and bride each have their own father", () => {
+  const groom = w.relativesInRecord(MARRIAGE());
+  assert.deepEqual(names(groom.father), ['Halvor Larsen']);
+  assert.deepEqual(names(groom.spouse), ['Kjersti Olsdatter']);
+  const bride = w.relativesInRecord(open(MARRIAGE(), 1));
+  assert.deepEqual(names(bride.father), ['Ole Olsen']);
+  assert.deepEqual(names(w.relativesInRecord(open(MARRIAGE(), 3)).child), ['Kjersti Olsdatter']);
+});
+
 test('relativesInRecord(): in 1900 the man and the woman of the house are a couple', () => {
   const r = record('census-1900');
   let found = w.relativesInRecord(r);

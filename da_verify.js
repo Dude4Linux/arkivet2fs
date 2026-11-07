@@ -65,6 +65,8 @@ function relativesInRecord(record) {
       if (theirs === 'child') found.child.push(other);
     } else if (mine === 'groom' || mine === 'bride') {
       if (theirs === 'groom' || theirs === 'bride') found.spouse.push(other);
+      // The church book names the couple's fathers: the groom's and the bride's
+      if (theirs === (mine === 'groom' ? 'groomFather' : 'brideFather')) found.father.push(other);
     } else if (mine === 'groomFather' || mine === 'brideFather') {
       // A child's marriage: the groom or bride is the person's child
       if (theirs === (mine === 'groomFather' ? 'groom' : 'bride')) found.child.push(other);
