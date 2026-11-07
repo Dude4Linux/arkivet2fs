@@ -131,6 +131,23 @@ test('patronymics: recognized, and their base', () => {
   assert.equal(w.patronymicBase('Halvardsen'), 'Halvard');
 });
 
+test("patronymics: the church books' abbreviations of -datter", () => {
+  for (const name of ['Larsdatter', 'Larsdaatter', 'Larsdattr.', 'Larsdatt.', 'Larsdatr', 'Larsdat.', 'Larsdtr.', 'Larsdr', 'Larsd:r', 'Larsd.']) {
+    assert.equal(w.isPatronymic(name), true, name);
+    assert.equal(w.patronymicBase(name), 'Lar', name);
+  }
+  assert.equal(w.patronymicBase('Johannesdat.'), 'Johanne');
+  assert.equal(w.isPatronymic('Halvorsrud'), false);
+});
+
+test('unreadPatronymic(): an ending not read as a patronymic says nothing either way', () => {
+  assert.equal(w.unreadPatronymic('Larsdtter', 'Lar'), true);
+  assert.equal(w.unreadPatronymic('Johannesdottr', 'Johan'), true);
+  assert.equal(w.unreadPatronymic('Larsdatter', 'Lar'), false, 'read as one');
+  assert.equal(w.unreadPatronymic('Halvorsrud', 'Halvor'), false, 'a farm');
+  assert.equal(w.unreadPatronymic('Moen', 'Halvor'), false);
+});
+
 test('profile(): the full birth date, the year, the relatives', () => {
   const P = plain(w.profile(lars()));
   assert.equal(P.given, 'Lars');

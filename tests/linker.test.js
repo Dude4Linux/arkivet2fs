@@ -126,6 +126,7 @@ test('censusKin(): the kin word of a family position', () => {
 test('patronymics: a clash of fathers, spellings of one, a father of this name', () => {
   assert.equal(w.patronymicClash('Lars Gunsteinsen', 'Lars Halvorsen'), true);
   assert.equal(w.patronymicClash('Lars Halvardsen', 'Lars Halvorsen'), false);
+  assert.equal(w.patronymicClash('Lars Gudbrandsen', 'Lars Gulbrandsen'), false);
   assert.equal(w.patronymicClash('Lars', 'Lars Halvorsen'), false);
   assert.equal(w.patronymicFrom('Reidar Larsen', 'Lars'), true);
   assert.equal(w.patronymicFrom('Reidar Halvorsen', 'Lars'), false);
@@ -133,6 +134,8 @@ test('patronymics: a clash of fathers, spellings of one, a father of this name',
 
 test('recordSex(): from a patronymic or a family position', () => {
   assert.equal(w.recordSex({ name: 'Eli Larsdatter' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli Larsdat.' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli Larsd:r' }), 'Female');
   assert.equal(w.recordSex({ name: 'Reidar Larsen' }), 'Male');
   assert.equal(w.recordSex({ name: 'Lars', role: 'deres Søn' }), 'Male');
   assert.equal(w.recordSex({ name: 'Lars' }), '');

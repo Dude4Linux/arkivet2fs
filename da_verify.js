@@ -125,15 +125,18 @@ function ownBirthDate(record) {
 }
 
 // A record person whose patronymic isn't the FS relative's (Halvor Moen for FS Halvor
-// Larsen; Halvor Larsen Moen or Halvor Larssen agree, Halvor alone says nothing)
+// Larsen; Halvor Larsen Moen, Halvor Larssen or Halvor Gudbrandsen for Gulbrandsen
+// (nameNear()) agree, Halvor alone says nothing, nor does an ending not read as one:
+// Johannesdat., unreadPatronymic())
 function patronymicDiffers(person, surname) {
   if (!isPatronymic(surname)) return false;
   const words = (person.name || '').replace(/%[^%]*%|[*,]/g, ' ').split(/\s+/).filter(Boolean).slice(1);
   if (!words.length) return false;
   const base = patronymicBase(surname).toLowerCase();
   return !words.some((w) => {
+    if (unreadPatronymic(w, base)) return true;
     const b = patronymicBase(w).toLowerCase();
-    return isPatronymic(w) && (b.startsWith(base) || base.startsWith(b) || nameMatch(b, base) || nameMatch(base, b));
+    return isPatronymic(w) && (b.startsWith(base) || base.startsWith(b) || nameMatch(b, base) || nameMatch(base, b) || nameNear(b, base));
   });
 }
 

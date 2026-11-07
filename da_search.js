@@ -36,8 +36,10 @@ const REQUEST_GAP_MS = 1000; // DA rate-limits automated traffic
 // The most hits of one search that are read (a function: search.js uses it)
 function readLimit() { return MAX_PAGES * RESULTS_PER_PAGE; }
 
-// Patronymic: genitive s + ending (-sen/-søn/-son, -datter/-dotter, -dtr., -dr., -d.)
-const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|dtr\.?|dr\.?|d\.)$/i;
+// Patronymic: genitive s + ending: -sen/-søn/-son, -datter/-dotter and the church
+// books' abbreviations of it (-daatter, -dattr., -datt., -datr., -dat., -dtr., -dr.,
+// -d:r, -d.; Johannesdat. is Johannesdatter)
+const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|daatter|dattr\.?|datt\.?|datr\.?|dat\.?|dtr\.?|dr\.?|d:r\.?|d\.)$/i;
 
 const RECORD_TYPES = {
   pd: 'Baptism', pk: 'Confirmation', pv: 'Marriage', pg: 'Burial', pf: 'Census',
@@ -68,6 +70,16 @@ function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(
 function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
 // The father's name in a patronymic (Halvorsen → Halvor, Olsdr. → Ol)
 function patronymicBase(surname) { return (surname || '').replace(PATRONYMIC_ENDING, ''); }
+
+// A word that may be a patronymic of a father's name `base` in a form isPatronymic()
+// doesn't read: the father's name (and a few letters: Johan → Johannes), a genitive s
+// and the start of an ending (-sd…, -ss…, -se…, -sø…, -so…). Neither the same father
+// nor another, so it mustn't count against a match (Halvorsrud, a farm, isn't one).
+function unreadPatronymic(word, base) {
+  const w = (word || '').toLowerCase(), b = (base || '').toLowerCase();
+  if (b.length < 3 || isPatronymic(word) || !w.startsWith(b)) return false;
+  return /^\p{L}{0,3}s[dseøo]/u.test(w.slice(b.length));
+}
 
 // Given name for a DA search: without its final vowel(s), with a trailing *, so
 // spellings DA doesn't treat as variants match too (Anna → Ann*, finding Anne;

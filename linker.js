@@ -189,7 +189,7 @@ function givenNameFit(person, tree) {
   const given = givenOf(stripVariants(tree.name));
   if (hasGivenName(person, given)) return 2;
   const first = stripVariants(person.name).split(/\s+/)[0] || '';
-  return first && given.split(/\s+/).some((g) => nameMatch(g, first)) ? 1 : 0;
+  return first && given.split(/\s+/).some((g) => nameMatch(g, first) || nameNear(first, g)) ? 1 : 0;
 }
 
 // A resident's sex where the record tells it: a patronymic (Olsdatter, Halvorsen) or a
@@ -198,7 +198,7 @@ const FEMALE_ROLE = /\b(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughte
 const MALE_ROLE = /\b(søn|son|fader|far|father|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)\b/i;
 function recordSex(person) {
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
-  if (/(datter|dotter|dtr\.?|sd\.?)(\s|$)/i.test(last)) return 'Female';
+  if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
   if (/(sen|søn|son)(\s|$)/i.test(last) && !FEMALE_ROLE.test(person.role || '')) return 'Male';
   const role = (person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, '');
   if (FEMALE_ROLE.test(role) && !MALE_ROLE.test(role)) return 'Female';
@@ -214,7 +214,7 @@ function patronymicClash(recordName, treeName) {
     .map((w) => patronymicBase(w).toLowerCase()).filter(Boolean);
   const a = pats(recordName), b = pats(treeName);
   if (!a.length || !b.length) return false;
-  const agree = (x, y) => x.startsWith(y) || y.startsWith(x) || nameMatch(x, y) || nameMatch(y, x);
+  const agree = (x, y) => x.startsWith(y) || y.startsWith(x) || nameMatch(x, y) || nameMatch(y, x) || nameNear(x, y);
   return !a.some((x) => b.some((y) => agree(x, y)));
 }
 

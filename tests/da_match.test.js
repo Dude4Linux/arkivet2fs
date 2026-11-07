@@ -37,9 +37,44 @@ test('skeleton(): the consonants, spelled one way', () => {
   assert.equal(w.skeleton('Christine'), w.skeleton('Kristina'));
 });
 
+test("skeleton(): Norphone's silent j and h at the start, x and a final dt", () => {
+  for (const [a, b] of [['Kjetil', 'Kittil'], ['Kjersti', 'Kirsti'], ['Gjermund', 'Jermund'], ['Hjalmar', 'Jalmar'],
+    ['Arndt', 'Arnt'], ['Alexander', 'Aleksander'], ['Kristen', 'Kirsten']]) {
+    assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b);
+  }
+  for (const [a, b] of [['Guri', 'Kari'], ['Gunder', 'Gunnar'], ['Ingrid', 'Inger']]) {
+    assert.notEqual(w.skeleton(a), w.skeleton(b), a + ' ≠ ' + b);
+  }
+});
+
+test('jaroWinkler(): 1 for the same word, less the more they differ', () => {
+  assert.equal(w.jaroWinkler('Lars', 'lars'), 1);
+  assert.equal(w.jaroWinkler('Lars', ''), 0);
+  assert.ok(w.jaroWinkler('Torbjørn', 'Torbiørn') > w.jaroWinkler('Torbjørn', 'Torkel'));
+  assert.ok(w.jaroWinkler('Torbjørn', 'Torkel') > w.jaroWinkler('Torbjørn', 'Lars'));
+});
+
+test('nameNear(): near spellings, not other names', () => {
+  for (const [a, b] of [['Ingebrigt', 'Ingebret'], ['Torbjørn', 'Torbiørn'], ['Gulbrand', 'Gudbrand'],
+    ['Tollef', 'Tollev'], ['Sigvard', 'Sigvart'], ['Halvor', 'Halvar']]) {
+    assert.equal(w.nameNear(a, b), true, a + ' ≈ ' + b);
+  }
+  for (const [a, b] of [['Kari', 'Karin'], ['Berte', 'Bertel'], ['Helge', 'Helga'], ['Marit', 'Maria'], ['Maren', 'Marte'],
+    ['Elling', 'Erling'], ['Simen', 'Simon'], ['Ola', 'Ole'], ['Lars', 'Hans']]) {
+    assert.equal(w.nameNear(a, b), false, a + ' ≉ ' + b);
+  }
+});
+
 test('nameClose(): Astri or Bodil for Astrid, not Hans', () => {
   assert.equal(w.nameClose('Astri', 'Astrid'), true);
   assert.equal(w.nameClose('Hans', 'Astrid'), false);
+});
+
+test('nameClose(): Torbiørn for Torbjørn, Tollev for Tollef: near spellings', () => {
+  assert.equal(w.nameClose('Torbiørn', 'Torbjørn'), true);
+  assert.equal(w.nameClose('Tollev', 'Tollef'), true);
+  assert.equal(w.nameClose('Torbjørn', 'Torbjørn'), false, 'the same name is a match');
+  assert.equal(w.nameClose('Helga', 'Helge'), false);
 });
 
 test('mergeHits() keeps a record once, with every search that found it', () => {

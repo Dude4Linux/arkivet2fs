@@ -123,7 +123,8 @@ async function rememberPerson(person) {
 }
 
 // Patronymic surnames: -sen/-søn/-son, -datter/-dotter and their abbreviations
-const PATRONYMIC = /(s[eøo]n|datter|dotter|dtr\.?|sdr?\.?)$/i;
+// (as da_search.js PATRONYMIC_ENDING: -dattr., -datt., -dat., -dtr., -sdr., -sd:r, -sd.)
+const PATRONYMIC = /(s[eøo]n|datter|dotter|daatter|s(?:dattr|datt|datr|dat|d:r)\.?|dtr\.?|sdr?\.?)$/i;
 
 // Split an FS full name into given name(s), surname, and what follows the surname.
 // Names in this tree are patronymic, often with the farm as an address: "Tollef

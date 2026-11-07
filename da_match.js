@@ -51,11 +51,58 @@ function hasWord(text, word) {
 // A name's consonants, spelled one way (Christine, Kristina → krstn; John, Joen → jn):
 // spellings of a name mostly differ in their vowels, doubled letters, a silent h
 // (before a consonant or after one: Ragnhild, Ragnild, Ragnihld → rgnld), and ch/k,
-// th/t, w/v, and an old final j for i (Sirj, Karj for Siri, Kari)
+// th/t, w/v, x/ks, and an old final j for i (Sirj, Karj for Siri, Kari). From
+// Norphone (Lars Marius Garshol's phonetic key for Norwegian): a silent j or h at the
+// start (Kjetil = Kittil, Kjersti = Kirsti, Gjermund = Jermund, Hjalmar = Jalmar) and
+// a final dt (Arndt = Arnt). Not its g → k, d → t, nd → n, ld → l or the final d
+// after a vowel: they make Guri Kari, Gunder Gunnar, Ingrid Inger.
 function skeleton(name) {
-  return fold(name).replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i').replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's')
-    .replace(/[^\p{L}]/gu, '')
+  return fold(name).replace(/[^\p{L}]/gu, '').replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i')
+    .replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
+    .replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's').replace(/x/g, 'ks')
     .replace(/(?<=.)h(?![aeiouyæøåäöüé])|(?<=[^aeiouyæøåäöüé])h/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
+}
+
+// Jaro-Winkler similarity of two words, 0 to 1: the share of letters they have in
+// common near the same place, less the transposed ones, and more for a common start
+function jaroWinkler(x, y) {
+  const a = fold(x), b = fold(y);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const window = Math.max(0, Math.floor(Math.max(a.length, b.length) / 2) - 1);
+  const inA = [], inB = [];
+  let m = 0;
+  for (let i = 0; i < a.length; i++) {
+    for (let j = Math.max(0, i - window); j < Math.min(b.length, i + window + 1); j++) {
+      if (!inB[j] && a[i] === b[j]) { inA[i] = inB[j] = true; m++; break; }
+    }
+  }
+  if (!m) return 0;
+  let transposed = 0;
+  for (let i = 0, k = 0; i < a.length; i++) {
+    if (!inA[i]) continue;
+    while (!inB[k]) k++;
+    if (a[i] !== b[k]) transposed++;
+    k++;
+  }
+  const jaro = (m / a.length + m / b.length + (m - transposed / 2) / m) / 3;
+  let prefix = 0;
+  while (prefix < Math.min(4, a.length, b.length) && a[prefix] === b[prefix]) prefix++;
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+// Two spellings close enough to be one name, where nameMatch() can't tell (Ingebrigt,
+// Ingebret; Torbjørn, Torbiørn; Gulbrand, Gudbrand; Tollef, Tollev): Jaro-Winkler
+// 0.92 or more, both of at least 4 letters, ending in the same letter or both in a
+// consonant (Kari and Karin, Helge and Helga, Berte and Bertel are other names). Only
+// ever a close name (≈), never a match, and never a reason against a record.
+function nameNear(x, y) {
+  const a = fold(x).replace(/[^\p{L}]/gu, ''), b = fold(y).replace(/[^\p{L}]/gu, '');
+  if (a.length < 4 || b.length < 4) return false;
+  const vowel = (c) => 'aeiouyæøåäöüé'.includes(c);
+  const endA = a[a.length - 1], endB = b[b.length - 1];
+  if (endA !== endB && (vowel(endA) || vowel(endB))) return false;
+  return jaroWinkler(a, b) >= 0.92;
 }
 
 // A word of a hit's name is the FS name, one of its forms (Ingbjør for Ingeborg:
@@ -79,9 +126,9 @@ function yearPoints(off) {
 
 // A record's given name close to FS's, but not one of its forms: the record's is a
 // stem of FS's (Astri for Astrid; nameMatch() the other way round), as
-// church books often write it
+// church books often write it, or a near spelling (Ingebret for Ingebrigt: nameNear())
 function nameClose(word, name) {
-  return !nameMatch(word, name) && nameMatch(name, word);
+  return !nameMatch(word, name) && (nameMatch(name, word) || nameNear(word, name));
 }
 
 // An FS place's parts, each with its other names
@@ -105,7 +152,7 @@ function scoreHit(hit, P) {
   const isSurname = (w) => stems.some((stem) => fold(w).startsWith(stem));
   // A patronymic from a spelling of the same father's name (Halvardsen for Halvorsen)
   const fsPatronymics = P.surnames.filter(isPatronymic);
-  const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => nameMatch(patronymicBase(w), patronymicBase(s)));
+  const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => nameMatch(patronymicBase(w), patronymicBase(s)) || nameNear(patronymicBase(w), patronymicBase(s)));
   const surname = words.slice(1).find(isSurname) || words.slice(1).find(spelled);
   if (surname && isSurname(surname)) add(2, surname, true);
   else if (surname) add(2, t('{name} for {fs}', { name: surname, fs: spelled(surname) }), null);
@@ -116,10 +163,10 @@ function scoreHit(hit, P) {
   // The first given name (of any FS name): the same 2, a spelling of it 2, otherwise
   // a variant DA matched 1 (0 where all given names are given: it isn't one of them)
   const first = names.find((w) => P.givens.some((g) => fold(g) === fold(w)));
-  const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g)));
+  const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g) || nameNear(w, g)));
   const variant = !first && !close && P.givens.length && names[0];
   if (first) add(2, first, true);
-  else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => nameMatch(close, g)) }), null);
+  else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => nameMatch(close, g) || nameNear(close, g)) }), null);
   else if (variant) add(allGiven ? 0 : 1, t('{name} (variant of {fs})', { name: variant, fs: P.given }), null);
   // Further given names (Magdalen for Magdaline)
   const used = new Set([first || close || variant]);
@@ -131,7 +178,7 @@ function scoreHit(hit, P) {
   // Kristina Caspara for Maren Kristine)
   if (allGiven && P.givenNames.length) {
     for (const w of names) {
-      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name))) add(-1, t('{name} not in FamilySearch', { name: w }), false);
+      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name) || nameNear(w, name))) add(-1, t('{name} not in FamilySearch', { name: w }), false);
     }
   }
 

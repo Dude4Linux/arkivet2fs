@@ -79,6 +79,27 @@ test('checkRecord(): the FS parents and birth date in the baptism', () => {
   ]);
 });
 
+test("checkRecord(): a mother's patronymic abbreviated or spelled otherwise is still FS's", () => {
+  const mother = (name) => {
+    const r = record('baptism-1846');
+    r.people.find((p) => p.role === 'mor').name = name;
+    return plain(w.checkRecord(r, lars())).find((r) => /mother/.test(r.text));
+  };
+  for (const name of ['Astri Larsdat.', 'Astri Larsdatt.', 'Astri Larsd:r', 'Astri Larsdtter']) {
+    const reason = mother(name);
+    assert.ok(reason && reason.points > 0, name + ': ' + JSON.stringify(reason));
+  }
+  assert.ok(mother('Astri Olsdat.').points < 0, 'another father');
+});
+
+test("patronymicDiffers(): Johannesdat. for Johansdr, Gudbrandsen for Gulbrandsen; not Moen", () => {
+  assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdat.' }, 'Johansdr'), false);
+  assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdottr' }, 'Johansdr'), false);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Gudbrandsen' }, 'Gulbrandsen'), false);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Moen' }, 'Larsen'), true);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Halvorsrud' }, 'Halvorsen'), true);
+});
+
 test("checkRecord(): another father's name, another day of birth", () => {
   const P = lars({ father: [{ fatherGivenName: 'Hans', fatherSurname: 'Larsen' }], birth: [{ birthLikeDate: '2 March 1846', 'birthLikeDate.from': '1845', 'birthLikeDate.to': '1847' }] });
   const reasons = plain(w.checkRecord(record('baptism-1846'), P));

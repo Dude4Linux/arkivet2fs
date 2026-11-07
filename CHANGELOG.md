@@ -4,6 +4,19 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.3.1 - 2026-11-07
+
+- A patronymic the church book abbreviates, such as Johannesdat., Larsdatt. or
+  Olsd:r, is read as one. Before, a mother written Astri Johannesdat. counted as
+  another woman than FamilySearch's Astri Johansdr, and her child's baptism was marked
+  down.
+- A name the extension can't read as a patronymic no longer counts against a record:
+  it's unknown, not a contradiction.
+- Names are compared more like the old spellings go: Kjetil and Kittil, Hjalmar and
+  Jalmar, Gjermund and Jermund, Arndt and Arnt are one name, and near spellings such
+  as Torbiørn for Torbjørn or Tollev for Tollef are close (≈). A near spelling only
+  ever helps a record; it is never a reason against one.
+
 ## 1.3.0 - 2026-11-06
 
 - A baptism (or other church-book entry) found in both of a parish's church books, the
