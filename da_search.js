@@ -7,6 +7,9 @@
 // - It adds its own name variants (Jon → Joen, John), but not for patronymic endings.
 // - A trailing * works, and DA still applies its variants to the stem (Christ* finds
 //   Kristian). A * inside a word or a ? doesn't ("J*n", "Tol*fs*", "Lindem?n").
+// - Its variants cover some spellings of a patronymic's father's name (Olsen =
+//   Olssen, Torchels* = Torkels*) but not others: Johans* finds neither Johannsdtr
+//   nor Johannesdtr., Johan* finds all three. See PATRONYMIC_SPELLINGS.
 // - DA doesn't treat Anna and Anne, or Magdaline and Magdalene, as variants; cutting
 //   the final vowel does (Ann*, Magdalin*). See givenStem().
 // - firstname matches each of its words against any given name ("Magdalin*" finds
@@ -133,22 +136,33 @@ function relatedStem(name) {
 // Irregular patronymics: Ole → Olsen
 const PATRONYMIC_BASE = { ole: 'Ol', ola: 'Ol' };
 
-// Patronymic stems that are spellings of one name but that DA doesn't treat as
-// variants (Johans* and Johannes* find different records). DA itself handles ch/k
-// (Torchels* = Torkels*) and doubled letters (Ols* = Olss*).
+// Patronymic stems (the father's name with the genitive s) that are spellings of one
+// name but that DA doesn't treat as variants: in one family's baptisms the mother is
+// Johannesdtr. and Johannsdtr, and FS has Johansdr, and Johans* finds neither. DA's
+// own variants cover ch/k (Torchels* = Torkels*) and some doubled letters (Olsen =
+// Olssen), not all (Johansdtr doesn't find Johannsdtr). `shared` is the start the
+// spellings share, searched by instead of each spelling where it names no other
+// father (Johan* finds all three); the others are searched for one by one, since
+// their shared start finds too many other names (Pe*, And*, Christ*: Christophersen,
+// Halv*: Halvdansen, Gu*).
 const PATRONYMIC_SPELLINGS = [
-  ['johannes', 'johans'], ['peders', 'pers'], ['christens', 'christians'],
-  ['anders', 'andres'], ['halvors', 'halvards'], ['gulbrands', 'gudbrands']
+  { forms: ['johannes', 'johanns', 'johans'], shared: 'johan' },
+  { forms: ['peders', 'pers'] }, { forms: ['christens', 'christians'] },
+  { forms: ['anders', 'andres'] }, { forms: ['halvors', 'halvards'] }, { forms: ['gulbrands', 'gudbrands'] }
 ];
 
-// A patronymic stem's other spellings (Johans* → Johannes*)
-function patronymicSpellings(stem) {
-  const s = stem.replace(/\*$/, '');
-  const group = PATRONYMIC_SPELLINGS.find((list) => list.some((p) => s.toLowerCase().startsWith(p)));
-  if (!group) return [];
-  const own = group.find((p) => s.toLowerCase().startsWith(p));
-  const rest = s.slice(own.length);
-  return group.filter((p) => p !== own).map((p) => s[0] + p.slice(1) + rest + '*');
+// The spelling group of a patronymic: {group, own, rest}, own being the longest
+// listed spelling the genitive stem starts with (Johannessen → johannes + s); null
+// when it isn't listed
+function patronymicGroup(surname) {
+  const s = (surname || '').trim();
+  if (!isPatronymic(s)) return null;
+  const stem = s.replace(PATRONYMIC_ENDING, '$1').toLowerCase();
+  let found = null;
+  for (const group of PATRONYMIC_SPELLINGS) {
+    for (const p of group.forms) if (stem.startsWith(p) && (!found || p.length > found.own.length)) found = { group, own: p, rest: stem.slice(p.length) };
+  }
+  return found;
 }
 
 // The patronymic a child of `father` has (Aslak → Aslaksen, Aslaksdatter; Johannes →
@@ -171,6 +185,25 @@ function surnameStem(surname) {
   if (isPatronymic(s)) return s.replace(PATRONYMIC_ENDING, '$1') + '*';
   const m = s.match(/^(.*)[aeiouyæøå][^aeiouyæøå]*$/i);
   return m && m[1].length >= 4 ? m[1] + '*' : s;
+}
+
+// Surname to search by: surnameStem(), but a patronymic of a father's name with
+// listed spellings by the start they share, where there is one (Johansdr → Johan*,
+// finding Johannesdtr. and Johannsdtr).
+// Scoring keeps surnameStem().
+function searchStem(surname) {
+  const spelled = patronymicGroup(surname);
+  const shared = spelled && spelled.group.shared;
+  return shared ? surname.trim().slice(0, shared.length) + '*' : surnameStem(surname);
+}
+
+// The other spellings of a patronymic to search for one by one (Pedersen → Pers*;
+// Johansdr → none, since Johan* finds them)
+function surnameSpellings(surname) {
+  const spelled = patronymicGroup(surname);
+  if (!spelled || spelled.group.shared) return [];
+  const s = surname.trim();
+  return spelled.group.forms.filter((p) => p !== spelled.own).map((p) => s[0] + p.slice(1) + spelled.rest + '*');
 }
 
 const year = (v) => (/^\d{4}$/.test(String(v || '').trim()) ? Number(v) : null);
@@ -322,7 +355,7 @@ function buildQueries(criteria) {
   const queries = [];
   if (!P.given && !P.surname) return queries;
 
-  const stem = surnameStem(P.surname);
+  const stem = searchStem(P.surname);
   // Every search ends when the person left Norway (P.leftNorway)
   const [lifeFrom, lifeEnd] = lifetime(P);
   const left = P.leftNorway;
@@ -370,10 +403,13 @@ function buildQueries(criteria) {
 
   // The person's and a relative's names as search fields: the person's in firstname
   // and lastname, a relative's (the stem of the given name's forms and of the
-  // surname: Ing* Lars* for Ingrid Larsdr) as related person
+  // surname: Ing* Lars* for Ingrid Larsdr, Ann* Johan* for Anne Johansdr) as related
+  // person, with the other spellings of the relative's patronymic (Pers* for
+  // Pedersdatter)
   const me = { first: given, last: stem };
   const relative = (r, relation, roles) => r && r.given ? {
-    relation, roles, first: relatedStem(firstWord(r.given)), last: r.surname ? surnameStem(r.surname) : '',
+    relation, roles, first: relatedStem(firstWord(r.given)), last: r.surname ? searchStem(r.surname) : '',
+    spellings: r.surname ? surnameSpellings(r.surname) : [],
     fsFirst: firstWord(r.given), fsLast: r.surname || ''
   } : null;
   // One party's names in a step (first and/or last), or null when the step wants a
@@ -398,23 +434,36 @@ function buildQueries(criteria) {
   // The person and a relative in one record, strict to relaxed: both full names;
   // `a` without the surname, then by surname only; `b` the same; both by given name
   // only. `a` is the one whose surname records leave out most (a mother, a bride).
+  // The first step with the relative's surname has the surname's other spellings in
+  // `then`, steps that query() puts right after it, before the surname is left out
+  // (a mother Pedersdatter written Persdatter).
   const pairSteps = (a, b) => {
     const steps = [];
+    const rel = a.relation ? a : b;
+    let spelled = !(rel.spellings || []).length;
     for (const [af, al, bf, bl] of [[1, 1, 1, 1], [1, 0, 1, 1], [0, 1, 1, 1], [1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 0]]) {
       const pa = part(a, af, al), pb = part(b, bf, bl);
       if (!pa || !pb) continue;
-      steps.push(step(a === me ? [pa, pb] : [pb, pa]));
+      const pair = (x, y) => step(a === me ? [x, y] : [y, x]);
+      const s = pair(pa, pb);
+      if (!spelled && (rel === a ? al : bl)) {
+        spelled = true;
+        s.then = rel.spellings.map((last) => rel === a
+          ? pair(part({ ...rel, last }, af, al), pb) : pair(pa, part({ ...rel, last }, bf, bl)));
+      }
+      steps.push(s);
     }
     return steps;
   };
   const alone = (who, first = 1, last = 1) => { const p = part(who, first, last); return p ? [step([p])] : []; };
 
-  // A query; arrays in fields are repeated fields, empty values are left out
+  // A query; arrays in fields are repeated fields, empty values are left out. A
+  // step's `then` steps follow it (pairSteps()).
   const query = (id, title, base, steps, levels, summary, extra = {}) => {
     const seen = new Set();
     const q = {
       id, title, base: withFields(new URLSearchParams(), base), levels, reasons: [],
-      steps: steps.filter((s) => { const key = withFields(new URLSearchParams(), s.fields).toString(); return !seen.has(key) && seen.add(key); }),
+      steps: steps.flatMap(({ then = [], ...s }) => [s, ...then]).filter((s) => { const key = withFields(new URLSearchParams(), s.fields).toString(); return !seen.has(key) && seen.add(key); }),
       summary: summary.filter(Boolean).join(' · '),
       goal: (hits) => (hits.length ? [] : [t('a record')]),
       ...extra
@@ -593,9 +642,9 @@ function buildQueries(criteria) {
   const variants = [];
   {
     const candidates = [
-      P.patronymic && { firstname: given, lastname: surnameStem(P.patronymic) },
-      ...P.alternates.map((a) => ({ firstname: givenStem(a.given), lastname: surnameStem(a.surname) || stem })),
-      ...[stem, ...P.alternates.map((a) => surnameStem(a.surname))].flatMap(patronymicSpellings).map((lastname) => ({ firstname: given, lastname }))
+      P.patronymic && { firstname: given, lastname: searchStem(P.patronymic) },
+      ...P.alternates.map((a) => ({ firstname: givenStem(a.given), lastname: searchStem(a.surname) || stem })),
+      ...[P.surname, ...P.alternates.map((a) => a.surname)].flatMap(surnameSpellings).map((lastname) => ({ firstname: given, lastname }))
     ];
     const seen = new Set([given + ' ' + stem]);
     for (const c of candidates) {

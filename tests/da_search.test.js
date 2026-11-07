@@ -31,6 +31,86 @@ test('surnameStem() keeps the patronymic or name base', () => {
   assert.equal(w.surnameStem('Lindeman'), 'Lindem*');
 });
 
+test('searchStem(): spellings of a patronymic by the start they share; surnameStem() stays narrow', () => {
+  // FS has Johansdr, DA Johannesdtr. and Johannsdtr: Johans* finds neither, Johan* all
+  for (const name of ['Johansdr', 'Johannsdtr', 'Johannesdtr.', 'Johansen', 'Johannessen']) assert.equal(w.searchStem(name), 'Johan*', name);
+  assert.equal(w.surnameStem('Johansdr'), 'Johans*');
+  // no shared start that names only one father: as surnameStem()
+  assert.equal(w.searchStem('Pedersdatter'), 'Peders*');
+  assert.equal(w.searchStem('Andersen'), 'Anders*');
+  assert.equal(w.searchStem('Aslaksen'), 'Aslaks*');
+  assert.equal(w.searchStem('Lindeman'), 'Lindem*');
+  assert.equal(w.searchStem(''), '');
+});
+
+test('surnameSpellings(): the other spellings to search one by one, none when the shared start finds them', () => {
+  assert.deepEqual(plain(w.surnameSpellings('Pedersdatter')), ['Pers*']);
+  assert.deepEqual(plain(w.surnameSpellings('Persen')), ['Peders*']);
+  assert.deepEqual(plain(w.surnameSpellings('Andresen')), ['Anders*']);
+  assert.deepEqual(plain(w.surnameSpellings('Halvorsen')), ['Halvards*']);
+  assert.deepEqual(plain(w.surnameSpellings('Gudbrandsdatter')), ['Gulbrands*']);
+  assert.deepEqual(plain(w.surnameSpellings('Christiansen')), ['Christens*']);
+  assert.deepEqual(plain(w.surnameSpellings('Johansdr')), []);
+  assert.deepEqual(plain(w.surnameSpellings('Aslaksen')), []);
+  assert.deepEqual(plain(w.surnameSpellings('Lindeman')), []);
+});
+
+// Nils Olsen, b. 1825, married to Gunhild Johansdr (FS's spelling; the baptisms of
+// their children have her as Johannesdtr. and Johannsdtr), children b. 1852 and 1858
+const nils = (wife = 'Johansdr') => criteria({
+  name: [{ givenName: 'Nils', surname: 'Olsen' }], sex: [{ sex: 'Male' }],
+  birth: [{ 'birthLikeDate.from': '1824', 'birthLikeDate.to': '1826', birthLikePlace: 'Vågå, Oppland, Norway' }],
+  spouse: [{ spouseGivenName: 'Gunhild', spouseSurname: wife }],
+  child: [{ childGivenName: 'Ole', childBirthYear: '1852' }, { childGivenName: 'Marit', childBirthYear: '1858' }]
+});
+const children = (c) => w.buildQueries(c).find((q) => q.kind === 'children');
+
+test("buildQueries(): children's baptisms find the mother under every spelling of Johansdr", () => {
+  const q = children(nils());
+  assert.equal(q.steps[0].text, 'Nils Ols* + mother Gunhild Johan*');
+  assert.equal(q.steps[0].fields.related_last_name, 'Johan*');
+  assert.deepEqual(plain(q.steps[0].reasons), ['mother Gunhild Johan* for Gunhild Johansdr']);
+  // the next step leaves her surname out, as before
+  assert.equal(q.steps[1].text, 'Nils Ols* + mother Gunhild');
+  // the plan starts with it in the parish
+  assert.equal(w.searchPlan(q)[0].step.text + ' @ ' + w.searchPlan(q)[0].level.text, 'Nils Ols* + mother Gunhild Johan* @ Vågå');
+});
+
+test("buildQueries(): a relative's other patronymic spelling right after the full names", () => {
+  const q = children(nils('Pedersdatter'));
+  assert.deepEqual(plain(q.steps.slice(0, 3).map((s) => s.text)), [
+    'Nils Ols* + mother Gunhild Peders*',
+    'Nils Ols* + mother Gunhild Pers*',
+    'Nils Ols* + mother Gunhild'
+  ]);
+  assert.deepEqual(plain(q.steps[1].reasons), ['mother Gunhild Pers* for Gunhild Pedersdatter']);
+  assert.equal(q.steps.filter((s) => s.fields.related_last_name === 'Pers*').length, 1);
+  // the own baptism: the father's spelling after his full name, before his given name only
+  const baptism = w.buildQueries(criteria({
+    name: [{ givenName: 'Ole', surname: 'Pedersen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1850', 'birthLikeDate.to': '1852' }],
+    father: [{ fatherGivenName: 'Peder', fatherSurname: 'Andersen' }]
+  }))[0];
+  assert.deepEqual(plain(baptism.steps.map((s) => s.text)), [
+    'Ole + father Peder Anders*', 'Ole + father Peder Andres*', 'Ole + father Peder', 'Ole'
+  ]);
+});
+
+test("buildQueries(): the person's own patronymic spelling as a fallback step", () => {
+  const q = w.buildQueries(criteria({
+    name: [{ givenName: 'Ole', surname: 'Pedersen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1850', 'birthLikeDate.to': '1852' }]
+  })).find((x) => x.kind === 'census');
+  assert.ok(q.steps.some((s) => s.fallback && s.fields.lastname === 'Pers*'), JSON.stringify(plain(q.steps.map((s) => s.text))));
+  // Johansen: Johan* already finds every spelling, so no fallback for them
+  const j = w.buildQueries(criteria({
+    name: [{ givenName: 'Ole', surname: 'Johansen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1850', 'birthLikeDate.to': '1852' }]
+  })).find((x) => x.kind === 'census');
+  assert.equal(j.steps[0].fields.lastname, 'Johan*');
+  assert.ok(!j.steps.some((s) => s.fallback), JSON.stringify(plain(j.steps.map((s) => s.text))));
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');

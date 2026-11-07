@@ -4,6 +4,18 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.2.1 - 2026-11-06
+
+- A patronymic from a father's name that Digitalarkivet spells in several ways is
+  searched under all of them. A mother FamilySearch has as Johansdr is searched as
+  Johan*, which finds the Johannesdtr. and Johannsdtr of the church books; before, the
+  search found none of her children's baptisms with her surname, and fell back to one
+  without it that found other couples' children too. Johansen and Johannessen are
+  searched the same way.
+- A parent's or spouse's patronymic with other spellings (Pedersdatter and
+  Persdatter, Andersen and Andresen, Halvorsen and Halvardsen, ...) is also searched
+  in the other spelling, right after the search under FamilySearch's spelling.
+
 ## 1.2.0 - 2026-11-06
 
 - The extension checks once a day whether a newer release is out (only a copy loaded
