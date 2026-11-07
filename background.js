@@ -1,5 +1,6 @@
-// The languages (the notifications), place tables and the farm check (personToQuery)
-importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js');
+// The languages (the notifications), place tables, the farm check (personToQuery) and
+// the update check (releases.js)
+importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js', 'releases.js');
 
 // Whether an address is a page on DigitalArkivet (https, digitalarkivet.no or a
 // subdomain of it)
@@ -32,7 +33,11 @@ chrome.action.onClicked.addListener((tab) => {
   // Ensure the tab is a DigitalArkivet page: its host, not just the text anywhere in
   // the address ("https://example.com/?digitalarkivet.no" isn't one)
   if (!isDigitalArkivet(url)) {
-    showErrorMessage('Not a DigitalArkivet URL');
+    // With a newer release shown on the icon, the icon opens the update page instead
+    pendingUpdate().then((release) => {
+      if (release) openUpdatePage(tab);
+      else showErrorMessage('Not a DigitalArkivet URL');
+    });
     return;
   }
 
@@ -309,3 +314,114 @@ async function showErrorMessage(errorMessage) {
   });
 }
 
+
+// --- Updates (release-plan.md, Phase 3) --------------------------------------------
+// Only a copy loaded unpacked ("development", as from a release's zip) is checked: a
+// store updates its own. Once a day (the alarm, and when the service worker starts a
+// day or more after the last check) GitHub's latest release is read (releases.js
+// fetchLatestRelease()); a newer one gets a badge on the icon, one notification per
+// version, and the line in the pages' headers. update.html shows it and downloads it.
+const UPDATE_ALARM = 'update-check';
+
+async function developmentInstall() {
+  try {
+    return (await chrome.management.getSelf()).installType === 'development';
+  } catch (e) {
+    return false;
+  }
+}
+
+async function updateSettings() {
+  return chrome.storage.local.get(['update', 'updateChoice', 'updateCheck', 'updateDev']);
+}
+
+// The newer release to show on the icon: checks on, not skipped or put off
+async function pendingUpdate() {
+  try {
+    if (!await developmentInstall()) return null;
+    const { update, updateChoice, updateCheck, updateDev } = await updateSettings();
+    if (updateCheck === false) return null;
+    return newerRelease(update, currentVersionOf(updateDev, chrome.runtime.getManifest().version), Date.now(), updateChoice || {});
+  } catch (e) {
+    return null;
+  }
+}
+
+function openUpdatePage(tab) {
+  const url = chrome.runtime.getURL('update.html');
+  chrome.tabs.create(tab ? { url, index: tab.index + 1, openerTabId: tab.id } : { url });
+}
+
+// The badge, and the notification once per version
+async function showUpdate() {
+  const release = await pendingUpdate();
+  try {
+    await chrome.action.setBadgeText({ text: release ? '↑' : '' });
+    if (release) await chrome.action.setBadgeBackgroundColor({ color: '#b0621f' });
+  } catch (e) { /* no badge */ }
+  if (!release) return null;
+  const { update } = await chrome.storage.local.get('update');
+  if (update && update.notified !== release.version) {
+    await chrome.storage.local.set({ update: { ...update, notified: release.version } });
+    await loadUiLanguage();
+    chrome.notifications.create('update:' + release.version, {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: t('arkivet2fs {version} is out', { version: release.version }),
+      message: t('Click to see what is new and download it.')
+    }, () => void chrome.runtime.lastError);
+  }
+  return release;
+}
+
+// Checks GitHub when a day has passed (`force`: now, update.html's "Check now"), keeps
+// the answer and shows it. → the state kept, or null on a store install
+async function checkForUpdate(force) {
+  if (!await developmentInstall()) return null;
+  const { update, updateCheck, updateDev } = await updateSettings();
+  let state = update || null;
+  if (force || (updateCheck !== false && updateDue(update, Date.now()))) {
+    state = await fetchLatestRelease(updateRepoOf(updateDev), update, fetch, Date.now());
+    const now = await chrome.storage.local.get('update');
+    // the notification kept since (two checks at once)
+    if (now.update && now.update.notified) state.notified = state.notified || now.update.notified;
+    await chrome.storage.local.set({ update: state });
+    if (state.error) console.warn('Update check:', state.error);
+  }
+  await showUpdate();
+  return state;
+}
+
+async function startUpdateChecks() {
+  if (!await developmentInstall()) return;
+  try {
+    if (!await chrome.alarms.get(UPDATE_ALARM)) chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 });
+  } catch (e) {
+    console.warn('No update alarm:', e);
+  }
+  await checkForUpdate(false);
+}
+
+if (chrome.alarms) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === UPDATE_ALARM) checkForUpdate(false);
+  });
+}
+chrome.notifications.onClicked.addListener((id) => {
+  if (!id.startsWith('update:')) return;
+  chrome.notifications.clear(id, () => {});
+  openUpdatePage();
+});
+// update.html's choices and settings change what the icon shows
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.updateCheck || changes.updateChoice) showUpdate();
+  if (changes.updateDev) checkForUpdate(true);
+});
+// update.html's "Check now"
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (!request || request.action !== 'checkUpdate' || sender.id !== chrome.runtime.id) return false;
+  checkForUpdate(true).then((state) => sendResponse({ state }), (error) => sendResponse({ error: error.message }));
+  return true;
+});
+startUpdateChecks();

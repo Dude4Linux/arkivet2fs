@@ -539,4 +539,5 @@ document.getElementById('criteria').addEventListener('submit', (event) => {
 window.addEventListener('popstate', render);
 localizePage();
 document.querySelector('.topbar').append(languageMenu());
+addVersionLink(document.querySelector('.topbar'));
 render();

@@ -80,6 +80,18 @@ button, input, select { font: inherit; }
   padding: 3px 6px;
 }
 .topbar .fs-link:not([hidden]) ~ select.language { margin-left: 16px; }
+/* The version and update link (releases.js addVersionLink()), before the language menu */
+.topbar .version-link {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topbar .version-link:hover { text-decoration: underline; }
+.topbar .version-link.new { color: var(--link); font-weight: 600; }
+.topbar .fs-link:not([hidden]) ~ .version-link { margin-left: 16px; }
+.topbar .version-link ~ select.language { margin-left: 12px; }
 
 .layout {
   display: grid;

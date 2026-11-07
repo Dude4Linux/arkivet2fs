@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n>arkivet2fs updates</title>
+  <link rel="icon" href="icons/icon32.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="search.css">
+  <link rel="stylesheet" href="update.css">
+</head>
+<body>
+  <header class="topbar">
+    <img src="icons/icon32.svg" alt="" width="28" height="28">
+    <h1 data-i18n>arkivet2fs updates</h1>
+  </header>
+  <main class="update-page">
+    <section class="box">
+      <h2 data-i18n>This copy</h2>
+      <p id="current"></p>
+      <p id="store-note" class="muted" hidden data-i18n>This copy was installed from a store, which keeps it up to date. Nothing is checked here.</p>
+    </section>
+
+    <section id="checker" class="box" hidden>
+      <h2 data-i18n>Latest release</h2>
+      <p id="check-status" class="muted" aria-live="polite"></p>
+      <p class="buttons">
+        <button id="check-now" type="button" data-i18n>Check now</button>
+        <a id="all-releases" target="_blank" rel="noopener" data-i18n>All releases on GitHub</a>
+      </p>
+      <div id="release" hidden>
+        <h3 id="release-title"></h3>
+        <div id="notes"></div>
+        <p class="buttons">
+          <button id="download" type="button" class="primary"></button>
+          <button id="later" type="button" data-i18n>Remind me later</button>
+          <button id="skip" type="button" data-i18n>Skip this version</button>
+        </p>
+        <p id="download-status" aria-live="polite"></p>
+        <div id="install" hidden>
+          <h3 data-i18n>Installing it</h3>
+          <ol>
+            <li data-i18n>Unzip the download. It holds a folder named arkivet2fs.</li>
+            <li data-i18n>Put its files over the folder this copy was loaded from (the extension's details page on chrome://extensions shows where that is). If you loaded a git clone, run git pull there instead.</li>
+            <li data-i18n>Reload the extension: the button below, or the reload button on its card. Your drafts and remembered persons are kept.</li>
+          </ol>
+          <p class="buttons">
+            <button id="reload" type="button" data-i18n>Reload the extension</button>
+            <button id="extensions" type="button" data-i18n>Open the extensions page</button>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="settings" class="box" hidden>
+      <h2 data-i18n>Settings</h2>
+      <label class="check"><input id="update-check" type="checkbox"> <span data-i18n>Check for updates once a day</span></label>
+      <p class="muted small" data-i18n>The check asks GitHub for the latest release. Nothing about you or your records is sent; GitHub sees only your IP address.</p>
+      <p class="muted small" id="key-note"></p>
+    </section>
+  </main>
+  <script src="i18n.js"></script>
+  <script src="i18n_strings.js"></script>
+  <script src="releases.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>

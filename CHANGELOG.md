@@ -4,6 +4,20 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.2.0 - 2026-11-06
+
+- The extension checks once a day whether a newer release is out (only a copy loaded
+  unpacked, as from a release's zip). A new release shows as an arrow on the toolbar
+  icon, a notification, and "v. X.Y.Z is out" in the search and linker pages' headers.
+- A new Updates page (click the version in a page's header, or the icon with the arrow):
+  the release's notes, and a Download button that saves the package only after checking
+  that it's the release's file, signed with the maintainer's key. Then unzip it over
+  the extension's folder and click **Reload the extension**; your drafts and persons
+  are kept. "Remind me later", "Skip this version", and a setting to turn the check off.
+- The check asks GitHub for the latest release and sends nothing about you or your
+  records. Chrome asks for two new permissions: GitHub's API and its file host, for
+  the check and the download, and alarms, for the daily check.
+
 ## 1.1.3 - 2026-11-06
 
 - A census couple who are both heads of the household (1900's husfar and husmor,

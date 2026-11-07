@@ -36,6 +36,18 @@ click the reload button on the extension's card in `chrome://extensions`. Chrome
 an unpacked extension's stored persons and drafts by its folder, so keep the folder
 where it is.
 
+From 1.2.0 the extension tells you when a new release is out: an arrow on its toolbar
+icon, a notification, and "v. X.Y.Z is out" at the top of its pages. Click the version
+there (or the icon with the arrow, on a page other than Digitalarkivet) for the
+**Updates** page: what's new, and a **Download** button that saves the package only
+after checking it (its size and SHA-256 as the release gives them, and the signature
+against the maintainer's key below; a file that fails is not saved). Unzip it over the
+folder, then click **Reload the extension** there. **Remind me later** waits three days;
+**Skip this version** waits for the next one. The check runs once a day and sends one
+request to GitHub (`api.github.com`), which sees your IP address and nothing else; turn
+it off on the Updates page. A copy installed from a store isn't checked: the store
+updates it.
+
 **To check a download** (optional): each package is signed with the maintainer's key,
 `keys/release.pub` in the repository, whose SHA-256 fingerprint is
 
@@ -237,6 +249,9 @@ use that language.
 - **Data stays between the sites.** The extension sends requests only to
   digitalarkivet.no and familysearch.org. To check farm names, it also queries Rygh's
   *Norske Gaardnavne* (dokpro.uio.no) and Kartverket's place names (ws.geonorge.no).
+  The update check asks GitHub (api.github.com) for the latest release once a day,
+  and a download comes from GitHub's file host; neither gets anything about you or
+  your records.
   Search results are kept only for the browser session. The extension also keeps the
   last 30 FS persons you searched for (name, events and family), so the linker can
   pair a record with them. They stay in the browser's extension storage.
@@ -249,7 +264,9 @@ use that language.
 | `_locales/` | The extension's name and description in English and Norwegian |
 | `i18n.js`, `i18n_strings.js` | The languages: choosing one, and the Bokmål and Nynorsk texts |
 | `fs_person.js` | The "Digital Arkivet" entry on FS person pages |
-| `background.js` | Toolbar icon, opening the search page and the linker, keeping the FS persons |
+| `background.js` | Toolbar icon, opening the search page and the linker, keeping the FS persons, the daily update check |
+| `releases.js` | The update check: GitHub's latest release, checking a download against the release key |
+| `update.html`, `update.js`, `update.css` | The Updates page: the new release's notes, a checked download, how to install it |
 | `farms.js` | Farm or family name? (Rygh, Kartverket) |
 | `search.html`, `search.js`, `search.css` | The search page |
 | `da_places.js` | DA's counties and municipalities, old place names |
@@ -272,8 +289,8 @@ use that language.
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |
 | `LICENSE` | The GNU General Public License, version 3 |
 
-The version is shown when you hover over the extension's toolbar icon, and on its
-card in `chrome://extensions`. It counts up as MAJOR.MINOR.PATCH: fixes raise the
+The version is shown when you hover over the extension's toolbar icon, at the top
+right of its pages, and on its card in `chrome://extensions`. It counts up as MAJOR.MINOR.PATCH: fixes raise the
 last number, new features the middle one.
 
 Developer notes are in `CLAUDE.md`. After changing the code, reload the extension on

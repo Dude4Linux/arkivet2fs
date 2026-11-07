@@ -1,7 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
 Status: **approved; Phases 0 and 2 done, Phase 1 nearly done** (the Forgejo mirror is
-left); v1.1.3, the first signed release, is published. Next: Phase 3. All the decisions below are made.
+left); v1.1.3, the first signed release, is published. Phase 3 (1.2.0) is written and tested offline; next: its test against a fork, then the release. All the decisions below are made.
 Each phase ends with a test and a tagged release (or a test tag), so the next
 phase starts from something that works.
 
@@ -9,7 +9,7 @@ phase starts from something that works.
 
 - One Chromium MV3 extension at the repo root: Chrome and Brave load the folder
   unpacked. There's no build step. The tests are in the repo (`tests/`, `npm test`:
-  91 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
+  106 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
   harness that lived in a temporary folder and was lost.
 - The repo is public on GitHub, `Dude4Linux/arkivet2fs`: one author (the noreply
   address), 5 tags (v1.0.0 – v1.1.3), the history rewritten once without the real
@@ -228,6 +228,19 @@ Done but for the mirror and the settings (marked *to do*).
   download, a download with a broken signature (refused), and that nothing happens in a
   store-type install.
 - **Version:** 1.2.0 (a new feature).
+- **Done (written, offline tests):** releases.js (the pinned key, GitHub's latest
+  release with its ETag, the size, SHA-256 and Ed25519 checks), the daily check in
+  background.js (badge, one notification per version), update.html, the version link
+  in the pages' headers, the nb/nn texts, and `tests/releases.test.js` (15 tests: a
+  fake GitHub, a key made in the test, a good download saved, a broken signature and
+  a changed file refused, nothing in a store install).
+- **Left:** the test against a real fork. `/releases/latest` never gives a
+  pre-release, so the fork's 1.2.1 must be an ordinary release, signed with the
+  release key (`sign.mjs` works on this repository only, so the fork's files are
+  signed by hand with the same key), and the checker pointed at it with `updateDev = {repo: '<you>/arkivet2fs'}` in the
+  service worker's console. Or, simpler: `updateDev = {version: '1.1.0'}` against the
+  real repository, so the published v1.1.3 shows as new and its real, signed package
+  is downloaded and checked.
 
 ### Phase 3b (optional): Chrome Web Store and Edge Add-ons
 

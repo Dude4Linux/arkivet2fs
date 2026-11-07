@@ -28,7 +28,7 @@ const ROOT = path.join(__dirname, '..');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 // The scripts of search.html and linker.html, in their order (CLAUDE.md)
-const SHARED = ['i18n.js', 'i18n_strings.js', 'da_places.js', 'da_search.js', 'da_match.js', 'da_record.js', 'da_verify.js'];
+const SHARED = ['i18n.js', 'i18n_strings.js', 'releases.js', 'da_places.js', 'da_search.js', 'da_match.js', 'da_record.js', 'da_verify.js'];
 
 function offlineFetch(url) {
   return Promise.reject(new Error('The tests are offline; no fetch of ' + url));
@@ -53,18 +53,22 @@ function load(files, options = {}) {
   return w;
 }
 
-// A do-nothing stub of the chrome.* APIs background.js uses at its top level
+// A do-nothing stub of the chrome.* APIs background.js uses at its top level. The
+// install is a store's ("normal"), so the update check doesn't run; releases.test.js
+// gives it more.
 function chromeStub(version = '0.0.0') {
   const event = () => ({ addListener() {} });
   const area = () => ({ async get() { return {}; }, async set() {}, async remove() {} });
   return {
-    action: { setTitle() {}, onClicked: event() },
-    runtime: { onInstalled: event(), onMessage: event(), getManifest: () => ({ version }), getURL: (p) => 'chrome-extension://test/' + p },
+    action: { setTitle() {}, async setBadgeText() {}, async setBadgeBackgroundColor() {}, onClicked: event() },
+    runtime: { id: 'test', onInstalled: event(), onMessage: event(), getManifest: () => ({ version }), getURL: (p) => 'chrome-extension://test/' + p },
     i18n: { getMessage: () => '' },
-    storage: { local: area(), session: area() },
+    storage: { local: area(), session: area(), onChanged: event() },
     tabs: { async query() { return []; }, async create() { return {}; } },
     scripting: { async executeScript() { return []; } },
-    notifications: { create() {} }
+    notifications: { create() {}, clear() {}, onClicked: event() },
+    alarms: { async get() { return undefined; }, create() {}, onAlarm: event() },
+    management: { async getSelf() { return { installType: 'normal' }; } }
   };
 }
 

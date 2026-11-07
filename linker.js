@@ -1172,5 +1172,6 @@ if (typeof chrome !== 'undefined' && chrome.storage) {
   $('other-households').addEventListener('click', () => { state.showAll = !state.showAll; showHouseholds(); });
   localizePage();
   document.querySelector('.topbar').append(languageMenu());
+  addVersionLink(document.querySelector('.topbar'));
   main();
 }
