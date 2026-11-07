@@ -639,7 +639,7 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-const state = { record: null, people: [], fs: null, trees: {}, rows: [], running: false, trusted: false };
+const state = { record: null, parallel: null, people: [], fs: null, trees: {}, rows: [], running: false, trusted: false };
 const $ = (id) => document.getElementById(id);
 
 function relationLabel(tree) {
@@ -743,6 +743,20 @@ function rename(row, newName) {
   }
   citation.value = renamePhrase(citation.value, oldName, newName);
   notes.value = renameNoteLine(notes.value, row.person.roleEnglish || row.person.role || 'Unknown', row.noteName, newName);
+  // The other church book's source: the same person there, as that book spells them
+  const other = counterpart(row.person);
+  if (other) {
+    const g = (id) => $('g-' + id);
+    const otherOld = row.otherName || stripVariants(other.name);
+    g('title').value = renamePhrase(g('title').value, otherOld, newName);
+    if (state.record.recordTypeInfo.type === 'birth_baptism' && roleKind(other) === 'child' && newName.split(/\s+/).length > otherOld.split(/\s+/).length) {
+      g('title').value = dropChildOf(g('title').value);
+    }
+    g('citation').value = renamePhrase(g('citation').value, otherOld, newName);
+    g('notes').value = renameNoteLine(g('notes').value, other.roleEnglish || other.role || 'Unknown', row.otherNoteName || other.name, newName);
+    row.otherName = newName;
+    row.otherNoteName = newName;
+  }
   row.name = newName;
   row.noteName = newName;
 }
@@ -969,16 +983,143 @@ async function readInTab(tabId, pid) {
   return { error: t('FamilySearch did not answer.') };
 }
 
-function fillSource(record) {
-  $('f-title').value = record.title || '';
-  $('f-date').value = record.date || '';
-  $('f-url').value = record.url || '';
-  $('f-citation').value = record.citation || '';
-  $('f-notes').value = record.notes || '';
+// The source's fields (`prefix` f; g for the other church book's)
+function fillSource(record, prefix = 'f') {
+  $(prefix + '-title').value = record.title || '';
+  $(prefix + '-date').value = record.date || '';
+  $(prefix + '-url').value = record.url || '';
+  $(prefix + '-citation').value = record.citation || '';
+  $(prefix + '-notes').value = record.notes || '';
+  if (prefix !== 'f') return;
   state.filled = sourceFields();
   const link = $('da-link');
   link.href = daPageUrl(record.url);
   link.hidden = !record.url;
+}
+
+// --- An entry in both of a parish's church books ---------------------------------------
+// A search hit can come with `also`, the same event in the parish's other church book
+// (pairParallel(), da_match.js): the priest's ministerialbok and the parish clerk's
+// klokkerbok, transcribed apart, with their own IDs and spellings. Both become
+// sources, attached to the same people, the ministerialbok's first and tagged; each
+// names its book and in its notes the other's entry and where the two differ.
+
+// The other book's record and both books (their DA source pages, readSourcePage());
+// the ministerialbok's record is `main`, the other `parallel`. A book that can't be
+// read is null.
+async function loadParallel(loaded, also) {
+  if (!onDigitalArkivet(also)) throw new Error('Not a Digitalarkivet address: ' + also);
+  const other = await loadFromDA(also);
+  const book = async (record) => {
+    try { return record.sourceUrl ? await fetchSource(record.sourceUrl) : null; } catch (e) {
+      console.warn('arkivet2fs: could not read the source page ' + record.sourceUrl, e);
+      return null;
+    }
+  };
+  const first = { ...loaded, book: await book(loaded.record) };
+  const second = { ...other, book: await book(other.record) };
+  const ministerial = (x) => !!(x.book && x.book.series === 'ministerial');
+  return ministerial(second) && !ministerial(first) ? { main: second, parallel: first } : { main: first, parallel: second };
+}
+
+// A book's name for the source: "Ministerialbok A-13"; without its page, the source title
+const bookName = (book, record) => (book && book.book) || record.sourceTitle || '';
+// Where it is: "Kristiansand domprosti, AV/SAK-1112-0006/F/Fa/L0013"
+const bookPlace = (book) => (book ? [book.archive.replace(/^[^:]*:\s*/, ''), book.reference].filter(Boolean).join(', ') : '');
+
+// The title and citation with the book named: after the source title in both
+// ("… (1001P), Ministerialbok A-13 - Birth"; "…(1001P)," Ministerialbok A-13, …"),
+// so that the two sources are told apart (FS's SourceBox by title, too)
+function withBook(record, book) {
+  const name = bookName(book, record);
+  if (!name || !book) return record;
+  const parts = record.title.split(' - ');
+  if (parts.length >= 3) parts[parts.length - 2] += ', ' + name;
+  else parts.push(name);
+  const place = book.reference ? ', ' + book.reference : '';
+  const citation = record.citation.includes('," ') ? record.citation.replace('," ', '," ' + name + place + ', ')
+    : name + place + '; ' + record.citation;
+  return { ...record, title: parts.join(' - '), citation };
+}
+
+// The notes' entries: "Label: value" lines before "--- Persons ---" (the person's own
+// fields, the record's details; not the permanent ID), and the persons after it
+function noteEntries(notes) {
+  const fields = [], persons = [];
+  let inPersons = false;
+  for (const line of String(notes || '').split('\n')) {
+    if (line.trim() === '--- Persons ---') { inPersons = true; continue; }
+    if (inPersons && !line.trim()) break;
+    const m = line.match(/^([^:]+): (.*)$/);
+    if (!m || /^permanent id$/i.test(m[1])) continue;
+    (inPersons ? persons : fields).push({ label: m[1], value: m[2].replace(/ \*(?= \(|$)/, '').trim() });
+  }
+  return { fields, persons };
+}
+
+// Two lists' items paired: by role (`role`), then the first given name (`name`), else
+// in order; [a, b] with null for one the other list lacks
+function matchByRole(as, bs, role, name) {
+  const left = [...bs];
+  const pairs = as.map((a) => {
+    const same = left.filter((b) => role(b) === role(a));
+    const b = same.find((x) => sameGiven(firstGiven(name(x)), firstGiven(name(a)))) || same[0] || null;
+    if (b) left.splice(left.indexOf(b), 1);
+    return [a, b];
+  });
+  return pairs.concat(left.map((b) => [null, b]));
+}
+
+// The two entries side by side, from what their sources say: the date, each field of
+// the notes, each person → [{ label, a, b, same }]
+function compareRecords(a, b) {
+  const rows = [];
+  const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const add = (label, x, y) => { if (x || y) rows.push({ label, a: x || '', b: y || '', same: norm(x) === norm(y) }); };
+  add('Date', a.date, b.date);
+  const ea = noteEntries(a.notes), eb = noteEntries(b.notes);
+  const value = (list, label) => list.filter((f) => f.label === label).map((f) => f.value).join('; ');
+  for (const label of new Set([...ea.fields, ...eb.fields].map((f) => f.label))) add(label, value(ea.fields, label), value(eb.fields, label));
+  for (const [p, q] of matchByRole(ea.persons, eb.persons, (x) => x.label, (x) => x.value)) {
+    add((p || q).label, p ? p.value : '', q ? q.value : '');
+  }
+  return rows;
+}
+
+// The notes' section on the other book's entry (English, as the source is), with
+// where it differs: "Mother: Astri Larsdtr. (here: Astri Larsdatter)"
+function parallelNote(other, book, rows, theirs) {
+  const ours = theirs === 'a' ? 'b' : 'a';
+  const place = bookPlace(book);
+  const lines = ['--- Also recorded in ---',
+    bookName(book, other) + (place ? ' (' + place + ')' : '') + (other.permanentId ? ', Permanent ID ' + other.permanentId : '') + ', ' + other.url];
+  const differs = rows.filter((r) => !r.same);
+  if (!differs.length) lines.push('The two entries agree.');
+  else {
+    lines.push('Differences there:');
+    for (const r of differs) {
+      lines.push(r.label + ': ' + (r[theirs] || 'not there') + ' (' + (r[ours] ? 'here: ' + r[ours] : 'not here') + ')');
+    }
+  }
+  return lines.join('\n');
+}
+
+// The other book's person for a person of the main record (renames carry over)
+function counterpart(person) {
+  if (!state.parallel) return null;
+  const pair = matchByRole(state.record.people, state.parallel.record.people, (p) => p.roleEnglish || p.role, (p) => p.name)
+    .find(([p]) => p && p.id === person.id);
+  return pair ? pair[1] : null;
+}
+
+// The comparison table: what each book says, differences marked
+function showComparison(rows, mainName, otherName) {
+  const cell = (tag, text) => el(tag, { text });
+  $('compare').replaceChildren(
+    el('thead', {}, [el('tr', {}, [cell('th', ''), cell('th', mainName), cell('th', otherName)])]),
+    el('tbody', {}, rows.map((r) => el('tr', { class: r.same ? '' : 'differs' },
+      [cell('th', r.label === 'Date' ? t('Date') : r.label), cell('td', r.a || '—'), cell('td', r.b || '—')])))
+  );
 }
 
 // --- Running on FS --------------------------------------------------------------------
@@ -1042,10 +1183,17 @@ function onFamilySearch(address) {
 }
 
 // The plan from the page: the source, and each paired person (PIDs checked)
+// (with the other church book's entry, `parallel`, its source: no tags, a distinct title)
 function readPlan(attach) {
-  const source = { title: $('f-title').value.trim(), date: $('f-date').value.trim(), url: $('f-url').value.trim(),
-    citation: $('f-citation').value.trim(), notes: $('f-notes').value.trim() };
+  const sourceOf = (prefix) => {
+    const v = (id) => $(prefix + '-' + id).value.trim();
+    return { title: v('title'), date: v('date'), url: v('url'), citation: v('citation'), notes: v('notes') };
+  };
+  const source = sourceOf('f');
   if (!source.title) throw new Error(t('The source needs a title.'));
+  const parallel = state.parallel ? sourceOf('g') : null;
+  if (parallel && !parallel.title) throw new Error(t('The source of the other church book needs a title.'));
+  if (parallel && parallel.title === source.title) throw new Error(t('The two sources need different titles: FamilySearch would take them for one.'));
   const pairs = [];
   if (attach) {
     for (const row of state.rows) {
@@ -1058,7 +1206,22 @@ function readPlan(attach) {
     }
     if (!pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
   }
-  return { source, pairs };
+  return parallel ? { source, parallel, pairs } : { source, pairs };
+}
+
+// Both books' sources: each named by its book, with the other's entry in the notes,
+// side by side above the other's fields
+function fillParallel(main, parallel) {
+  const rows = compareRecords(main.record, parallel.record);
+  const mainName = bookName(main.book, main.record), otherName = bookName(parallel.book, parallel.record);
+  const named = (x) => withBook(x.record, x.book);
+  const a = named(main), b = named(parallel);
+  fillSource({ ...a, notes: a.notes + '\n\n' + parallelNote(parallel.record, parallel.book, rows, 'b') });
+  fillSource({ ...b, notes: b.notes + '\n\n' + parallelNote(main.record, main.book, rows, 'a') }, 'g');
+  $('source-heading').textContent = t('Source: {book}', { book: mainName });
+  $('parallel-heading').textContent = t('Also in {book}', { book: otherName });
+  showComparison(rows, mainName, otherName);
+  $('parallel').hidden = false;
 }
 
 const logTags = (pair, result) => log(t('Tags for {name}: {tags}', { name: pair.label,
@@ -1097,28 +1260,37 @@ async function run(attach) {
   try {
     log(t('Opening the SourceBox on FamilySearch…'));
     const tabId = await openTab(SOURCEBOX_URL);
-    const created = await step(tabId, 'createSource', plan.source);
-    if (!created.ok) throw new Error(created.error);
-    log(created.existing ? t('The SourceBox already has a source with this title; using it ({id}).', { id: created.sourceId })
-      : t('Source created ({id}).', { id: created.sourceId }) +
-        (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');
-    const attached = [];
-    for (const pair of plan.pairs) {
-      const result = await step(tabId, 'attach', { sourceId: created.sourceId, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence });
-      if (!result.ok) { log(t('Not attached to {name} ({pid}): {error}', { name: pair.label, pid: pair.pid, error: result.error }), 'bad'); continue; }
-      log(t('Attached to {name} ({pid}).', { name: pair.label, pid: pair.pid }), 'ok');
-      // Tagged in FS's own dialog after attaching, or later on the Sources tab
-      if (result.tagged) logTags(pair, result.tagged);
-      else attached.push(pair);
+    // The source, then the other church book's (attached to the same people, untagged)
+    const sources = [{ source: plan.source, pairs: plan.pairs, book: state.parallel ? $('source-heading').textContent : '' }];
+    if (plan.parallel) {
+      sources.push({ source: plan.parallel, pairs: plan.pairs.map((p) => ({ ...p, tags: [], residence: false })), book: $('parallel-heading').textContent });
     }
-    for (const pair of attached) {
-      if (!pair.tags.length && !pair.residence) continue;
-      await navigate(tabId, personSourcesUrl(pair.pid));
-      const result = await step(tabId, 'tag', { sourceId: created.sourceId, title: plan.source.title, tags: pair.tags, residence: pair.residence });
-      if (result.ok) logTags(pair, result);
-      else log(t('Tags for {name} not set: {error}', { name: pair.label, error: result.error }), 'bad');
+    for (const [i, { source, pairs, book }] of sources.entries()) {
+      if (i > 0) await navigate(tabId, SOURCEBOX_URL);
+      if (book) log(book);
+      const created = await step(tabId, 'createSource', source);
+      if (!created.ok) throw new Error(created.error);
+      log(created.existing ? t('The SourceBox already has a source with this title; using it ({id}).', { id: created.sourceId })
+        : t('Source created ({id}).', { id: created.sourceId }) +
+          (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');
+      const attached = [];
+      for (const pair of pairs) {
+        const result = await step(tabId, 'attach', { sourceId: created.sourceId, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence });
+        if (!result.ok) { log(t('Not attached to {name} ({pid}): {error}', { name: pair.label, pid: pair.pid, error: result.error }), 'bad'); continue; }
+        log(t('Attached to {name} ({pid}).', { name: pair.label, pid: pair.pid }), 'ok');
+        // Tagged in FS's own dialog after attaching, or later on the Sources tab
+        if (result.tagged) { if (pair.tags.length || pair.residence) logTags(pair, result.tagged); }
+        else attached.push(pair);
+      }
+      for (const pair of attached) {
+        if (!pair.tags.length && !pair.residence) continue;
+        await navigate(tabId, personSourcesUrl(pair.pid));
+        const result = await step(tabId, 'tag', { sourceId: created.sourceId, title: source.title, tags: pair.tags, residence: pair.residence });
+        if (result.ok) logTags(pair, result);
+        else log(t('Tags for {name} not set: {error}', { name: pair.label, error: result.error }), 'bad');
+      }
     }
-    if (!attach) log(t('The source is in your SourceBox; attach it there when you like.'));
+    if (!attach) log(t(sources.length > 1 ? 'The sources are in your SourceBox; attach them there when you like.' : 'The source is in your SourceBox; attach it there when you like.'));
     log(t('Done.'), 'ok');
   } catch (e) {
     log(e.message || String(e), 'bad');
@@ -1137,11 +1309,28 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const status = $('status');
   try {
-    const loaded = params.get('draft') ? await loadDraft(params.get('draft')) : params.get('rec') ? await loadFromDA(params.get('rec')) : null;
+    let loaded = params.get('draft') ? await loadDraft(params.get('draft')) : params.get('rec') ? await loadFromDA(params.get('rec')) : null;
     if (!loaded) throw new Error(t('No record given. Open the linker from a search hit, or with the extension icon on a DA record.'));
+    // The same entry in the parish's other church book (a search hit's `also`):
+    // the ministerialbok's is the main record
+    let parallel = null;
+    if (params.get('rec') && params.get('also')) {
+      try {
+        const both = await loadParallel(loaded, params.get('also'));
+        loaded = both.main;
+        parallel = both.parallel;
+      } catch (e) {
+        const note = $('source-note');
+        note.textContent = t('The entry in the other church book could not be read: {error}', { error: tMessage(e.message || String(e)) });
+        note.classList.add('bad');
+        note.hidden = false;
+      }
+    }
     state.record = loaded.record;
+    state.parallel = parallel;
     state.people = recordPeople(loaded.record, loaded.anchorId, loaded.openPerson);
-    fillSource(loaded.record);
+    if (parallel) fillParallel(loaded, parallel);
+    else fillSource(loaded.record);
 
     // The FS person: the search's (the hit is theirs), or the last one searched
     const recent = await recentPersons();

@@ -4,6 +4,17 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.3.0 - 2026-11-06
+
+- A baptism (or other church-book entry) found in both of a parish's church books, the
+  ministerialbok and the klokkerbok, is one hit on the search page, with a link to the
+  entry in the other book. Before, each child of such a parish showed twice.
+- **Review & Attach** on such a hit reviews both entries together: the linker shows
+  them side by side with the differences marked, and makes a source for each book,
+  named in the title and citation. Each source's notes give the other book's entry
+  and the differences between the two transcriptions. The people are paired once and
+  both sources are attached to them; only the ministerialbok's source gets the tags.
+
 ## 1.2.1 - 2026-11-06
 
 - A patronymic from a father's name that Digitalarkivet spells in several ways is

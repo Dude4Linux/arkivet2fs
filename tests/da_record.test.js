@@ -32,6 +32,9 @@ test('a baptism: the child, the parents, the date of birth with the year', () =>
   assert.equal(r.fields['date of birth'], '07-16');
   assert.match(r.notes, /^Date of birth: 16 July 1846$/m);
   assert.match(r.notes, /^Gender: Male$/m);
+  // the source's own page, which names the book (da_verify.js readSourcePage())
+  assert.equal(r.sourceTitle, 'Church book from Vågå parish, Vågå local parish 1842-1856 (0515P)');
+  assert.equal(r.sourceUrl, 'https://www.digitalarkivet.no/en/source/9002');
 });
 
 test('a burial: split date of death merged, age in years, the position translated', () => {

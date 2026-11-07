@@ -553,7 +553,7 @@ function extractRecord(document, pageUrl) {
   //   "Name - Church book from X parish 1828-1841 (0301M4) - The Digital Archive"
   //   "001 Name - farm - district - ... - 1891 census for 0529 Vestre Toten - The Digital Archive"
   function extractSourceInfo() {
-    const info = { sourceTitle: '', county: '', municipality: '', parish: '', startYear: '' };
+    const info = { sourceTitle: '', county: '', municipality: '', parish: '', startYear: '', sourceUrl: '' };
 
     const infobox = document.querySelector(".right-view-column .infobox");
     if (infobox) {
@@ -564,6 +564,11 @@ function extractRecord(document, pageUrl) {
       info.municipality = muniKey ? f[muniKey] : '';
       info.parish = f['parish/church'] || f['parish'] || '';
       info.startYear = f['start year'] || '';
+      // The source's own page ("Go to complete source information"), which names the
+      // book: a ministerialbok or a klokkerbok of the parish (da_verify.js readSourcePage())
+      const link = infobox.querySelector('#source-link');
+      const href = link ? link.getAttribute('href') || '' : '';
+      if (/^https:\/\/([\w-]+\.)*digitalarkivet\.no\/.*\/source\/\d+$/.test(href)) info.sourceUrl = href;
     }
 
     if (!info.sourceTitle) {
@@ -1045,6 +1050,8 @@ function extractRecord(document, pageUrl) {
       census: isCensus ? census : null,
       fields: ownFields,
       principalUrl: principalUrl,
+      sourceTitle: sourceInfo.sourceTitle,
+      sourceUrl: sourceInfo.sourceUrl,
       error: idValidation.valid ? null : idValidation.error
     };
   } catch (err) {

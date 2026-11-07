@@ -310,3 +310,35 @@ function childYearHits(hits, P) {
   }
   return first.sort((a, b) => b.score - a.score);
 }
+
+// A DA source page (/en/source/NNN, the record's "Go to complete source
+// information") → { archive, book, reference, series }: the archive's heading
+// ("AV/SAK-1112-0006: Kristiansand domprosti"), the book, the last of its headings
+// without the number ("L0013: Ministerialbok A-13" → "Ministerialbok A-13"), the
+// archive reference ("AV/SAK-1112-0006/F/Fa/L0013"), and which of a parish's two
+// church books it is: 'ministerial' (the priest's, series Fa) or 'clerk' (the parish
+// clerk's klokkerbok, Fb), '' for anything else
+function readSourcePage(doc) {
+  const text = (node) => (node ? node.textContent.replace(/\s+/g, ' ').trim() : '');
+  const archive = text(doc.querySelector('.data-view h1'));
+  const headings = [...doc.querySelectorAll('.additional-title h3')].map(text);
+  const book = (headings[headings.length - 1] || '').replace(/^L\d+:\s*/, '');
+  const label = [...doc.querySelectorAll('span')].find((s) => /^archive reference:?$/i.test(text(s)));
+  const reference = label && label.nextElementSibling ? text(label.nextElementSibling) : '';
+  const series = /\/F\/Fa\//.test(reference + '/') || /^ministerialbok\b/i.test(book) ? 'ministerial'
+    : /\/F\/Fb\//.test(reference + '/') || /^klokkerbok\b/i.test(book) ? 'clerk' : '';
+  return { archive, book, reference, series };
+}
+
+// A source page read (readSourcePage()), kept in sessionStorage (src:<url>); only DA's
+async function fetchSource(url) {
+  if (!onDigitalArkivet(url)) throw new Error('Not a Digitalarkivet address: ' + url);
+  const key = 'src:' + url;
+  try {
+    const cached = sessionStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+  } catch (e) { /* storage unavailable */ }
+  const source = readSourcePage(new DOMParser().parseFromString(await fetchResultPage(url, false), 'text/html'));
+  try { sessionStorage.setItem(key, JSON.stringify(source)); } catch (e) { /* full or unavailable */ }
+  return source;
+}

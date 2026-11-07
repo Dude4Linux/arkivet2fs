@@ -272,3 +272,70 @@ function groupHits(merged, P) {
   return [...groups].filter(([, hits]) => hits.length)
     .map(([title, hits]) => ({ title, hits: hits.sort(order) }));
 }
+
+// --- One event in two church books ---------------------------------------------------
+// A parish kept two church books side by side, the priest's ministerialbok and the
+// parish clerk's klokkerbok, and DA transcribed both: one baptism can be two records,
+// each with its own ID, source and spellings. Two hits are one event when the record
+// kind, role, full date and parish code (the source title's "(1001P)") agree, the
+// sources differ, and the first given names match. With more than one hit of the
+// event in a source (twins: the father's row in two baptisms of one day), only the
+// checked records' principals (`hit.record`, the baptized child's name) tell which go
+// together; until then they stay apart.
+
+// The parish code a church book's source title ends with: "… 1842-1851 (1001P)"
+function parishCode(source) {
+  const m = String(source || '').match(/\((\d{4}[A-Z]\w*)\)\s*$/);
+  return m ? m[1] : '';
+}
+
+function parallelKey(hit) {
+  const date = String(hit.date || '').match(/^\d{4}-\d{1,2}-\d{1,2}/);
+  const code = parishCode(hit.source);
+  return date && code && hit.sourceUrl ? [hit.type, hit.role, date[0], code].join('|') : '';
+}
+
+const firstGiven = (name) => String(name || '').replace(/%[^%]*%/g, ' ').replace(/[*,]/g, ' ').trim().split(/\s+/)[0] || '';
+const sameGiven = (a, b) => !!a && !!b && (nameMatch(a, b) || nameMatch(b, a));
+
+// The given name of a record's principal (the baptized child, the confirmand, the
+// deceased, the groom), '' when the record wasn't read
+function principalGiven(record) {
+  for (const role of ['Child', 'Confirmand', 'Deceased', 'Groom']) {
+    const p = record && (record.people || []).find((x) => x.roleEnglish === role);
+    if (p) return firstGiven(p.name);
+  }
+  return '';
+}
+
+// A group's hits (in their order) with each event found in two books once: the first
+// of the two gets the other as `parallel`, and the other leaves the list
+function pairParallel(hits) {
+  const clusters = new Map();
+  for (const hit of hits) {
+    const key = parallelKey(hit);
+    if (!key) continue;
+    if (!clusters.has(key)) clusters.set(key, []);
+    clusters.get(key).push(hit);
+  }
+  const partner = new Map();
+  for (const cluster of clusters.values()) {
+    const inSource = (url) => cluster.filter((h) => h.sourceUrl === url).length;
+    for (const a of cluster) {
+      if (partner.has(a)) continue;
+      const others = cluster.filter((b) => !partner.has(b) && b.sourceUrl !== a.sourceUrl && sameGiven(firstGiven(a.name), firstGiven(b.name)));
+      const given = principalGiven(a.record);
+      // Records read: the principals must agree; else the only one in each source
+      const fits = others.filter((b) => {
+        const other = principalGiven(b.record);
+        return given && other ? sameGiven(given, other) : inSource(a.sourceUrl) === 1 && inSource(b.sourceUrl) === 1;
+      });
+      if (fits.length === 1) {
+        partner.set(a, fits[0]);
+        partner.set(fits[0], a);
+      }
+    }
+  }
+  return hits.filter((h) => !partner.has(h) || hits.indexOf(h) < hits.indexOf(partner.get(h)))
+    .map((h) => (partner.has(h) ? { ...h, parallel: partner.get(h) } : h));
+}

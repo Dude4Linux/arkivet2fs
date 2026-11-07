@@ -294,9 +294,20 @@ function hitRow(hit) {
   }
   // The record in the linker (linker.html), to review it as a source and attach it to
   // the FS person (the hit is their entry) and the relatives it names
+  // (with the other church book's record of the event, `also`: both are reviewed together)
   const treeref = new URLSearchParams(location.search).get('treeref');
-  const link = hit.url ? el('a', { href: 'linker.html?' + new URLSearchParams(treeref ? { rec: hit.url, pid: treeref } : { rec: hit.url }),
+  const linkParams = { rec: hit.url };
+  if (hit.parallel && hit.parallel.url) linkParams.also = hit.parallel.url;
+  if (treeref) linkParams.pid = treeref;
+  const link = hit.url ? el('a', { href: 'linker.html?' + new URLSearchParams(linkParams),
     target: '_blank', class: 'hit-attach', text: t('Review & Attach') }) : '';
+  // The event in the parish's other church book (pairParallel(), da_match.js)
+  const also = hit.parallel ? el('span', { class: 'hit-also muted' }, [
+    t('Also in the other church book:') + ' ',
+    el('a', { href: daPageUrl(hit.parallel.url), target: '_blank', rel: 'noopener', text: hit.parallel.name || hit.parallel.id }),
+    hit.parallel.sourceUrl ? ', ' : '',
+    hit.parallel.sourceUrl ? el('a', { href: daPageUrl(hit.parallel.sourceUrl), target: '_blank', rel: 'noopener', text: hit.parallel.source }) : ''
+  ]) : '';
   const source = hit.sourceUrl
     ? el('a', { href: daPageUrl(hit.sourceUrl), target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
     : el('span', { class: 'hit-source', text: hit.source || '' });
@@ -305,6 +316,7 @@ function hitRow(hit) {
       el('a', { href: daPageUrl(hit.url), target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
       hit.role ? el('span', { class: 'hit-role', text: t(hit.role) }) : '',
       source,
+      also,
       link
     ]),
     el('div', { class: 'hit-details' }, events),
@@ -378,7 +390,9 @@ async function checkHits(run, merged, person, container, status) {
     status.textContent = t('Checking the records of the best hits ({n})…', { n: checked + 1 });
     const entry = merged.get(hit.id || hit.url);
     try {
-      entry.checks = checkRecord(await fetchRecord(hit), person);
+      // (the record is kept for pairParallel(): which of twins' baptisms go together)
+      entry.record = await fetchRecord(hit);
+      entry.checks = checkRecord(entry.record, person);
     } catch (error) {
       entry.checks = [];
       entry.checkError = error.message;
@@ -438,8 +452,9 @@ function groupSection(group) {
   return section;
 }
 
+// The groups, an event in both of a parish's church books shown once (pairParallel())
 function renderGroups(container, merged, person) {
-  container.replaceChildren(...groupHits(merged, person).map(groupSection));
+  container.replaceChildren(...groupHits(merged, person).map((g) => ({ ...g, hits: pairParallel(g.hits) })).map(groupSection));
 }
 
 async function renderResults(criteria) {

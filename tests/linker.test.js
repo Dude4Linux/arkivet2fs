@@ -150,3 +150,82 @@ test('onFamilySearch(): steps run only on familysearch.org', () => {
   assert.equal(w.onFamilySearch('http://www.familysearch.org/'), false);
   assert.equal(w.onFamilySearch('https://familysearch.org.example.com/'), false);
 });
+
+// --- An entry in both church books: the 1846 baptism, and the same entry as the
+// clerk's book might have it (the mother's surname abbreviated, its own ID and source)
+const MINISTERIAL = { archive: 'AV/SAK-0000-0001: Vågå prestekontor', book: 'Ministerialbok A-13', reference: 'AV/SAK-0000-0001/F/Fa/L0013', series: 'ministerial' };
+const CLERK = { archive: 'AV/SAK-0000-0001: Vågå prestekontor', book: 'Klokkerbok B-10', reference: 'AV/SAK-0000-0001/F/Fb/L0010', series: 'clerk' };
+const CLERK_URL = fixtureUrl('da/baptism-1846.html').replace('pd99000000000018', 'pd99000000000918');
+function clerkPage(win = w) {
+  const doc = fixtureDoc(win, 'da/baptism-1846.html');
+  doc.body.innerHTML = doc.body.innerHTML.replace(/Astri Larsdatter/g, 'Astri Larsdtr.').replace(/pd99000000000018/g, 'pd99000000000918')
+    .replace('/en/source/9002', '/en/source/9098');
+  return doc;
+}
+const clerkRecord = () => w.extractRecord(clerkPage(), CLERK_URL);
+
+test('compareRecords() and parallelNote(): the two entries side by side, the differences in the notes', () => {
+  const a = record('baptism-1846'), b = clerkRecord();
+  const rows = w.compareRecords(a, b);
+  assert.deepEqual(plain(rows.filter((r) => !r.same)), [{ label: 'Mother', a: 'Astri Larsdatter', b: 'Astri Larsdtr.', same: false }]);
+  assert.ok(rows.some((r) => r.label === 'Date of birth' && r.same && r.a === '16 July 1846'));
+  assert.equal(w.parallelNote(b, CLERK, rows, 'b'), '--- Also recorded in ---\n' +
+    'Klokkerbok B-10 (Vågå prestekontor, AV/SAK-0000-0001/F/Fb/L0010), Permanent ID pd99000000000918, ' + b.url + '\n' +
+    'Differences there:\nMother: Astri Larsdtr. (here: Astri Larsdatter)');
+  assert.match(w.parallelNote(a, MINISTERIAL, rows, 'a'), /\nMother: Astri Larsdatter \(here: Astri Larsdtr\.\)$/);
+  assert.match(w.parallelNote(a, MINISTERIAL, w.compareRecords(a, a), 'a'), /\nThe two entries agree\.$/);
+});
+
+test('withBook(): the book named after the source title, in the title and the citation', () => {
+  const named = w.withBook(record('baptism-1846'), MINISTERIAL);
+  assert.equal(named.title, '1846, Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P), Ministerialbok A-13 - Birth');
+  assert.match(named.citation, /\(0515P\)," Ministerialbok A-13, AV\/SAK-0000-0001\/F\/Fa\/L0013, Births and baptisms, p\. 24/);
+});
+
+test('two sources: both filled, renames carry into both, readPlan() gives both with distinct titles', () => {
+  const state = value(w, 'state');
+  const a = record('baptism-1846'), b = clerkRecord();
+  Object.assign(state, { record: a, parallel: { record: b, book: CLERK }, people: w.recordPeople(a) });
+  w.fillParallel({ record: a, book: MINISTERIAL }, { record: b, book: CLERK });
+  const $ = (id) => w.document.getElementById(id);
+  assert.equal($('parallel').hidden, false);
+  assert.equal($('source-heading').textContent, 'Source: Ministerialbok A-13');
+  assert.equal($('compare').querySelectorAll('tr.differs').length, 1);
+  assert.match($('f-notes').value, /\n\n--- Also recorded in ---\nKlokkerbok B-10 .*pd99000000000918/);
+  assert.match($('g-notes').value, /\n\n--- Also recorded in ---\nMinisterialbok A-13 .*pd99000000000018/);
+  assert.match($('g-title').value, /\(0515P\), Klokkerbok B-10 - Birth$/);
+
+  // the child gains a surname: in both sources
+  const child = state.people.find((p) => p.roleEnglish === 'Child');
+  w.rename({ person: child, name: 'Lars', noteName: 'Lars' }, 'Lars Halvorsen');
+  for (const id of ['f-title', 'g-title']) assert.match($(id).value, /^1846, Lars Halvorsen - Vågå/, id);
+  assert.match($('g-notes').value, /^Child: Lars Halvorsen \*$/m);
+  assert.match($('g-citation').value, /baptism of Lars Halvorsen, 23 August 1846/);
+
+  const plan = w.readPlan(false);
+  assert.notEqual(plan.parallel.title, plan.source.title);
+  assert.equal(plan.parallel.url, b.url);
+  $('g-title').value = $('f-title').value;
+  assert.throws(() => w.readPlan(false), /different titles/);
+  Object.assign(state, { parallel: null });
+});
+
+test('loadParallel(): the ministerialbok\'s entry is the main record, whichever was opened', async () => {
+  const pages = {
+    [fixtureUrl('da/baptism-1846.html')]: () => fixtureDoc(w, 'da/baptism-1846.html').documentElement.outerHTML,
+    [CLERK_URL]: () => clerkPage().documentElement.outerHTML,
+    'https://www.digitalarkivet.no/en/source/9002': () => '<html><body><div class="additional-title"><h3>L0013: Ministerialbok A-13</h3></div>' +
+      '<span>Archive reference:</span> <a>AV/SAK-0000-0001/F/Fa/L0013</a></body></html>',
+    'https://www.digitalarkivet.no/en/source/9098': () => '<html><body><div class="additional-title"><h3>L0010: Klokkerbok B-10</h3></div>' +
+      '<span>Archive reference:</span> <a>AV/SAK-0000-0001/F/Fb/L0010</a></body></html>'
+  };
+  const fetch = async (address) => (pages[String(address)] ? new Response(pages[String(address)]()) : new Response('Not found', { status: 404 }));
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', fetch, fast: true });
+  const opened = await win.loadFromDA(CLERK_URL);
+  const both = await win.loadParallel(opened, fixtureUrl('da/baptism-1846.html'));
+  assert.equal(both.main.record.permanentId, 'pd99000000000018');
+  assert.equal(both.main.book.series, 'ministerial');
+  assert.equal(both.parallel.record.permanentId, 'pd99000000000918');
+  assert.equal(both.parallel.book.book, 'Klokkerbok B-10');
+  await assert.rejects(win.loadParallel(opened, 'https://example.org/pd1'), /Not a Digitalarkivet address/);
+});

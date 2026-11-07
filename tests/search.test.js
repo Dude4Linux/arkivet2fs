@@ -17,20 +17,32 @@ const NO_HITS = '<html><body><div id="resultListContainer">Your search resulted 
 // DA, as far as the fixtures go: the baptism search by first name, a census search,
 // and the 1846 baptism's record page; any other search finds nothing, any other
 // record isn't there
-function fakeDA() {
+function fakeDA({ parallel = false } = {}) {
   const asked = [];
   const fetch = async (address) => {
     const url = new URL(String(address));
     asked.push(url);
     if (url.pathname === '/en/search/persons/advanced') {
-      if (url.searchParams.getAll('roles[]').includes('barn') && !url.searchParams.has('related_first_name')) return new Response(fixture('da/search-baptism.html'));
+      if (url.searchParams.getAll('roles[]').includes('barn') && !url.searchParams.has('related_first_name')) {
+        return new Response(parallel ? inBothBooks(fixture('da/search-baptism.html')) : fixture('da/search-baptism.html'));
+      }
       if (url.searchParams.getAll('jt[]').length) return new Response(fixture('da/search-census.html'));
       return new Response(NO_HITS);
     }
     if (url.pathname.endsWith('/pd99000000000018')) return new Response(fixture('da/baptism-1846.html'));
+    if (parallel && url.pathname.endsWith('/pd99000000000990')) return new Response(otherBook(fixture('da/baptism-1846.html')));
     return new Response('Not found', { status: 404 });
   };
   return { fetch, asked };
+}
+
+// The 1846 baptism as the parish's other church book has it: its own ID and source
+const otherBook = (html) => html.replace(/pd99000000000018/g, 'pd99000000000990').replace(/\/en\/source\/9002/g, '/en/source/9099');
+function inBothBooks(html) {
+  const units = html.split(/(?=<div class="unit")/);
+  const i = units.findIndex((u) => u.includes('pd99000000000018'));
+  units.splice(i + 1, 0, otherBook(units[i]));
+  return units.join('');
 }
 
 async function until(done, ms = 10000) {
@@ -41,8 +53,8 @@ async function until(done, ms = 10000) {
   }
 }
 
-async function searched() {
-  const da = fakeDA();
+async function searched(options) {
+  const da = fakeDA(options);
   const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html?' + QUERY, fetch: da.fetch, fast: true });
   const status = () => (w.document.querySelector('.check-status') || {}).textContent || '';
   await until(() => /^Checked/.test(status()));
@@ -92,4 +104,19 @@ test('"Review & Attach" opens the linker on the record, for the FS person', asyn
   const params = new URL(link.href).searchParams;
   assert.match(params.get('rec'), /^https:\/\/www\.digitalarkivet\.no\/.*pd99000000000018$/);
   assert.equal(params.get('pid'), 'TEST-001');
+});
+
+test('an entry in both of the parish\'s church books is one row, and "Review & Attach" opens both', async () => {
+  const { w } = await searched({ parallel: true });
+  const groups = [...w.document.querySelectorAll('section')].filter((s) => /^Baptism \(\d+\)/.test(s.textContent.trim()));
+  assert.match(groups[0].textContent.trim(), /^Baptism \(4\)/);
+  const also = groups[0].querySelector('.hit-also');
+  assert.ok(also, 'the other book is named under the hit');
+  assert.match(also.textContent, /Also in the other church book:/);
+  assert.match(also.querySelector('a').href, /pd99000000000990$/);
+  const params = new URL(groups[0].querySelector('a.hit-attach').href).searchParams;
+  assert.match(params.get('rec'), /pd99000000000018$/);
+  assert.match(params.get('also'), /^https:\/\/www\.digitalarkivet\.no\/.*pd99000000000990$/);
+  assert.equal(params.get('pid'), 'TEST-001');
+  assert.equal(groups[0].querySelectorAll('.hit-also').length, 1);
 });

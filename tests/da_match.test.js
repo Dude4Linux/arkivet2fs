@@ -109,3 +109,41 @@ test('census: an FS place in the hit counts', () => {
   const hits = scored('da/search-census.html')[0].hits;
   assert.ok(hits.every((h) => reason(h, /^Vågå$/)), 'Vaage is an old name of Vågå');
 });
+
+// An event in both of a parish's church books (the priest's ministerialbok, the
+// clerk's klokkerbok): two hits, one row
+const BOOK_A = 'https://www.digitalarkivet.no/en/source/9001', BOOK_B = 'https://www.digitalarkivet.no/en/source/9002';
+const hitIn = (id, sourceUrl, more = {}) => ({
+  id, url: 'https://www.digitalarkivet.no/en/view/1/' + id, name: 'Halvor Larsen', role: 'Father', type: 'Baptism', date: '1848-03-12',
+  sourceUrl, source: sourceUrl === BOOK_A ? 'Church book from Vågå parish 1842-1851 (0515P)' : 'Church book from Vågå parish 1843-1850 (0515P)', ...more
+});
+const baptism = (child) => ({ people: [{ name: child, roleEnglish: 'Child' }, { name: 'Halvor Larsen', roleEnglish: 'Father' }] });
+
+test('pairParallel(): one event in both church books is one row, the first with the other as parallel', () => {
+  const a = hitIn('pd99000000000901', BOOK_A), b = hitIn('pd99000000000902', BOOK_B, { name: 'Halvor Larsen' });
+  const other = hitIn('pd99000000000903', BOOK_A, { date: '1850-05-01' });
+  const out = w.pairParallel([a, other, b]);
+  assert.deepEqual(out.map((h) => h.id), ['pd99000000000901', 'pd99000000000903']);
+  assert.equal(out[0].parallel, b);
+  assert.equal(out[1].parallel, undefined);
+  // the clerk's spelling of the name still matches; another father, parish or day doesn't
+  assert.equal(w.pairParallel([a, hitIn('x2', BOOK_B, { name: 'Halvard Larssen' })]).length, 1);
+  for (const more of [{ name: 'Lars Halvorsen' }, { source: 'Church book from Lom parish 1843-1850 (0514P)' }, { date: '1848-03-13' }, { date: '1848' }]) {
+    assert.equal(w.pairParallel([a, hitIn('x3', BOOK_B, more)]).length, 2, JSON.stringify(more));
+  }
+  // two hits from one book are two events
+  assert.equal(w.pairParallel([a, hitIn('x4', BOOK_A)]).length, 2);
+});
+
+test('pairParallel(): twins are paired only by their checked records', () => {
+  const twins = () => [hitIn('a1', BOOK_A), hitIn('a2', BOOK_A), hitIn('b1', BOOK_B), hitIn('b2', BOOK_B)];
+  assert.equal(w.pairParallel(twins()).length, 4, 'not read: they stay apart');
+  const [a1, a2, b1, b2] = twins();
+  a1.record = baptism('Lars'); a2.record = baptism('Astri');
+  b1.record = baptism('Astrid'); b2.record = baptism('Lars');
+  const out = w.pairParallel([a1, a2, b1, b2]);
+  assert.deepEqual(out.map((h) => h.id + '+' + h.parallel.id), ['a1+b2', 'a2+b1']);
+  // the only hit in each book, but the records name other children: two events
+  const c = hitIn('c1', BOOK_A, { record: baptism('Lars') }), d = hitIn('d1', BOOK_B, { record: baptism('Ingrid') });
+  assert.equal(w.pairParallel([c, d]).length, 2);
+});

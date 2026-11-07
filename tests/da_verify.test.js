@@ -125,3 +125,17 @@ test('the three Peer Aslaksens of 1801: the one with the FS wife leads once the 
   for (const hit of merged.values()) hit.checks = w.checkRecord(records.find((r) => r.permanentId === hit.id), PEER);
   assert.deepEqual(order(), ['1766*', '1764*', '1779*']);
 });
+
+// DA's source page, as /en/source/NNN has it (the parts readSourcePage() reads)
+const sourcePage = (book, reference) => new w.DOMParser().parseFromString(`<html><body>
+  <div class="data-view"><div class="container-fluid limit info"><h1> AV/SAK-0000-0001: Vågå prestekontor </h1>
+  <div class="additional-title"><h3>F: Ministerialia</h3><h3>Fa: Kirkebøker</h3><h3>${book}</h3></div></div></div>
+  <div class="col-xs-9 shared"><span class="uppercase">Archive reference: </span> <a href="http://arkivportalen.no/x">${reference}</a>
+  <br><span class="uppercase">Source ID: </span> <span>9001</span></div></body></html>`, 'text/html');
+
+test('readSourcePage(): which of the parish\'s two church books', () => {
+  assert.deepEqual(plain(w.readSourcePage(sourcePage('L0013: Ministerialbok A-13', 'AV/SAK-0000-0001/F/Fa/L0013'))),
+    { archive: 'AV/SAK-0000-0001: Vågå prestekontor', book: 'Ministerialbok A-13', reference: 'AV/SAK-0000-0001/F/Fa/L0013', series: 'ministerial' });
+  assert.equal(w.readSourcePage(sourcePage('L0010: Klokkerbok B-10', 'AV/SAK-0000-0001/F/Fb/L0010')).series, 'clerk');
+  assert.equal(w.readSourcePage(sourcePage('L0002: Dødsfallsprotokoll', 'AV/SAK-0000-0001/F/Fc/L0002')).series, '');
+});

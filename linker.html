@@ -21,7 +21,8 @@
         <strong data-i18n>Create source and attach</strong>.</p>
 
       <section class="box">
-        <h2 data-i18n>Source</h2>
+        <h2 id="source-heading" data-i18n>Source</h2>
+        <p id="source-note" class="small" hidden></p>
         <label class="field" data-i18n>Title <input id="f-title" type="text"></label>
         <div class="field-row">
           <label class="field" data-i18n>Date <input id="f-date" type="text"></label>
@@ -29,6 +30,20 @@
         </div>
         <label class="field" data-i18n>Citation <textarea id="f-citation" rows="5"></textarea></label>
         <label class="field" data-i18n>Notes <textarea id="f-notes" rows="10"></textarea></label>
+      </section>
+
+      <section id="parallel" class="box" hidden>
+        <h2 id="parallel-heading"></h2>
+        <p class="muted small" data-i18n>The parish kept two church books, and both have this entry. Each becomes a source of its own,
+          attached to the same people; only the first gets the tags. The differences between them are in both sources' notes.</p>
+        <table id="compare" class="compare"></table>
+        <label class="field" data-i18n>Title <input id="g-title" type="text"></label>
+        <div class="field-row">
+          <label class="field" data-i18n>Date <input id="g-date" type="text"></label>
+          <label class="field" data-i18n>Web page <input id="g-url" type="text"></label>
+        </div>
+        <label class="field" data-i18n>Citation <textarea id="g-citation" rows="5"></textarea></label>
+        <label class="field" data-i18n>Notes <textarea id="g-notes" rows="10"></textarea></label>
       </section>
 
       <section class="box">

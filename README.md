@@ -202,6 +202,18 @@ on an 1801 farm. A link under the rows shows them. If you opened a namesake in a
 household, the linker switches to the household where the FS person fits, and says
 so above the rows.
 
+Many parishes kept two church books, the priest's ministerialbok and the clerk's
+klokkerbok, and Digitalarkivet transcribed both, so one baptism can turn up twice,
+each copy with its own permanent ID and sometimes with a name spelled differently.
+The search page shows the two as one hit, with "Also in the other church book" and a
+link to the second entry. **Review & Attach** then opens both together: the linker
+shows the two entries side by side with the differences marked, and fills in a source
+for each book, the book named in its title and citation. Each source's notes name the
+other book's entry and list where the two differ, so nothing either transcription
+says is lost. You pair the people once, and both sources are attached to them; the
+tags go on the ministerialbok's source only. An entry found in one book only is a
+single source as before.
+
 The family comes from the FS person you started the search from. From the toolbar
 icon, the linker uses the last person you searched for when their name is in the
 record. Otherwise, type the FS ID at the top.
