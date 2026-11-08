@@ -1,7 +1,6 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **approved; Phases 0, 2 and 3 done, Phase 1 nearly done** (the Forgejo mirror is
-left); v1.1.3, the first signed release, and v1.2.0, with the update checker, are
+Status: **approved; Phases 0–3 done**; v1.1.3, the first signed release, and v1.2.0, with the update checker, are
 published. All the decisions below are made.
 Each phase ends with a test and a tagged release (or a test tag), so the next
 phase starts from something that works.
@@ -131,7 +130,7 @@ checker reads them without one. Before publishing:
 
 ### Phase 1: Move to GitHub
 
-Done but for the mirror and the settings (marked *to do*).
+Done.
 
 - **Done: rewrite the commit emails** to the GitHub noreply address (decided) with
   `git filter-repo --mailmap`, on a fresh clone, before the first push. Every commit hash
@@ -146,8 +145,10 @@ Done but for the mirror and the settings (marked *to do*).
   word and real permanent ID. The list stays private (`tests/private/`).
 - **Done: create the repo** `Dude4Linux/arkivet2fs`, public, GPL-3.0 (decided). Push master and
   all five tags.
-- *To do:* **git-server becomes a read-only mirror of GitHub** (decided): a Forgejo pull mirror,
-  so nothing is pushed there by hand any more. GitHub is the main repo.
+- **Done: git-server is a read-only mirror of GitHub** (decided): a Forgejo pull mirror,
+  `Personal/arkivet2fs` (the organization Personal keeps it apart from rvwifi), so nothing
+  is pushed there by hand any more. GitHub is the main repo, the remote `origin`; the
+  mirror is `forgejo`. The old copy, `rvwifi/arkivet2fs`, was deleted (November 2026).
 - **Done: settings:** protect master and `v*` tags; Actions limited to read-only tokens except
   in release.yml; issues on; private vulnerability reporting on (SECURITY.md points to it).
 - **Done: SECURITY.md** says how to report problems privately and what the extension
