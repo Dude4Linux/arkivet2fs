@@ -387,7 +387,29 @@ if (!window.__arkivet2fsAttach) {
   // A combobox (date, place): the text typed, then FS's first suggestion picked, which
   // makes it standard ("Vågå, Oppland, Norway", the municipality 1781–2019). Without
   // one the text stays as typed. No blur before picking: it closes the list.
-  async function comboField(form, name, value) {
+  // FS's suggestion to take for a typed date or place. FS's fact dialogs list the text
+  // as typed first ("Vågå, Oppland"), then the standard forms, a place's with a line
+  // of its kind and years ("Municipality, 1781 - 2019"): the typed entry is skipped,
+  // and of the places the first whose years hold `year` (Vågå, Oppland for 1846;
+  // Vågå, Innlandet from 2020) is taken, else the first with such a line
+  function pickSuggestion(options, typed, year) {
+    const lines = (o) => [...o.querySelectorAll('*')].filter((e) => !e.children.length && clean(e.textContent)).map((e) => clean(e.textContent));
+    const fold = (text) => clean(text).toLowerCase();
+    let rest = options;
+    if (options.length > 1 && fold(options[0].textContent) === fold(typed)) rest = options.slice(1);
+    const kinds = rest.filter((o) => lines(o).length > 1);
+    if (!kinds.length) return rest[0];
+    const holds = (o) => {
+      const m = lines(o).slice(1).join(' ').match(/(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Present)/i);
+      if (!m) return false;
+      const from = /^\d/.test(m[1]) ? Number(m[1]) : -Infinity;
+      const to = /^\d/.test(m[2]) ? Number(m[2]) : Infinity;
+      return year >= from && year <= to;
+    };
+    return (year && kinds.find(holds)) || kinds[0];
+  }
+
+  async function comboField(form, name, value, year) {
     const input = form.querySelector('input[name="' + name + '"]');
     if (!input || !value) return { name, value: input ? input.value : '' };
     input.focus();
@@ -400,8 +422,9 @@ if (!window.__arkivet2fsAttach) {
     let found = [];
     try { found = await waitFor(() => { const o = options(); return o.length ? o : null; }, 'suggestions', 5000); } catch (e) { /* none */ }
     if (!found.length) return { name, value, picked: '' };
-    const picked = clean(found[0].textContent);
-    found[0].click();
+    const option = pickSuggestion(found, value, year);
+    const picked = clean(option.textContent);
+    option.click();
     await sleep(300);
     return { name, value: input.value, picked };
   }
@@ -450,7 +473,9 @@ if (!window.__arkivet2fsAttach) {
     radio('sex', person.sex || 'unknown');
     radio('status', 'deceased');
     const fields = [];
-    for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) fields.push(await comboField(form, name, person[name]));
+    const yearOf = (date) => { const m = String(date || '').match(/\b(\d{4})\b/); return m ? Number(m[1]) : null; };
+    const years = { birthPlace: yearOf(person.birthDate), deathPlace: yearOf(person.deathDate) };
+    for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) fields.push(await comboField(form, name, person[name], years[name]));
     await sleep(300);
     const heading = clean(((form.querySelector('h1, h2, h3, [role="heading"]') || {}).textContent) || '');
     (await waitFor(() => byTestId('next-button', addDialog()), 'the Next button')).click();

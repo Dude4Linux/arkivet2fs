@@ -164,7 +164,15 @@ test('editSource(): a source Home doesn\'t show is found with the search', async
 // standard form of what's typed), Next, then FS's possible matches and Create Person.
 const STANDARD = { 'Vågå, Oppland, Norway': 'Vågå, Oppland, Norway Municipality, 1781 - 2019', '16 July 1846': '16 July 1846' };
 
-function personPage({ matches = [], afterCreate = 'card' } = {}) {
+// FS's fact dialogs' lists: the text as typed first, then the standard forms, a
+// place's with its kind and years on a second line
+const FS_LISTS = {
+  'Vågå': [['Vågå, Innlandet, Norway', 'Municipality, 2020 - Present'], ['Vågå, Oppland, Norway', 'Municipality, 1781 - 2019'],
+    ['Vågå, Oplandenes, Norway', 'Municipality, Unknown - 1780'], ['Vågåmo, Vågå, Oppland, Norway', 'Village,']],
+  '16 jul 1846': [['16 July 1846']],
+};
+
+function personPage({ matches = [], afterCreate = 'card', lists = null } = {}) {
   const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-HAL',
     '<section data-testid="section-card-family">' +
     '<div data-testid="family-TEST-HAL_TEST-AST"><div data-testid="couple-persons"><a href="/tree/person/details/TEST-HAL">Halvor Larsen</a>' +
@@ -188,6 +196,16 @@ function personPage({ matches = [], afterCreate = 'card' } = {}) {
     for (const input of dialog.querySelectorAll('[role="combobox"]')) {
       input.addEventListener('input', () => {
         const list = d.getElementById(input.getAttribute('aria-controls'));
+        if (lists) {
+          const typed = input.value;
+          const forms = lists[typed] || [];
+          list.innerHTML = [[typed], ...forms].map(([text, kind], i) =>
+            `<li role="option" data-testid="suggestion-${i}"><span>${text}</span>${kind ? `<div>${kind}</div>` : ''}</li>`).join('');
+          for (const [i, option] of [...list.querySelectorAll('[role="option"]')].entries()) {
+            option.addEventListener('click', () => { input.value = i ? forms[i - 1][0] : typed; list.innerHTML = ''; });
+          }
+          return;
+        }
         const standard = STANDARD[input.value];
         list.innerHTML = standard ? `<li role="option">${standard}</li>` : '';
         const option = list.querySelector('[role="option"]');
@@ -241,6 +259,22 @@ test('findPerson(): fills FS\'s Add Child form in the couple\'s card, picks FS\'
   const place = answer.fields.find((f) => f.name === 'birthPlace');
   assert.equal(place.picked, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
   assert.equal(filled.created, undefined, 'nothing is created');
+});
+
+test('findPerson(): skips the text as typed and takes the standard place of the record\'s years', async () => {
+  const { step, filled } = personPage({ lists: FS_LISTS });
+  const person = { ...LARS, birthDate: '16 jul 1846', birthPlace: 'Vågå', deathDate: '1921', deathPlace: 'Vågå' };
+  const answer = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(filled.birthDate, '16 July 1846');
+  assert.equal(filled.birthPlace, 'Vågå, Oppland, Norway', 'the municipality of 1781–2019, not the text as typed');
+  assert.equal(filled.deathPlace, 'Vågå, Oppland, Norway');
+  const later = personPage({ lists: FS_LISTS });
+  await later.step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '2021', deathDate: '' } });
+  assert.equal(later.filled.birthPlace, 'Vågå, Innlandet, Norway', 'from 2020 the place is in Innlandet');
+  const undated = personPage({ lists: FS_LISTS });
+  await undated.step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '', deathDate: '' } });
+  assert.equal(undated.filled.birthPlace, 'Vågå, Innlandet, Norway', 'no year: the first standard form');
 });
 
 test('findPerson(): FS\'s possible matches, each with PID, lifespan, events and spouses', async () => {

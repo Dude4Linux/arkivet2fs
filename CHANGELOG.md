@@ -30,6 +30,8 @@ fixes, new features, changes that break what users have).
   www.familysearch.org, not every address under them. Nothing changes in use. If
   FamilySearch's sign-in page comes up while sources are attached, the linker asks you
   to sign in and try again.
+- A new person created from the linker gets FamilySearch's standard places for the
+  record's years (Vågå, Oppland, Norway for a birth in 1846), not the place as typed.
 
 ## 1.4.0 - 2026-11-07
 

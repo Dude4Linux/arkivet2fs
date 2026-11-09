@@ -1,19 +1,21 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
 Status: **Phases 0–3 done**; v1.4.0 is the latest signed release. The next four
-steps (Phases 4–7, decided 7–8 November 2026) take the extension from one Chromium
+steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
 folder loaded unpacked to store listings in four browsers, and then to testers:
 
 1. **1.4.1**: clean up and refine the Chrome version (name matching, the host
    permissions).
-2. **1.5.0**: one package for Chromium and Firefox; tested in Firefox, LibreWolf and
+2. **1.5.0**: adding the record's facts to FamilySearch from the linker (alternate
+   names, events, a differing date or place), with the user's approval of each.
+3. **1.6.0**: one package for Chromium and Firefox; tested in Firefox, LibreWolf and
    Opera.
-3. **Store listings**: Chrome Web Store, Edge Add-ons, Opera add-ons, Firefox AMO, all
+4. **Store listings**: Chrome Web Store, Edge Add-ons, Opera add-ons, Firefox AMO, all
    from the same zip.
-4. **A call for testers** on a Norwegian genealogy Facebook group, with the store
+5. **A call for testers** on a Norwegian genealogy Facebook group, with the store
    links; perhaps a RootsTech 2027 presentation later.
 
-No outreach before step 4. Safari is dropped (decision 8). Each phase ends with a
+No outreach before step 5. Safari is dropped (decision 8). Each phase ends with a
 test and a tagged release (or a test tag), so the next phase starts from something
 that works.
 
@@ -48,7 +50,7 @@ This shapes the whole plan:
   itself, and that's the gap our update checker fills.
 - **Firefox** requires every extension to be signed by Mozilla (AMO). A self-distributed
   ("unlisted") extension can name its own `update_url`, and Firefox then updates it by
-  itself; we use AMO's listed channel instead (Phase 6), which updates it the same way.
+  itself; we use AMO's listed channel instead (Phase 7), which updates it the same way.
 - **Stores do the updating for their users.** Our checker should stay quiet in a store
   install and only run in an unpacked or self-hosted install.
   `chrome.management.getSelf()` gives `installType` (`development` for unpacked) without
@@ -61,8 +63,8 @@ download the right package, check its signature, and say how to install it.**
 
 The code stays where it is. The root remains a loadable Chromium extension, so "Load
 unpacked → the repo folder" and the CLAUDE.md workflow don't change. Chrome, Brave,
-Edge and Opera use it as it is, and from 1.5.0 Firefox and LibreWolf do too: one
-manifest carries the keys each browser needs and the others ignore (Phase 5), so there
+Edge and Opera use it as it is, and from 1.6.0 Firefox and LibreWolf do too: one
+manifest carries the keys each browser needs and the others ignore (Phase 6), so there
 is no per-browser folder (the `platform/` planned at first isn't needed):
 
 ```
@@ -275,10 +277,11 @@ yet.
     -datter), in scoring, `patronymicDiffers()`, and the linker's `patronymicClash()`
     and `patronymicFrom()`;
   - -sd without a full stop (Olsd) read as a patronymic.
-- **To check: a woman under -sen.** `recordSex()` (linker.js) reads -sen as a man's
-  unless the role or position says otherwise; a woman recorded as Aanensen in a census
-  could then fail a pairing by sex. Look for a fixture or a record that shows it
-  before changing it.
+- **Checked, no change: a woman under -sen.** `recordSex()` (linker.js) reads -sen as
+  a man's unless the role or position says otherwise; a woman recorded as Aanensen in a
+  census could then fail a pairing by sex. Every -sen person in the fixtures is a man
+  (fathers, husbands, sons, emigrants), so nothing shows it yet; change it when a
+  record does.
 - **Done: a linker test** of `patronymicClash()` with one father's
   spellings (Kjersti Jonsdatter / Kjersti Johannesdatter: no clash).
 - **Done (in code): the host permissions narrowed** to `https://www.familysearch.org/*`
@@ -297,12 +300,76 @@ yet.
   5 min) in which nothing is sent and cached pages are still given; the search page and
   the linker show the warning with "Try again now". One page's failure while DA answers
   doesn't pause.
+- **Done (in code): standard places in Create person.** `comboField()` (fs_attach.js)
+  clicked FS's first suggestion, which in FS's fact dialogs is the text as typed, not
+  the standard place. `pickSuggestion()` skips the text as typed and takes the first
+  suggestion with a kind-and-years line whose years hold the record's year (Vågå,
+  Oppland for 1846, Vågå, Innlandet for 2021), else the first standard one.
+  - **To check:** the person created on 7 November: is the birth place standard?
 - **Test:** `npm test`; the workflow once in Chrome and once in Brave on the test tree
   (search, the linker's pairing, the SourceBox check; attach only with your OK).
 - **Release:** `sh tools/release v1.4.1`. Copies from 1.2.0 on are told by the update
   checker.
 
-### Phase 5: 1.5.0, one package for Chromium and Firefox
+### Phase 5: 1.5.0, adding the record's facts to FamilySearch
+
+MINOR: a new feature (decided 9 November 2026; Firefox moved to 1.6.0). The linker's
+facts table already sets the record's facts beside the tree's (✓ ≈ ✗, or nothing in
+the tree); each row can now be added to the tree person, or written over, with the
+user's approval.
+
+- **What can be added:**
+  - **A name** that differs (≈ or ✗): an alternate name, Also Known As by default (FS's
+    types: Also Known As, Birth Name, Married Name, Nickname).
+  - **A fact the tree lacks:** a christening, death, burial, residence or occupation;
+    an emigration as a Custom Event titled Emigration (FS's add-event menu has no
+    Emigration; fs_person.js already reads such events).
+  - **A vital that differs** (birth, christening, death, burial): FS keeps one of each,
+    so the change is an edit of FS's, often a combination of the two.
+  - **Not yet:** the couple's marriage (a dialog of the relationship).
+- **How it's shown:** a tickbox on each fact row that has something to add, unticked by
+  default, with an editable box pre-filled with a suggestion: the more specific value of
+  each part (the record's "16 July 1846" over FS's "1846", FS's "Vågå, Oppland, Norway"
+  over the record's "Vågå"), the record's where the two disagree, and FS's value shown
+  beside it. The reason is editable too: "From <source title>, Digitalarkivet,
+  Permanent ID <id>." A summary above the buttons lists what will be added.
+- **Places in FS's standard form:** FS standardizes a place only in its own dialog.
+  Its suggestions (`suggestion-N`) start with the text as typed; the standard forms have
+  a second line with the kind and the years ("Municipality, 1781 - 2019"), so the one
+  whose years hold the record's year is picked (Vågå, Oppland for 1846; Vågå, Innlandet
+  from 2020). A ticked addition is prepared first (filled in FS's dialog in the hidden
+  window, the picked forms read back, cancelled), shown for approval, then saved, as
+  Find and Create person do.
+- **In `run()`:** after the source is attached, each approved addition, logged; then the
+  source is tagged to that fact from the fact's own Tag Sources (which lists the
+  person's sources; to check what follows Select Source), so a census's residence is
+  tagged even when the person has several.
+- **FS's dialogs** (looked at on 2026-11-09 on the test tree, each cancelled):
+  - a fact's pencil (`pencil-edit-button`, "Edit Birth") opens `conclusion-dialog`
+    with `ConclusionDialog:edit:button` (Edit) and Tag Sources;
+  - the add buttons: `add-alternate-name`, `add-new-otherEvent-button` (a menu,
+    `add-new-conclusion-overlay`: Residence, Occupation, Immigration, Custom Event, ...),
+    `add-new-otherFact-button` (nothing we'd use);
+  - the form: `conclusionDetailOverlay:date`, `:place` (comboboxes, `aria-controls`),
+    `:description` (a residence's), `:reason` (`justification`),
+    `conclusionDetailOverlay:submit:button` (Save), `add-edit:cancel-action` (Cancel),
+    `conclusionDetailOverlay:delete:button` (never clicked);
+  - an alternate name: the `nameType` select (AKA, BIRTH, MARRIED, NICK), `template`
+    (`no`), `first-name`, `last-name`, as in Add Person;
+  - a fact's Tag Sources: "Tag Source For Residence", the person's sources,
+    `restore-source-select-button`, `restore-source-cancel-button`.
+  - **To check:** how a missing vital (no christening) is added.
+- **An existing SourceBox source:** the check reads its fields too (the Edit Source
+  dialog, cancelled) and shows each field that differs side by side: keep FS's or use
+  the record's. The record's by default for the fields the extension writes (title,
+  citation, web page, date); for the notes, FS's with what's new from the record
+  appended, unless FS's are an older copy of the extension's. Nothing differs: nothing
+  written, as now.
+- **Test:** fs_attach.test.js on made-up dialogs with these testids; linker tests of the
+  suggestions; on the test tree, one addition of each kind, only with your OK.
+- **Release:** `sh tools/release v1.5.0`.
+
+### Phase 6: 1.6.0, one package for Chromium and Firefox
 
 One zip for every browser and store (decision 10), not a build per browser. MINOR: a
 new browser.
@@ -345,15 +412,15 @@ new browser.
     (search, the linker, the SourceBox check; attach to a test person only with your
     OK).
   - **LibreWolf:** the same with the package installed from a file (it runs unsigned
-    add-ons only with `xpinstall.signatures.required` off; after Phase 6 from AMO). Its
+    add-ons only with `xpinstall.signatures.required` off; after Phase 7 from AMO). Its
     defaults clear cookies on closing and resist fingerprinting: note what testers
     need (staying signed in to FamilySearch: an exception for familysearch.org).
   - **Opera:** the Chromium package loaded unpacked. Opera's `chrome.notifications` is
     uncertain; if it's missing, errors show on the badge and in the page instead.
   - **Chrome, Brave, Edge:** the same package once more, since the manifest changed.
-- **Release:** `sh tools/release v1.5.0`.
+- **Release:** `sh tools/release v1.6.0`.
 
-### Phase 6: Store listings
+### Phase 7: Store listings
 
 Same zip, four stores; each store signs and updates its own copy, and the update
 checker stays quiet there (it runs only in an unpacked copy). The self-hosted Firefox
@@ -387,7 +454,7 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
 - **Test:** install from each store once its listing is public; the update from one
   store version to the next.
 
-### Phase 7: A call for testers
+### Phase 8: A call for testers
 
 - **Where:** a Norwegian genealogy Facebook group you're a member of, asking for
   Norwegian-speaking volunteers to try it and send feedback. You post it; I can draft
@@ -408,14 +475,14 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
    GPG).
 5. ~~Where the signing key lives~~ **Decided:** local signing for now; a GitHub secret
    behind an approval step can come later, when releases are frequent.
-6. ~~Chrome Web Store and Edge listing~~ **Decided:** listed after 1.5.0 (Phase 6), with
+6. ~~Chrome Web Store and Edge listing~~ **Decided:** listed after 1.6.0 (Phase 7), with
    Opera and AMO; the Chrome Web Store's $5 is accepted.
 7. ~~Firefox ID and channel~~ **Decided:** `arkivet2fs@dude4linux`; listed on AMO only
    (the unlisted, self-hosted channel is dropped).
 8. ~~Safari~~ **Dropped:** the extension isn't sold, so an Apple Developer membership
    ($99 a year) isn't justified.
 9. ~~Dev-only `package.json`~~ **Decided:** keep it (jsdom, for the tests); add web-ext to
-   it in Phase 5.
+   it in Phase 6.
 10. ~~Packages~~ **Decided:** one zip for all browsers and stores, one manifest.
 11. **The update-check hosts:** optional permissions asked for on the Updates page
     (recommended: store installs then ask only for the four sites they use), or kept in
