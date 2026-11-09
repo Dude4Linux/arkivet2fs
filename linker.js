@@ -276,14 +276,14 @@ function recordSex(person) {
 
 // Two names with patronymics of different fathers (Ingri Gulbrandsdatter isn't
 // Ingrid Larsdr; Lars Jakobsen isn't Lars Halvorsen). Spellings of one father's name
-// agree: Halvardsen/Halvorsen, Olsson/Olsen, Torsdatter/Tordsdatter.
+// agree (sameFather()): Halvardsen/Halvorsen, Olsson/Olsen, Torsdatter/Tordsdatter,
+// Jonsdatter/Johannesdatter. A farm in the patronymic's place says nothing.
 function patronymicClash(recordName, treeName) {
   const pats = (name) => stripVariants(name).split(/\s+/).slice(1).filter(isPatronymic)
     .map((w) => patronymicBase(w).toLowerCase()).filter(Boolean);
   const a = pats(recordName), b = pats(treeName);
   if (!a.length || !b.length) return false;
-  const agree = (x, y) => x.startsWith(y) || y.startsWith(x) || nameMatch(x, y) || nameMatch(y, x) || nameNear(x, y);
-  return !a.some((x) => b.some((y) => agree(x, y)));
+  return !a.some((x) => b.some((y) => sameFather(x, y)));
 }
 
 // A record name with the patronymic of a father of this given name (Iver Olsen, Ole)
@@ -291,7 +291,7 @@ function patronymicFrom(name, fatherGiven) {
   const base = patronymicBase(patronymicOf(firstWord(stripVariants(fatherGiven)))).toLowerCase();
   if (!base) return false;
   return stripVariants(name).split(/\s+/).slice(1).filter(isPatronymic).map((w) => patronymicBase(w).toLowerCase())
-    .some((x) => x.startsWith(base) || base.startsWith(x) || nameMatch(x, base) || nameMatch(base, x));
+    .some((x) => sameFather(x, base));
 }
 
 // The household of a record person as relativesInRecord() sees it: the household's
@@ -1500,7 +1500,7 @@ async function navigate(tabId, url, active = true) {
     } catch (e) {
       loaded.cancel();
       if (attempt >= NAVIGATE_TRIES) throw e;
-      console.warn('arkivet2fs: navigating to ' + url + ' failed (' + (e.message || e) + '); trying again');
+      console.info('arkivet2fs: navigating to ' + url + ' failed (' + (e.message || e) + '); trying again');
       await sleep(attempt * 1000);
       continue;
     }

@@ -32,6 +32,25 @@ test('nameMatch(): spellings and forms of one name', () => {
   assert.equal(w.nameMatch('Lars', 'Hans'), false);
 });
 
+test('nameMatch(): an old final j or y for i, in both directions and in the forms', () => {
+  for (const [a, b] of [['Sirj', 'Siri'], ['Siri', 'Sirj'], ['Siry', 'Sirj'], ['Sirj', 'Sigrid'], ['Sigrid', 'Siry']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+});
+
+test("nameMatch(): Åshild, Rønnaug and Ånund in their old spellings", () => {
+  for (const [a, b] of [['Aasel', 'Åshild'], ['Aasild', 'Osille'], ['Ronnau', 'Rønnaug'], ['Ronaug', 'Ronu'], ['Aanen', 'Aanon'], ['Ånund', 'Aanen']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+});
+
+test('sameFather(): spellings of one father, and John, Jon, Joen for Johannes', () => {
+  for (const [a, b] of [['Halvard', 'Halvor'], ['Johan', 'Johanne'], ['John', 'Johanne'], ['Joen', 'Johan'], ['Aanen', 'Aanon']]) {
+    assert.equal(w.sameFather(a, b), true, a + ' = ' + b);
+  }
+  for (const [a, b] of [['Ol', 'Lar'], ['Jon', 'Jakob'], ['Hans', 'Johanne']]) assert.equal(w.sameFather(a, b), false, a + ' ≠ ' + b);
+});
+
 test('skeleton(): the consonants, spelled one way', () => {
   assert.equal(w.skeleton('Ragnihld'), 'rgnld');
   assert.equal(w.skeleton('Christine'), w.skeleton('Kristina'));
@@ -43,6 +62,15 @@ test("skeleton(): Norphone's silent j and h at the start, x and a final dt", () 
     assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b);
   }
   for (const [a, b] of [['Guri', 'Kari'], ['Gunder', 'Gunnar'], ['Ingrid', 'Inger']]) {
+    assert.notEqual(w.skeleton(a), w.skeleton(b), a + ' ≠ ' + b);
+  }
+});
+
+test('skeleton(): one sound for sj, skj, sch, sk before a front vowel, and the old si', () => {
+  for (const [a, b] of [['Sjønne', 'Skjønne'], ['Siønne', 'Sjønne'], ['Sionne', 'Sjønne'], ['Skønne', 'Sjønne'], ['Schjønne', 'Sjønne'], ['Skiold', 'Skjold']]) {
+    assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b);
+  }
+  for (const [a, b] of [['Siri', 'Skiri'], ['Simon', 'Sjmon'], ['Sigrid', 'Skrid']]) {
     assert.notEqual(w.skeleton(a), w.skeleton(b), a + ' ≠ ' + b);
   }
 });

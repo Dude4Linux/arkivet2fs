@@ -121,12 +121,32 @@ test("checkRecord(): a baptism's child counts once, for the FS child whose first
   assert.deepEqual(kids.map((x) => x.text), ['child Johan Peder (b. 1846) in the record']);
 });
 
-test("patronymicDiffers(): Johannesdat. for Johansdr, Gudbrandsen for Gulbrandsen; not Moen", () => {
+test("patronymicDiffers(): Johannesdat. for Johansdr, Gudbrandsen for Gulbrandsen; Olsen for Larsen", () => {
   assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdat.' }, 'Johansdr'), false);
   assert.equal(w.patronymicDiffers({ name: 'Astri Johannesdottr' }, 'Johansdr'), false);
   assert.equal(w.patronymicDiffers({ name: 'Halvor Gudbrandsen' }, 'Gulbrandsen'), false);
-  assert.equal(w.patronymicDiffers({ name: 'Halvor Moen' }, 'Larsen'), true);
-  assert.equal(w.patronymicDiffers({ name: 'Halvor Halvorsrud' }, 'Halvorsen'), true);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Olsen' }, 'Larsen'), true);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Olsen Moen' }, 'Larsen'), true);
+});
+
+test('patronymicDiffers(): a farm in the patronymic\'s place says nothing', () => {
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Moen' }, 'Larsen'), false);
+  assert.equal(w.patronymicDiffers({ name: 'Halvor Halvorsrud' }, 'Halvorsen'), false);
+});
+
+test('patronymicDiffers(): spellings of one father, and a woman under -sen', () => {
+  for (const [name, fs] of [['Kjersti Aanensdr', 'Aanonsdatter'], ['Kjersti Olsd', 'Olsdatter'], ['Kjersti Aanensen', 'Aanensdatter'],
+    ['Kjersti Jonsdatter', 'Johannesdatter'], ['Kjersti Johnsdr', 'Johansdr'], ['Ole Schjønnesen', 'Skjønnesen'], ['Ole Sionesen', 'Sjønnesen']]) {
+    assert.equal(w.patronymicDiffers({ name }, fs), false, name + ' for ' + fs);
+  }
+  assert.equal(w.patronymicDiffers({ name: 'Kjersti Jonsdatter' }, 'Olsdatter'), true);
+});
+
+test("checkRecord(): the father under his farm's name is FS's father", () => {
+  const r = record('baptism-1846');
+  r.people.find((p) => p.role === 'far').name = 'Halvor Nordby';
+  const father = plain(w.checkRecord(r, lars())).find((x) => /father/.test(x.text));
+  assert.ok(father && father.points > 0, JSON.stringify(father));
 });
 
 test("checkRecord(): another father's name, another day of birth", () => {

@@ -260,6 +260,11 @@ test('patronymics: a clash of fathers, spellings of one, a father of this name',
   assert.equal(w.patronymicClash('Lars Halvardsen', 'Lars Halvorsen'), false);
   assert.equal(w.patronymicClash('Lars Gudbrandsen', 'Lars Gulbrandsen'), false);
   assert.equal(w.patronymicClash('Lars', 'Lars Halvorsen'), false);
+  // One father's name spelled John or Johannes, a farm in the patronymic's place
+  assert.equal(w.patronymicClash('Kjersti Jonsdatter', 'Kjersti Johannesdatter'), false);
+  assert.equal(w.patronymicClash('Kjersti Johnsdr', 'Kjersti Johansdr'), false);
+  assert.equal(w.patronymicClash('Kjersti Olsdatter', 'Kjersti Jonsdatter'), true);
+  assert.equal(w.patronymicClash('Lars Nordby', 'Lars Halvorsen'), false);
   assert.equal(w.patronymicFrom('Reidar Larsen', 'Lars'), true);
   assert.equal(w.patronymicFrom('Reidar Halvorsen', 'Lars'), false);
 });

@@ -1,21 +1,39 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **approved; Phases 0–3 done**; v1.1.3, the first signed release, and v1.2.0, with the update checker, are
-published. All the decisions below are made.
-Each phase ends with a test and a tagged release (or a test tag), so the next
-phase starts from something that works.
+Status: **Phases 0–3 done**; v1.4.0 is the latest signed release. The next four
+steps (Phases 4–7, decided 7–8 November 2026) take the extension from one Chromium
+folder loaded unpacked to store listings in four browsers, and then to testers:
 
-## Where we are (1.1.3)
+1. **1.4.1**: clean up and refine the Chrome version (name matching, the host
+   permissions).
+2. **1.5.0**: one package for Chromium and Firefox; tested in Firefox, LibreWolf and
+   Opera.
+3. **Store listings**: Chrome Web Store, Edge Add-ons, Opera add-ons, Firefox AMO, all
+   from the same zip.
+4. **A call for testers** on a Norwegian genealogy Facebook group, with the store
+   links; perhaps a RootsTech 2027 presentation later.
+
+No outreach before step 4. Safari is dropped (decision 8). Each phase ends with a
+test and a tagged release (or a test tag), so the next phase starts from something
+that works.
+
+## Where we are (1.4.0)
 
 - One Chromium MV3 extension at the repo root: Chrome and Brave load the folder
-  unpacked. There's no build step. The tests are in the repo (`tests/`, `npm test`:
-  106 tests, jsdom, offline, about 2 s; a dev-only `package.json`), replacing the earlier
-  harness that lived in a temporary folder and was lost.
-- The repo is public on GitHub, `Dude4Linux/arkivet2fs`: one author (the noreply
-  address), 5 tags (v1.0.0 – v1.1.3), the history rewritten once without the real
-  names. git-server still holds a copy, to become a pull mirror.
-- APIs used: `action`, `scripting`, `storage.local/session`, `tabs`, `notifications`,
-  `runtime`, `i18n`. The service worker loads its helpers with `importScripts()`.
+  unpacked, from a signed zip on GitHub's releases or a clone. There's no build step
+  for the extension; `tools/build.mjs` zips a git ref. The tests are in the repo
+  (`tests/`, `npm test`: 187 tests, jsdom, offline, about 2 s; a dev-only
+  `package.json`).
+- The repo is public on GitHub, `Dude4Linux/arkivet2fs`; git-server is a read-only
+  pull mirror of it.
+- Unpacked copies check GitHub once a day and offer a signed download (update.html).
+- APIs used: `action`, `alarms`, `scripting`, `storage.local/session`, `tabs`,
+  `windows`, `notifications`, `management.getSelf`, `runtime`, `i18n`. The service
+  worker loads its helpers with `importScripts()`.
+
+## To do
+
+The open items are the phases below, starting with Phase 4 (1.4.1).
 
 ## What an extension can and can't do about updates
 
@@ -30,9 +48,7 @@ This shapes the whole plan:
   itself, and that's the gap our update checker fills.
 - **Firefox** requires every extension to be signed by Mozilla (AMO). A self-distributed
   ("unlisted") extension can name its own `update_url`, and Firefox then updates it by
-  itself. That's the one browser where a GitHub release can be a true auto-update.
-- **Safari** extensions ship inside a macOS app that Apple signs and notarizes. Updates
-  come from the App Store, or are downloaded by hand for a directly distributed app.
+  itself; we use AMO's listed channel instead (Phase 6), which updates it the same way.
 - **Stores do the updating for their users.** Our checker should stay quiet in a store
   install and only run in an unpacked or self-hosted install.
   `chrome.management.getSelf()` gives `installType` (`development` for unpacked) without
@@ -45,16 +61,14 @@ download the right package, check its signature, and say how to install it.**
 
 The code stays where it is. The root remains a loadable Chromium extension, so "Load
 unpacked → the repo folder" and the CLAUDE.md workflow don't change. Chrome, Brave,
-Edge and Opera all use it as it is. The other browsers get what differs from it:
+Edge and Opera use it as it is, and from 1.5.0 Firefox and LibreWolf do too: one
+manifest carries the keys each browser needs and the others ignore (Phase 5), so there
+is no per-browser folder (the `platform/` planned at first isn't needed):
 
 ```
 /                         the Chromium extension, as today (manifest.json is the base)
-platform/
-  firefox/manifest.json   keys merged over the base (gecko id, background.scripts, ...)
-  opera/manifest.json     only if Opera needs anything (Phase 5 finds out)
-  safari/                 the Xcode project made by safari-web-extension-converter
 tools/
-  build.mjs               dist/<browser>/ = the shared files + the merged manifest; zips it
+  build.mjs               zips the shipped files of a git ref, the same bytes each time
   sign.mjs                SHA256SUMS + signatures (see "Signatures")
   verify.sh               lets a user check a download by hand (openssl)
   release                 the maintainer's steps: sign, test, publish (or check a release)
@@ -68,7 +82,6 @@ package.json              dev-only tools (jsdom, web-ext); nothing ships from np
 ```
 
 - **The version stays in one place.** `manifest.json` is still the only place it's kept.
-  build.mjs copies it into the Firefox manifest and into Safari's `MARKETING_VERSION`.
 - **`package.json` is new.** It's for development tools only. The shipped extension
   stays free of dependencies and has no build-time code changes, so the source in a
   release is the source that runs.
@@ -77,13 +90,9 @@ package.json              dev-only tools (jsdom, web-ext); nothing ships from np
 
 | File | For |
 |---|---|
-| `arkivet2fs-X.Y.Z-chromium.zip` | Chrome, Brave, Edge (unpack and load) and the store uploads |
-| `arkivet2fs-X.Y.Z-opera.zip` | Opera, if it ends up differing from chromium |
-| `arkivet2fs-X.Y.Z-firefox.xpi` | Firefox, signed by Mozilla |
-| `arkivet2fs-X.Y.Z-safari.zip` | the notarized macOS app |
+| `arkivet2fs-X.Y.Z-chromium.zip` | every browser: unpacked in Chromium browsers, and the upload to all four stores (the name stays, since copies from 1.2.0 on look for it) |
 | `*.sig` next to each package | a detached signature of that file |
 | `SHA256SUMS`, `SHA256SUMS.sig` | checksums of everything, signed |
-| `updates.json` | Firefox's self-hosted update manifest (Phase 4) |
 
 GitHub adds the source archive. A release can only be made from a `vX.Y.Z` tag, and the
 workflow checks that the tag matches manifest.json's version.
@@ -91,12 +100,12 @@ workflow checks that the tag matches manifest.json's version.
 ## Signatures
 
 Each package gets our own detached signature, on top of whatever the browser does
-itself (Mozilla's signing of the xpi, Apple's code signing).
+itself (the stores sign their own copies).
 
 - **Recommended scheme: Ed25519, as a raw detached signature (`.sig`, base64).** It's
   made with `openssl pkeyutl -sign -rawin`. A user can check it with `openssl` (verify.sh),
-  and the extension can check it with WebCrypto, which supports Ed25519 in current Chrome,
-  Firefox and Safari. The extension pins the public key, so a download that doesn't
+  and the extension can check it with WebCrypto, which supports Ed25519 in current Chrome
+  and Firefox. The extension pins the public key, so a download that doesn't
   verify is refused.
 - **Alternative: GPG `.asc` signatures.** Linux users know them, but the extension can't
   check them without bundling an OpenPGP library. They could be added next to the `.sig`
@@ -245,76 +254,149 @@ Done.
 - **Done: v1.2.0 published** (7 November 2026) with `sh tools/release v1.2.0`. Copies
   from 1.2.0 on show the next release by themselves; 1.1.3 and older don't check.
 
-### Phase 3b (optional): Chrome Web Store and Edge Add-ons
+### Phase 4: 1.4.1, the Chrome version cleaned up
 
-- **Why:** most Chrome users can't use a zip comfortably. A store listing gives them a
-  one-click install and automatic updates.
-- **Cost and listing:** the Chrome Web Store needs a $5 developer registration, a
-  privacy policy and screenshots. Edge Add-ons is free. Both take the chromium zip.
-- **Your accounts:** you'd create these accounts and submit the listings yourself.
-- **Later:** API uploads from release.yml.
+Fixes only (PATCH), in Chrome and Brave as they are now; nothing for other browsers
+yet.
 
-### Phase 4: Firefox
+- **Done: names in their old spellings**, found in a real family's
+  index records (the patterns only; no names from them in the repo):
+  - an old final j or y for i (Sirj, Siry = Siri, and so a form of Sigrid): the
+    search stem (`givenStem()`), the name groups (`nameKey()`) and scoring;
+  - the forms of Åshild (Aasel, Aasild, Osille, Oselle), Rønnaug (Ronnau, Ronu, Ronaug)
+    and Ånund (Aanen, Aanon) in `GIVEN_NAME_FORMS`;
+  - an initial sj, skj, sch, sk before a front vowel, and the old si before a vowel, as
+    one sound in `skeleton()` (Sjønne = Skjønne = Siønne = Sionne);
+  - a farm name in place of the patronymic says nothing against a relative
+    (`patronymicDiffers()`: Halvor Nordby may be Halvor Larsen); another patronymic
+    still does;
+  - patronymics of one father in other spellings agree (`sameFather()`: Jonsdatter,
+    Johnsdatter, Johannesdatter; Aanensdatter, Aanonsdatter; a woman's -sen for
+    -datter), in scoring, `patronymicDiffers()`, and the linker's `patronymicClash()`
+    and `patronymicFrom()`;
+  - -sd without a full stop (Olsd) read as a patronymic.
+- **To check: a woman under -sen.** `recordSex()` (linker.js) reads -sen as a man's
+  unless the role or position says otherwise; a woman recorded as Aanensen in a census
+  could then fail a pairing by sex. Look for a fixture or a record that shows it
+  before changing it.
+- **Done: a linker test** of `patronymicClash()` with one father's
+  spellings (Kjersti Jonsdatter / Kjersti Johannesdatter: no clash).
+- **Narrow the host-permission wildcards.** `manifest.json` asks for
+  `https://*.familysearch.org/*` and `https://*.digitalarkivet.no/*`, but the
+  extension uses only `www.familysearch.org` and `www.digitalarkivet.no` (and bare
+  `digitalarkivet.no`, which `isDigitalArkivet()` accepts for the toolbar icon). List
+  those exactly, so Chrome's default Site access ("On specific sites") matches what's
+  used; an update asking for fewer sites gives users no prompt. The store reviews
+  (Phase 6) also ask why each host is needed, and a wildcard is harder to justify.
+  Check with it:
+  - `isDigitalArkivet()` (background.js), `onDigitalArkivet()` (da_record.js), and the
+    `fetchResultPage()` host check (da_search.js) accept any subdomain: narrow them to
+    the same hosts, or leave them (the manifest is what Chrome enforces) and say why.
+  - `onFamilySearch()` (linker.js) and the content scripts' `matches` (already
+    `www.familysearch.org`).
+  - SECURITY.md and CLAUDE.md's Host Permissions, which name the wildcards.
+  - Load it unpacked and run a search, the linker and the toolbar icon on a DA record
+    once, since a missed host fails only in the browser, not in the tests.
+- **Test:** `npm test`; the workflow once in Chrome and once in Brave on the test tree
+  (search, the linker's pairing, the SourceBox check; attach only with your OK).
+- **Release:** `sh tools/release v1.4.1`. Copies from 1.2.0 on are told by the update
+  checker.
 
-- **Manifest** (`platform/firefox/manifest.json`):
-  - `browser_specific_settings.gecko.id`: a permanent ID, a decision.
-  - `strict_min_version`.
-  - `background.scripts` listing i18n.js, i18n_strings.js, da_places.js, farms.js,
-    background.js. Firefox has no extension service workers; background.js calls
-    `importScripts` only when it exists.
-  - `data_collection_permissions`: Mozilla now asks new extensions to declare what data
-    they collect; I'll check the current rule.
-- **Host permissions:** in Firefox MV3 the user can withhold or revoke them. Search and
-  the linker check `permissions.contains()` and ask with `permissions.request()` when
-  access is missing.
-- **Notifications:** check `notifications`, `storage.session`, `scripting.executeScript`
-  with `func` and the reading of FS in a background tab (`readPerson`); fix what differs.
-- **Distribution:** self-distributed. `web-ext sign --channel=unlisted` in release.yml
-  (AMO API keys as secrets) gives a Mozilla-signed xpi. `gecko.update_url` points at
-  `updates.json` on the latest release, so Firefox updates by itself. Our checker stays
-  quiet on Firefox. A listing on addons.mozilla.org can come later; a listed version
-  can't carry `update_url`, so it would be a second channel.
-- **Test:** `web-ext lint` and `web-ext run` locally; the full workflow on a real
-  person (search, review, attach to a test person only with your OK); then an update
-  from X.Y.Z to a test release through `updates.json`.
-- **Version:** the next MINOR (a new browser).
+### Phase 5: 1.5.0, one package for Chromium and Firefox
 
-### Phase 5: Opera
+One zip for every browser and store (decision 10), not a build per browser. MINOR: a
+new browser.
 
-- **Expected to need little:** Opera runs Chromium MV3 extensions, so it probably needs
-  no changes. Its users can also install from the Chrome Web Store if 3b is done.
-- **Check:** load the chromium zip in Opera; go through the workflow. Opera's support for
-  `chrome.notifications` is unclear; if it's missing, errors show on the badge and in
-  the page instead.
-- **Distribution:** submit to addons.opera.com (free; the review can take weeks), or
-  point Opera users to the chromium zip with the update checker.
-- **Package:** a separate `-opera.zip` only if Opera turns out to need its own manifest.
-- **Version:** PATCH if only fixes, MINOR if Opera gets its own package.
+- **Manifest**, the same file for all:
+  - `background` with both `service_worker: "background.js"` (Chromium) and `scripts`
+    (Firefox, which has no extension service workers): i18n.js, i18n_strings.js,
+    releases.js, da_places.js, farms.js, background.js. Chrome ignores `scripts` when
+    `service_worker` is there (a warning on the extension's card, not an error);
+    background.js calls `importScripts` only when it exists.
+  - `browser_specific_settings.gecko`: `id` `arkivet2fs@dude4linux` (permanent once
+    published), `strict_min_version` (the first Firefox with everything below; check
+    `storage.session` and Ed25519 in WebCrypto), and `data_collection_permissions`
+    (Mozilla's rule for new extensions: I'll check what to declare for an extension that
+    sends nothing to its developer). Chrome ignores the key.
+  - `tools/build.mjs` stays as it is; `web-ext lint` on the zip in ci.yml.
+- **Notifications:** register `chrome.notifications.onClicked` at the top level of
+  background.js (an event page that has unloaded misses a listener added later), and
+  drop `buttons`, which Firefox doesn't support (the click itself opens the page).
+- **Site access:** Firefox (and Chrome when the user picks "On click") can withhold the
+  host permissions. search.html and linker.html check `permissions.contains()` for DA
+  and FS and, when one is missing, show a button that asks with
+  `permissions.request()` (it needs a click), instead of failing on the first fetch.
+- **The update-check hosts:** `api.github.com` and `release-assets.githubusercontent.com`
+  serve only unpacked copies, but every install asks for them, and the store reviews
+  ask why. Move them to `optional_host_permissions`, asked for on the Updates page with
+  one click in an unpacked copy ("Check for updates" off until then). A decision
+  (decision 11).
+- **The hidden window in Firefox:** the linker reads FS in a `popup` window behind its
+  own (`hiddenTab()`). Check that Firefox draws it (FS's SourceBox list loads), keeps it
+  below the linker, and that `windows.create({focused: false})` is honoured; else find
+  what does work there before release.
+- **Also to check in Firefox:** `scripting.executeScript` with `files` then `func` in
+  the same isolated world (background.js's click handler), `tabs.sendMessage` to
+  fs_attach.js, `chrome.management.getSelf()` (`installType` there: the update check
+  must stay quiet in an AMO install), `<a download>` of a `Blob` on update.html,
+  `storage.session`.
+- **Test, in each browser:**
+  - **Firefox:** `web-ext run` with the package; the whole workflow on the test tree
+    (search, the linker, the SourceBox check; attach to a test person only with your
+    OK).
+  - **LibreWolf:** the same with the package installed from a file (it runs unsigned
+    add-ons only with `xpinstall.signatures.required` off; after Phase 6 from AMO). Its
+    defaults clear cookies on closing and resist fingerprinting: note what testers
+    need (staying signed in to FamilySearch: an exception for familysearch.org).
+  - **Opera:** the Chromium package loaded unpacked. Opera's `chrome.notifications` is
+    uncertain; if it's missing, errors show on the badge and in the page instead.
+  - **Chrome, Brave, Edge:** the same package once more, since the manifest changed.
+- **Release:** `sh tools/release v1.5.0`.
 
-### Phase 6: Safari (macOS) — deferred
+### Phase 6: Store listings
 
-A placeholder: not planned until there's a Mac and an Apple Developer membership
-(decision 8). The notes below are kept for then.
+Same zip, four stores; each store signs and updates its own copy, and the update
+checker stays quiet there (it runs only in an unpacked copy). The self-hosted Firefox
+route (`web-ext sign --channel=unlisted`, `update_url`, `updates.json`) is dropped:
+AMO's listed channel updates Firefox and LibreWolf users by itself.
 
+- **Your accounts:** you create them and submit the listings yourself:
+  - Chrome Web Store: $5 once (decided). Brave and Opera users can install from it too.
+  - Microsoft Edge Add-ons: free.
+  - Opera add-ons (addons.opera.com): free; the review can take weeks.
+  - Firefox AMO, listed: free.
+- **What every listing needs** (prepared in the repo, `store/`, excluded from the
+  package):
+  - **A privacy policy:** `PRIVACY.md` from SECURITY.md's "What the extension does with
+    your data" (the hosts, nothing sent to the developer, what is kept and for how
+    long), linked by its GitHub address.
+  - **Permission justifications**, one line each: `activeTab` and `scripting` (read the
+    open DA record; the FS steps), `storage` (drafts, the persons searched), `alarms`
+    and `notifications` (errors; the update check of an unpacked copy), each host (DA,
+    FS, Rygh, Kartverket).
+  - **The single purpose**, Chrome's rule: "make a FamilySearch source from a
+    Digitalarkivet record and attach it to the persons it names".
+  - **Screenshots** (1280×800): the search page, the linker and the FS entry, with
+    made-up persons only. search.html and linker.html can be run on the test fixtures
+    (sanitized DA pages, `TEST-` persons) and captured with headless Chrome, as the
+    icons are; no real tree, no real FS page with other users' work.
+  - **Descriptions** in English and Norwegian (`_locales` has the short ones); the
+    store icon (icon128.png).
+- **Later:** uploads from release.yml through the stores' APIs (Chrome's, Edge's and
+  AMO's take a zip and keys as secrets); until then by hand, after `tools/release`.
+- **Test:** install from each store once its listing is public; the update from one
+  store version to the next.
 
-- **What you'll need:** a Mac with Xcode, and an Apple Developer Program membership
-  ($99 a year) for anything beyond local testing. Without the membership, Safari can
-  only run it with "Allow unsigned extensions", which resets every launch.
-- **The wrapper:** `xcrun safari-web-extension-converter` makes `platform/safari/`, a
-  macOS app that contains the extension. build.mjs copies in the shared files, so
-  there's still only one copy of the code.
-- **Likely gaps:**
-  - Safari has no `notifications` API (the Opera fallback covers it).
-  - Host access is granted per site by the user.
-  - Check `storage.session`, `scripting` and background tabs.
-- **Distribution (a decision):** the Mac App Store (Apple's review; App Store updates),
-  or a Developer ID–signed, notarized app in the release zip (the update checker tells
-  users when a new one is out).
-- **Builds:** they need macOS, so release.yml gets a macOS job, with the signing
-  certificate as a secret.
-- **iOS and iPadOS Safari** could follow from the same project, but they're out of scope
-  here.
-- **Version:** the next MINOR.
+### Phase 7: A call for testers
+
+- **Where:** a Norwegian genealogy Facebook group you're a member of, asking for
+  Norwegian-speaking volunteers to try it and send feedback. You post it; I can draft
+  the text (Norwegian and English) for you to edit.
+- **What it gives:** the store links (one per browser), the README as the guide, and
+  where to report problems (GitHub issues, or a contact for those without a GitHub
+  account). Ask testers for the browser, the version (the toolbar icon's tooltip) and
+  the DA record's address.
+- **Later:** a RootsTech 2027 presentation, once testers' feedback is in.
 
 ## Decisions needed
 
@@ -326,11 +408,15 @@ A placeholder: not planned until there's a Mac and an Apple Developer membership
    GPG).
 5. ~~Where the signing key lives~~ **Decided:** local signing for now; a GitHub secret
    behind an approval step can come later, when releases are frequent.
-6. ~~Chrome Web Store and Edge listing~~ **Decided:** later. Self-distributed releases
-   first; a listing once the update checker has proven itself.
-7. ~~Firefox ID and channel~~ **Decided:** `arkivet2fs@dude4linux` (permanent once
-   published); self-distributed first, an AMO listing later.
-8. ~~Safari~~ **Deferred:** Phase 6 is a placeholder until there's a Mac and an Apple
-   Developer membership.
+6. ~~Chrome Web Store and Edge listing~~ **Decided:** listed after 1.5.0 (Phase 6), with
+   Opera and AMO; the Chrome Web Store's $5 is accepted.
+7. ~~Firefox ID and channel~~ **Decided:** `arkivet2fs@dude4linux`; listed on AMO only
+   (the unlisted, self-hosted channel is dropped).
+8. ~~Safari~~ **Dropped:** the extension isn't sold, so an Apple Developer membership
+   ($99 a year) isn't justified.
 9. ~~Dev-only `package.json`~~ **Decided:** keep it (jsdom, for the tests); add web-ext to
-   it in Phase 4.
+   it in Phase 5.
+10. ~~Packages~~ **Decided:** one zip for all browsers and stores, one manifest.
+11. **The update-check hosts:** optional permissions asked for on the Updates page
+    (recommended: store installs then ask only for the four sites they use), or kept in
+    `host_permissions` and justified to the reviewers as used by unpacked copies only.

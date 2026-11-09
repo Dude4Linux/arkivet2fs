@@ -25,6 +25,12 @@ test('givenStem() cuts a final vowel, but not of short names', () => {
   assert.equal(w.givenStem('Johannes'), 'Johannes');
 });
 
+test("givenStem(): an old final j for i is cut like a vowel (Sirj searches Sir*, as Siri does)", () => {
+  assert.equal(w.givenStem('Sirj'), 'Sir*');
+  assert.equal(w.givenStem('Siri'), 'Sir*');
+  assert.equal(w.relatedStem('Sirj'), 'Sir*');
+});
+
 test('surnameStem() keeps the patronymic or name base', () => {
   assert.equal(w.surnameStem('Aslaksen'), 'Aslaks*');
   assert.equal(w.surnameStem('Tollefsdatter'), 'Tollefs*');
@@ -132,7 +138,7 @@ test('patronymics: recognized, and their base', () => {
 });
 
 test("patronymics: the church books' abbreviations of -datter", () => {
-  for (const name of ['Larsdatter', 'Larsdaatter', 'Larsdattr.', 'Larsdatt.', 'Larsdatr', 'Larsdat.', 'Larsdtr.', 'Larsdr', 'Larsd:r', 'Larsd.']) {
+  for (const name of ['Larsdatter', 'Larsdaatter', 'Larsdattr.', 'Larsdatt.', 'Larsdatr', 'Larsdat.', 'Larsdtr.', 'Larsdr', 'Larsd:r', 'Larsd.', 'Larsd']) {
     assert.equal(w.isPatronymic(name), true, name);
     assert.equal(w.patronymicBase(name), 'Lar', name);
   }

@@ -54,11 +54,13 @@ function hasWord(text, word) {
 // th/t, w/v, x/ks, and an old final j for i (Sirj, Karj for Siri, Kari). From
 // Norphone (Lars Marius Garshol's phonetic key for Norwegian): a silent j or h at the
 // start (Kjetil = Kittil, Kjersti = Kirsti, Gjermund = Jermund, Hjalmar = Jalmar) and
-// a final dt (Arndt = Arnt). Not its g → k, d → t, nd → n, ld → l or the final d
+// a final dt (Arndt = Arnt), and one sound at the start for sj, skj, sch, sk before
+// a front vowel, and the old si before a vowel (Sjønne = Skjønne = Siønne = Sionne;
+// Schjønnesen = Skjønnesen). Not its g → k, d → t, nd → n, ld → l or the final d
 // after a vowel: they make Guri Kari, Gunder Gunnar, Ingrid Inger.
 function skeleton(name) {
   return fold(name).replace(/[^\p{L}]/gu, '').replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i')
-    .replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
+    .replace(/^(sch|sj|si(?=[aeouæøå])|sk(?=[iyøæ]|ei))/, 'sk').replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
     .replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's').replace(/x/g, 'ks')
     .replace(/(?<=.)h(?![aeiouyæøåäöüé])|(?<=[^aeiouyæøåäöüé])h/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
 }
@@ -105,13 +107,25 @@ function nameNear(x, y) {
   return jaroWinkler(a, b) >= 0.92;
 }
 
+// Two patronymics' father names (patronymicBase()) that may be one man's: spellings
+// of one name (Halvard, Halvor; Gudbrand, Gulbrand), one the start of the other
+// (Johan, Johannes), or forms of Johannes, which church books wrote as John, Jon or
+// Joen for the same man (Johnsdatter, Johansdatter, Johannesdatter for one woman)
+const JOHANNES_FORMS = /^(jo(h?n|en)|johan+[ae]?)$/;
+function sameFather(x, y) {
+  const a = fold(x), b = fold(y);
+  if (!a || !b) return false;
+  return a.startsWith(b) || b.startsWith(a) || nameMatch(a, b) || nameMatch(b, a) || nameNear(a, b)
+    || (JOHANNES_FORMS.test(a) && JOHANNES_FORMS.test(b));
+}
+
 // A word of a hit's name is the FS name, one of its forms (Ingbjør for Ingeborg:
 // nameForms() in da_search.js), starts with its stem (Anne for Anna), or has its
 // consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole)
 function nameMatch(word, name) {
   if (fold(word) === fold(name)) return true;
   const forms = nameForms(name);
-  if (forms.length > 1 && forms.includes(fold(word).replace(/[.,*]/g, ''))) return true;
+  if (forms.length > 1 && forms.includes(nameKey(word))) return true;
   const stem = givenStem(name);
   if (stem.endsWith('*') && fold(word).startsWith(fold(stem.slice(0, -1)))) return true;
   const sk = skeleton(name);
@@ -152,7 +166,7 @@ function scoreHit(hit, P) {
   const isSurname = (w) => stems.some((stem) => fold(w).startsWith(stem));
   // A patronymic from a spelling of the same father's name (Halvardsen for Halvorsen)
   const fsPatronymics = P.surnames.filter(isPatronymic);
-  const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => nameMatch(patronymicBase(w), patronymicBase(s)) || nameNear(patronymicBase(w), patronymicBase(s)));
+  const spelled = (w) => isPatronymic(w) && fsPatronymics.find((s) => sameFather(patronymicBase(w), patronymicBase(s)));
   const surname = words.slice(1).find(isSurname) || words.slice(1).find(spelled);
   if (surname && isSurname(surname)) add(2, surname, true);
   else if (surname) add(2, t('{name} for {fs}', { name: surname, fs: spelled(surname) }), null);

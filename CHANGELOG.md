@@ -4,6 +4,24 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.4.1 - unreleased
+
+- Old spellings of a name match better. A final j for i is read as i everywhere: a
+  search for Sirj also finds Siri and Siry, and Sirj counts as a form of Sigrid, as
+  Siri does. Åshild, Rønnaug and Ånund are matched in their old spellings (Aasel,
+  Aasild, Osille; Ronnau, Ronu; Aanen, Aanon), and an initial sj, skj, sch or the old
+  si before a vowel are one sound (Sjønne, Skjønne, Siønne, Sionne).
+- A farm name in place of the patronymic no longer counts against a record: Halvor
+  Nordby may be FamilySearch's Halvor Larsen, since records name a man by his farm or
+  by his father. Another patronymic (Halvor Olsen) still does.
+- Patronymics of one father agree in more spellings: Jonsdatter, Johnsdatter and
+  Johannesdatter (church books wrote one man's name as John or Johannes), Aanensdatter
+  and Aanonsdatter, a woman's Olsen for Olsdatter, and the abbreviation -sd without a
+  full stop (Olsd).
+- The linker's retry when the browser refuses a move to a FamilySearch page ("Navigation
+  rejected.") no longer shows on the extension's Errors page: it was a note, not an
+  error, since the retry goes through.
+
 ## 1.4.0 - 2026-11-07
 
 - The linker checks your SourceBox when it opens, the way FamilySearch's Source

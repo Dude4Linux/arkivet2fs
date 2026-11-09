@@ -39,7 +39,7 @@ function readLimit() { return MAX_PAGES * RESULTS_PER_PAGE; }
 // Patronymic: genitive s + ending: -sen/-søn/-son, -datter/-dotter and the church
 // books' abbreviations of it (-daatter, -dattr., -datt., -datr., -dat., -dtr., -dr.,
 // -d:r, -d.; Johannesdat. is Johannesdatter)
-const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|daatter|dattr\.?|datt\.?|datr\.?|dat\.?|dtr\.?|dr\.?|d:r\.?|d\.)$/i;
+const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|daatter|dattr\.?|datt\.?|datr\.?|dat\.?|dtr\.?|dr\.?|d:r\.?|d\.?)$/i;
 
 const RECORD_TYPES = {
   pd: 'Baptism', pk: 'Confirmation', pv: 'Marriage', pg: 'Burial', pf: 'Census',
@@ -85,11 +85,13 @@ function unreadPatronymic(word, base) {
 // spellings DA doesn't treat as variants match too (Anna → Ann*, finding Anne;
 // Magdaline → Magdalin*, finding Magdalene and Magdalena). Names that don't end in a
 // vowel, or would be cut below 3 letters, are used as they are, with DA's own
-// variants (Jon → Joen, John; Johannes → Johanes; Ole).
+// variants (Jon → Joen, John; Johannes → Johanes; Ole). An old final j for i is a
+// vowel too (Sirj → Sir*, finding Siri and Siry, as Siri does).
+const OLD_FINAL_I = /(?<=[^aeiouyæøå])j$/i;
 function givenStem(name) {
   const s = (name || '').trim().replace(/[.,]$/, '');
   if (!s || /[\s*]/.test(s)) return s;
-  const cut = s.replace(/[aeiouyæøå]+$/i, '');
+  const cut = s.replace(OLD_FINAL_I, '').replace(/[aeiouyæøå]+$/i, '');
   return cut !== s && cut.length >= 3 ? cut + '*' : s;
 }
 
@@ -102,6 +104,9 @@ const GIVEN_NAME_FORMS = [
   ['ingrid', 'ingri', 'ingerid', 'ingerd'],
   ['margit', 'marit', 'margjit', 'margith'],
   ['sigrid', 'siri', 'sigri'],
+  ['åshild', 'aashild', 'åsild', 'aasild', 'åsil', 'aasil', 'åsille', 'aasille', 'osille', 'oselle', 'åsel', 'aasel'],
+  ['rønnaug', 'ronnaug', 'rønaug', 'ronaug', 'rønnau', 'ronnau', 'ronu', 'rønnog'],
+  ['ånund', 'aanund', 'anund', 'ånon', 'aanon', 'ånen', 'aanen'],
   ['kirsti', 'kirsten', 'kjersti', 'kjerstin', 'kristin', 'kerstin'],
   ['kari', 'karen', 'karin'],
   ['guri', 'gudrid', 'gurid'],
@@ -123,10 +128,16 @@ const GIVEN_NAME_FORMS = [
 // (relatedStem()), which they would cut to one letter
 const GIVEN_NAME_DIALECT = { imbjør: 'ingeborg', imbjor: 'ingeborg', imbjørg: 'ingeborg' };
 
+// A given name as GIVEN_NAME_FORMS lists it: lowercase, and an old final j or y for
+// i (Sirj, Siry → siri), so a group needn't list those spellings
+function nameKey(name) {
+  return (name || '').toLowerCase().replace(/[.,*]/g, '').trim().replace(/(?<=[^aeiouyæøå])[jy]$/, 'i');
+}
+
 // The forms of a given name (its group and the group's dialect forms, or just the
 // name), lowercase
 function nameForms(name) {
-  const n = (name || '').toLowerCase().replace(/[.,*]/g, '').trim();
+  const n = nameKey(name);
   const group = GIVEN_NAME_FORMS.find((g) => g.includes(n) || g[0] === GIVEN_NAME_DIALECT[n]);
   if (!group) return n ? [n] : [];
   return group.concat(Object.keys(GIVEN_NAME_DIALECT).filter((d) => GIVEN_NAME_DIALECT[d] === group[0]));
@@ -135,7 +146,7 @@ function nameForms(name) {
 // A relative's given name for related_first_name: the shared start of its forms
 // (Ingeborg → Ing*, finding Ingbjør), otherwise givenStem()
 function relatedStem(name) {
-  const n = (name || '').toLowerCase().replace(/[.,*]/g, '').trim();
+  const n = nameKey(name);
   const forms = GIVEN_NAME_FORMS.find((g) => g.includes(n)) || [];
   if (forms.length > 1) {
     let start = forms[0];
