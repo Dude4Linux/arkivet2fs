@@ -288,10 +288,21 @@ test('defaultTags(): by record type and role', () => {
   assert.deepEqual(plain(w.defaultTags('census', '')), ['Name', 'Gender', 'Residence']);
 });
 
-test('onFamilySearch(): steps run only on familysearch.org', () => {
+test('onFamilySearch(): steps run only on www.familysearch.org (the manifest\'s host)', () => {
   assert.equal(w.onFamilySearch('https://www.familysearch.org/en/tree/sources/sourceBox'), true);
+  assert.equal(w.onFamilySearch('https://ident.familysearch.org/en/identity/login'), false);
+  assert.equal(w.onFamilySearch(''), false);
   assert.equal(w.onFamilySearch('http://www.familysearch.org/'), false);
   assert.equal(w.onFamilySearch('https://familysearch.org.example.com/'), false);
+});
+
+test('step(): a tab the extension can\'t read (FS\'s sign-in page) asks to sign in', async () => {
+  const pageOf = (url) => load([...SHARED, 'linker.js'], { html: 'linker.html', chrome: { tabs: { get: async () => ({ id: 1, url }) } } });
+  const signIn = await pageOf('').step(1, 'findSource', {});
+  assert.equal(signIn.ok, false);
+  assert.match(signIn.error, /perhaps the sign-in page\. Please sign in to FamilySearch/);
+  const elsewhere = await pageOf('https://www.digitalarkivet.no/').step(1, 'findSource', {});
+  assert.equal(elsewhere.error, 'The FamilySearch tab is no longer on FamilySearch.');
 });
 
 // --- An entry in both church books: the 1846 baptism, and the same entry as the

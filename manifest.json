@@ -12,8 +12,8 @@
     "storage"
   ],
   "host_permissions": [
-    "https://*.familysearch.org/*",
-    "https://*.digitalarkivet.no/*",
+    "https://www.familysearch.org/*",
+    "https://www.digitalarkivet.no/*",
     "https://www.dokpro.uio.no/*",
     "https://ws.geonorge.no/*",
     "https://api.github.com/*",

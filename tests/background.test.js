@@ -4,10 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadBackground, plain } = require('./harness.js');
 
-test('isDigitalArkivet(): https, digitalarkivet.no or a subdomain', () => {
+test('isDigitalArkivet(): https, www.digitalarkivet.no only (the manifest\'s host)', () => {
   const w = loadBackground();
   assert.equal(w.isDigitalArkivet('https://www.digitalarkivet.no/en/view/255/pd99000000000018'), true);
-  assert.equal(w.isDigitalArkivet('https://digitalarkivet.no/'), true);
+  assert.equal(w.isDigitalArkivet('https://digitalarkivet.no/'), false);  // redirects to www.
+  assert.equal(w.isDigitalArkivet('https://media.digitalarkivet.no/ft99000000000029'), false);
   assert.equal(w.isDigitalArkivet('http://www.digitalarkivet.no/'), false);
   assert.equal(w.isDigitalArkivet('https://digitalarkivet.no.example.com/'), false);
   assert.equal(w.isDigitalArkivet('https://notdigitalarkivet.no/'), false);

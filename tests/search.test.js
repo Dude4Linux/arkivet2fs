@@ -120,3 +120,38 @@ test('an entry in both of the parish\'s church books is one row, and "Review & A
   assert.equal(params.get('pid'), 'TEST-001');
   assert.equal(groups[0].querySelectorAll('.hit-also').length, 1);
 });
+
+test('DA down: the search stops with a warning, sends nothing more, and "Try again now" searches again', async () => {
+  let down = true;
+  const da = fakeDA();
+  const asked = [];
+  const fetch = (address) => {
+    if (!down) return da.fetch(address);
+    asked.push(String(address));
+    return Promise.resolve(new Response('Service Unavailable', { status: 503 }));
+  };
+  const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html?' + QUERY, fetch, fast: true });
+  const warning = () => w.document.querySelector('.da-warning');
+  await until(() => warning());
+  assert.match(warning().textContent, /it seems to be down/);
+  // the first search, then DA's front page; the other queries aren't run, no record checked
+  assert.deepEqual(asked, [asked[0], 'https://www.digitalarkivet.no/en/']);
+  const statuses = [...w.document.querySelectorAll('.query-status')].map((n) => n.textContent);
+  assert.match(statuses[0], /it seems to be down/);
+  const rest = statuses.slice(1).filter((s) => !/Turned off/.test(s));
+  assert.ok(rest.length && rest.every((s) => s === 'Not run'), statuses.join(' | '));
+  assert.equal(w.document.querySelector('.check-status').textContent, '');
+
+  // a new search while paused asks DA nothing
+  w.render();
+  await until(() => warning());
+  assert.match(warning().textContent, /was not answering at \d\d:\d\d \(503\)/);
+  assert.equal(asked.length, 2);
+
+  // DA is back: "Try again now" ends the pause and runs the search
+  down = false;
+  warning().querySelector('button').click();
+  await until(() => /^Checked/.test(w.document.querySelector('.check-status').textContent));
+  assert.equal(warning(), null);
+  assert.ok(da.asked.length > 2);
+});

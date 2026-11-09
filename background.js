@@ -2,12 +2,12 @@
 // the update check (releases.js)
 importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js', 'releases.js');
 
-// Whether an address is a page on DigitalArkivet (https, digitalarkivet.no or a
-// subdomain of it)
+// Whether an address is a page on DigitalArkivet (https, www.digitalarkivet.no: the
+// manifest's host; digitalarkivet.no without www. redirects there)
 function isDigitalArkivet(address) {
   try {
     const url = new URL(address);
-    return url.protocol === 'https:' && /(^|\.)digitalarkivet\.no$/.test(url.hostname);
+    return url.protocol === 'https:' && url.hostname === 'www.digitalarkivet.no';
   } catch (e) {
     return false;
   }

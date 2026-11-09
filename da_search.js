@@ -747,34 +747,120 @@ function parseResults(html) {
   return { total: total, hits: hits };
 }
 
+// --- Whether DA answers ----------------------------------------------------------
+// When DA is down (a request fails with 5xx, no answer or a network error, and its
+// front page fails too) or refuses requests (403, 429), no page of the extension asks
+// it again before a pause is over: search.html and linker.html share it through
+// localStorage (one origin). The first request after the pause tries again, and one
+// that succeeds ends it. "Try again now" (clearDaPause()) ends it at once.
+const DA_PAUSE_KEY = 'arkivet2fs.daPause';
+const DA_DOWN_PAUSE_MS = 5 * 60 * 1000;
+const DA_REFUSED_PAUSE_MS = 15 * 60 * 1000;
+const DA_TIMEOUT_MS = 30000;  // a page DA hasn't sent by then isn't coming
+const DA_HOME_URL = 'https://www.digitalarkivet.no/en/';
+
+// The pause in force: {kind: 'down' | 'refused', status, since, until}, or null
+function daPause() {
+  try {
+    const pause = JSON.parse(localStorage.getItem(DA_PAUSE_KEY) || 'null');
+    return pause && pause.until > Date.now() ? pause : null;
+  } catch (e) {
+    return null;  // storage unavailable: no pause
+  }
+}
+
+function setDaPause(kind, status) {
+  const since = Date.now();
+  const pause = { kind, status: String(status), since, until: since + (kind === 'refused' ? DA_REFUSED_PAUSE_MS : DA_DOWN_PAUSE_MS) };
+  try { localStorage.setItem(DA_PAUSE_KEY, JSON.stringify(pause)); } catch (e) { /* unavailable */ }
+  return pause;
+}
+
+function clearDaPause() {
+  try { localStorage.removeItem(DA_PAUSE_KEY); } catch (e) { /* unavailable */ }
+}
+
+// A time of day as "14:05"
+function daClock(ms) {
+  const d = new Date(ms);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+// The error for a pause: error.unavailable (down) or error.refused; error.paused when
+// this request wasn't sent. Pages stop asking DA on either (daStopped()).
+function daPauseError(pause, paused) {
+  const params = { status: pause.status, since: daClock(pause.since), until: daClock(pause.until) };
+  const down = pause.kind !== 'refused';
+  const error = new Error(paused
+    ? (down ? t('Digital Arkivet was not answering at {since} ({status}). No requests are sent to it until {until}.', params)
+      : t('Digital Arkivet refused requests at {since} ({status}). No requests are sent to it until {until}.', params))
+    : (down ? t('Digital Arkivet is not answering ({status}), and its front page fails too: it seems to be down. No more requests are sent to it until {until}.', params)
+      : t('Digital Arkivet is refusing requests ({status}). No more requests are sent to it until {until}.', params)));
+  error.unavailable = down;
+  error.refused = !down;
+  error.paused = !!paused;
+  error.until = pause.until;
+  return error;
+}
+
+// Whether an error means DA isn't to be asked again for now
+function daStopped(error) {
+  return !!(error && (error.unavailable || error.refused));
+}
+
+function timeoutSignal(ms) {
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
+}
+
 let lastRequest = 0;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// One request to DA, spaced out from the last: the response, or {failure} (no
+// answer in time, or a network error) as text
+async function daRequest(url, options = {}) {
+  const wait = lastRequest + REQUEST_GAP_MS - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastRequest = Date.now();
+  try {
+    return await fetch(url, { credentials: 'omit', signal: timeoutSignal(options.timeout || DA_TIMEOUT_MS), ...(options.init || {}) });
+  } catch (e) {
+    return { failure: e && e.name === 'TimeoutError' ? t('no answer in {n} s', { n: Math.round((options.timeout || DA_TIMEOUT_MS) / 1000) }) : (e && e.message) || String(e) };
+  }
+}
+
+// Whether DA's front page loads: asked once after a request failed, to tell DA down
+// from one page failing
+async function daAnswers() {
+  const response = await daRequest(DA_HOME_URL, { timeout: 15000, init: { cache: 'no-store' } });
+  return !response.failure && response.ok;
+}
+
 // Fetch one result page (or record page), spaced out from the last request and
 // cached for the session (unless `store` is false: da_verify.js keeps a record's
-// extract instead of its page)
+// extract instead of its page). While DA is paused (daPause()), only cached pages.
 async function fetchResultPage(url, store = true) {
   // Only DA's pages (record addresses come from the page's address and from DA's own links)
   let host = '';
   try { const u = new URL(url); if (u.protocol === 'https:') host = u.hostname; } catch (e) { /* not an address */ }
-  if (!/(^|\.)digitalarkivet\.no$/.test(host)) throw new Error(t('Not a Digital Arkivet address: {url}', { url: String(url).slice(0, 200) }));
+  if (host !== 'www.digitalarkivet.no') throw new Error(t('Not a Digital Arkivet address: {url}', { url: String(url).slice(0, 200) }));
   try {
     const cached = sessionStorage.getItem('da:' + url);
     if (cached) return cached;
   } catch (e) { /* storage unavailable */ }
-  const wait = lastRequest + REQUEST_GAP_MS - Date.now();
-  if (wait > 0) await sleep(wait);
-  lastRequest = Date.now();
-  const response = await fetch(url, { credentials: 'omit' });
-  if (!response.ok) {
-    // (error.refused: DA refuses requests; search.js stops searching)
-    const refused = response.status === 403 || response.status === 429;
-    const error = new Error(refused
-      ? t('Digital Arkivet is refusing requests ({status}). Wait a while and search again.', { status: response.status })
-      : t('Digital Arkivet answered {status}.', { status: response.status }));
-    error.refused = refused;
-    throw error;
+  const pause = daPause();
+  if (pause) throw daPauseError(pause, true);
+  const response = await daRequest(url);
+  if (!response.failure && (response.status === 403 || response.status === 429)) {
+    throw daPauseError(setDaPause('refused', response.status), false);
   }
+  if (response.failure || response.status >= 500) {
+    const status = response.failure || String(response.status);
+    if (!(await daAnswers())) throw daPauseError(setDaPause('down', status), false);
+    // DA answers: only this page failed
+    throw new Error(response.failure ? t('Digital Arkivet did not answer ({status}).', { status }) : t('Digital Arkivet answered {status}.', { status }));
+  }
+  if (!response.ok) throw new Error(t('Digital Arkivet answered {status}.', { status: response.status }));
+  clearDaPause();
   const html = await response.text();
   if (store) try { sessionStorage.setItem('da:' + url, html); } catch (e) { /* full or unavailable */ }
   return html;

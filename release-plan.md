@@ -281,22 +281,22 @@ yet.
   before changing it.
 - **Done: a linker test** of `patronymicClash()` with one father's
   spellings (Kjersti Jonsdatter / Kjersti Johannesdatter: no clash).
-- **Narrow the host-permission wildcards.** `manifest.json` asks for
-  `https://*.familysearch.org/*` and `https://*.digitalarkivet.no/*`, but the
-  extension uses only `www.familysearch.org` and `www.digitalarkivet.no` (and bare
-  `digitalarkivet.no`, which `isDigitalArkivet()` accepts for the toolbar icon). List
-  those exactly, so Chrome's default Site access ("On specific sites") matches what's
-  used; an update asking for fewer sites gives users no prompt. The store reviews
-  (Phase 6) also ask why each host is needed, and a wildcard is harder to justify.
-  Check with it:
-  - `isDigitalArkivet()` (background.js), `onDigitalArkivet()` (da_record.js), and the
-    `fetchResultPage()` host check (da_search.js) accept any subdomain: narrow them to
-    the same hosts, or leave them (the manifest is what Chrome enforces) and say why.
-  - `onFamilySearch()` (linker.js) and the content scripts' `matches` (already
-    `www.familysearch.org`).
-  - SECURITY.md and CLAUDE.md's Host Permissions, which name the wildcards.
-  - Load it unpacked and run a search, the linker and the toolbar icon on a DA record
-    once, since a missed host fails only in the browser, not in the tests.
+- **Done (in code): the host permissions narrowed** to `https://www.familysearch.org/*`
+  and `https://www.digitalarkivet.no/*`, so Chrome's default Site access matches what's
+  used (an update asking for fewer sites gives no prompt) and the store reviews (Phase
+  6) have no wildcard to justify. `isDigitalArkivet()`, `onDigitalArkivet()`,
+  `fetchResultPage()` and `onFamilySearch()` accept the same hosts (bare
+  `digitalarkivet.no` redirects to www.); a work tab on FS's sign-in page
+  (ident.familysearch.org, no `url` now) asks the user to sign in. SECURITY.md and
+  CLAUDE.md name the exact hosts.
+  - **To do:** load it unpacked and run a search, the linker and the toolbar icon on a
+    DA record once, since a missed host fails only in the browser, not in the tests.
+- **Done: DA down or refusing.** A 5xx, a timeout (30 s) or a network error has
+  `fetchResultPage()` ask DA's front page once; when that fails too, DA is down. A
+  refusal (403/429) or an outage sets a pause shared by the pages (`daPause()`, 15 and
+  5 min) in which nothing is sent and cached pages are still given; the search page and
+  the linker show the warning with "Try again now". One page's failure while DA answers
+  doesn't pause.
 - **Test:** `npm test`; the workflow once in Chrome and once in Brave on the test tree
   (search, the linker's pairing, the SourceBox check; attach only with your OK).
 - **Release:** `sh tools/release v1.4.1`. Copies from 1.2.0 on are told by the update

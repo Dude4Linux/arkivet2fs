@@ -29,7 +29,7 @@ issue for those.
 
 ## What the extension does with your data
 
-- It talks only to `digitalarkivet.no` and `familysearch.org`, and, to check farm
+- It talks only to `www.digitalarkivet.no` and `www.familysearch.org`, and, to check farm
   names, to `dokpro.uio.no` (Rygh's *Norske Gaardnavne*) and `ws.geonorge.no`
   (Kartverket). These are the manifest's host permissions, with GitHub's
   `api.github.com` and `release-assets.githubusercontent.com` for the update check.

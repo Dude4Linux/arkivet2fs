@@ -302,8 +302,10 @@ use that language.
 ## Good to know
 
 - **Digitalarkivet limits requests.** The searches are spaced a second apart and
-  cached for the session. If DA starts refusing requests, the page says so and stops.
-  Wait a while before searching again.
+  cached for the session. If DA refuses requests, or is down (a page and its front page
+  both fail), the page says so and stops, and the extension sends DA nothing more for a
+  while: 15 minutes after a refusal, 5 after an outage. The warning says until when;
+  **Try again now** asks DA again at once.
 - **Transcriptions vary.** Names are spelled many ways (Jon, Joen, John; Siri, Sirj,
   Siry), and parents are sometimes transcribed wrongly. So a ✗ on one relative lowers
   a score only a little. Always check the record, and the scanned image when there is

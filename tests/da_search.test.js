@@ -259,10 +259,95 @@ test('fetchResultPage(): only Digital Arkivet\'s pages are fetched', async () =>
   const asked = [];
   const w = load(['i18n.js', 'i18n_strings.js', 'da_search.js'], { fetch: (url) => { asked.push(url); return Promise.reject(new Error('offline')); } });
   for (const url of ['https://example.com/en/view/255/pd99000000000001', 'http://www.digitalarkivet.no/en/view/255/pd99000000000001',
-    'https://digitalarkivet.no.example.com/x', 'javascript:alert(1)', '/en/view/255/pd99000000000001']) {
+    'https://digitalarkivet.no.example.com/x', 'https://media.digitalarkivet.no/ft99000000000029', 'https://digitalarkivet.no/en/view/255/pd99000000000001',
+    'javascript:alert(1)', '/en/view/255/pd99000000000001']) {
     await assert.rejects(w.fetchResultPage(url, false), /Not a Digital Arkivet address/, url);
   }
   assert.deepEqual(asked, []);
   await assert.rejects(w.fetchResultPage('https://www.digitalarkivet.no/en/view/255/pd99000000000001', false), /offline/);
-  assert.equal(asked.length, 1);
+  // the page, then DA's front page (is DA down, or only this page?)
+  assert.deepEqual(asked, ['https://www.digitalarkivet.no/en/view/255/pd99000000000001', 'https://www.digitalarkivet.no/en/']);
+});
+
+// --- DA down or refusing requests: a pause shared by the pages ---------------------
+const RECORD = 'https://www.digitalarkivet.no/en/view/255/pd99000000000018';
+const HOME = 'https://www.digitalarkivet.no/en/';
+
+// DA answering `answer(url)` (a status, or 'timeout' / 'network'); 200 is a page
+function daAnswering(answer) {
+  const asked = [];
+  const fetch = async (url) => {
+    asked.push(String(url));
+    const a = answer(String(url));
+    if (a === 'network') throw new TypeError('Failed to fetch');
+    if (a === 'timeout') throw Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' });
+    return new Response(a === 200 ? '<html><body>page</body></html>' : 'error', { status: a });
+  };
+  const w = load(['i18n.js', 'i18n_strings.js', 'da_search.js'], { fetch, fast: true });
+  return { w, asked };
+}
+
+test('fetchResultPage(): DA down (the page and the front page fail) pauses every request', async () => {
+  let up = false;
+  const { w, asked } = daAnswering(() => (up ? 200 : 503));
+  const down = await w.fetchResultPage(RECORD).catch((e) => e);
+  assert.equal(down.unavailable, true);
+  assert.equal(down.paused, false);
+  assert.equal(w.daStopped(down), true);
+  assert.match(down.message, /not answering \(503\), and its front page fails too: it seems to be down\. No more requests are sent to it until \d\d:\d\d\./);
+  assert.deepEqual(asked, [RECORD, HOME]);
+  assert.equal(w.daPause().kind, 'down');
+
+  // while paused, nothing is sent, even when DA would answer
+  up = true;
+  const paused = await w.fetchResultPage(RECORD).catch((e) => e);
+  assert.equal(paused.paused, true);
+  assert.equal(paused.unavailable, true);
+  assert.match(paused.message, /was not answering at \d\d:\d\d \(503\)\. No requests are sent to it until/);
+  assert.equal(asked.length, 2);
+
+  // after the pause, the next request is sent, and its success ends the pause
+  const pause = w.daPause();
+  w.localStorage.setItem('arkivet2fs.daPause', JSON.stringify({ ...pause, until: Date.now() - 1 }));
+  assert.equal(w.daPause(), null);
+  assert.match(await w.fetchResultPage(RECORD), /page/);
+  assert.equal(w.localStorage.getItem('arkivet2fs.daPause'), null);
+});
+
+test('fetchResultPage(): a page cached before the outage is still given while paused', async () => {
+  let up = true;
+  const { w, asked } = daAnswering(() => (up ? 200 : 'network'));
+  await w.fetchResultPage(RECORD);
+  up = false;
+  await assert.rejects(w.fetchResultPage(RECORD.replace('018', '019')), (e) => e.unavailable && /Failed to fetch/.test(e.message));
+  assert.match(await w.fetchResultPage(RECORD), /page/);
+  assert.equal(asked.length, 3);
+});
+
+test('fetchResultPage(): one page failing while DA answers is that page\'s error, no pause', async () => {
+  const { w, asked } = daAnswering((url) => (url === HOME ? 200 : 500));
+  const error = await w.fetchResultPage(RECORD).catch((e) => e);
+  assert.equal(error.message, 'Digital Arkivet answered 500.');
+  assert.equal(w.daStopped(error), false);
+  assert.equal(w.daPause(), null);
+  assert.deepEqual(asked, [RECORD, HOME]);
+  const late = daAnswering((url) => (url === HOME ? 200 : 'timeout'));
+  assert.equal((await late.w.fetchResultPage(RECORD).catch((e) => e)).message, 'Digital Arkivet did not answer (no answer in 30 s).');
+});
+
+test('fetchResultPage(): a refusal (403, 429) pauses without asking the front page', async () => {
+  const { w, asked } = daAnswering(() => 429);
+  const error = await w.fetchResultPage(RECORD).catch((e) => e);
+  assert.equal(error.refused, true);
+  assert.equal(error.unavailable, false);
+  assert.match(error.message, /refusing requests \(429\)\. No more requests are sent to it until/);
+  assert.deepEqual(asked, [RECORD]);
+  assert.equal(w.daPause().kind, 'refused');
+  assert.ok(w.daPause().until - w.daPause().since >= 15 * 60 * 1000);
+  w.clearDaPause();
+  assert.equal(w.daPause(), null);
+  // a 404 is the page's own answer: no front page asked, no pause
+  const missing = daAnswering(() => 404);
+  assert.equal((await missing.w.fetchResultPage(RECORD).catch((e) => e)).message, 'Digital Arkivet answered 404.');
+  assert.equal(missing.asked.length, 1);
 });

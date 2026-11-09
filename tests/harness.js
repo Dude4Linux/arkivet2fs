@@ -16,6 +16,8 @@
 //   chrome   a stub of the chrome.* APIs (default none: pages then don't start)
 //   fetch    a stub for fetch() (default: every request fails, the tests are offline)
 //   fast     timers wait at most 1 ms (DA's requests are spaced 1 s apart)
+// AbortSignal.timeout() starts no timer: the fetch stub decides what's late, and
+// jsdom's 30 s timers would keep the test process alive.
 
 'use strict';
 
@@ -40,6 +42,7 @@ function load(files, options = {}) {
   const w = dom.window;
   w.fetch = options.fetch || offlineFetch;
   if (options.chrome) w.chrome = options.chrome;
+  w.AbortSignal.timeout = () => new w.AbortController().signal;
   if (options.fast) {
     const setTimeout = w.setTimeout.bind(w);
     w.setTimeout = (fn, ms, ...args) => setTimeout(fn, Math.min(Number(ms) || 0, 1), ...args);

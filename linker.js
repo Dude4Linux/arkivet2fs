@@ -1515,7 +1515,11 @@ const NAVIGATE_TRIES = 3;
 // tab is still on FamilySearch (the user may have taken it elsewhere)
 async function step(tabId, name, args) {
   const tab = await chrome.tabs.get(tabId);
-  if (!onFamilySearch(tab.url)) return { ok: false, error: t('The FamilySearch tab is no longer on FamilySearch.') };
+  if (!onFamilySearch(tab.url)) {
+    // (no url: a site the extension has no access to, as FS's sign-in page)
+    return { ok: false, error: tab.url ? t('The FamilySearch tab is no longer on FamilySearch.')
+      : t('The FamilySearch tab is on a page the extension cannot read, perhaps the sign-in page. Please sign in to FamilySearch and try again.') };
+  }
   await chrome.scripting.executeScript({ target: { tabId }, files: ['fs_attach.js'] });
   const answer = await Promise.race([
     chrome.tabs.sendMessage(tabId, { linker: name, args }),
@@ -1525,13 +1529,13 @@ async function step(tabId, name, args) {
   return answer.ok ? answer : { ...answer, error: fsMessage(answer.error) };
 }
 
-// Whether an address is on FamilySearch (https, familysearch.org or a subdomain, such
-// as its sign-in page). Without the extension's access to a tab's site, its url is
-// empty: not FamilySearch.
+// Whether an address is on FamilySearch (https, www.familysearch.org: the manifest's
+// host). Without the extension's access to a tab's site, its url is empty: not
+// FamilySearch (its sign-in page, ident.familysearch.org, is such a site).
 function onFamilySearch(address) {
   try {
     const url = new URL(address || '');
-    return url.protocol === 'https:' && /(^|\.)familysearch\.org$/.test(url.hostname);
+    return url.protocol === 'https:' && url.hostname === 'www.familysearch.org';
   } catch (e) {
     return false;
   }
@@ -2221,8 +2225,14 @@ async function main() {
     $('linker').hidden = false;
     readDetails();  // the paired tree persons' facts, filled in as they're read
   } catch (e) {
-    status.textContent = e.refused ? e.message : tMessage(e.message || String(e));
+    status.textContent = daStopped(e) ? e.message : tMessage(e.message || String(e));
     status.classList.add('bad');
+    if (daStopped(e)) {
+      // DA down or refusing requests (da_search.js daPause()): read the record again now
+      const retry = el('button', { type: 'button', text: t('Try again now') });
+      retry.addEventListener('click', () => { clearDaPause(); location.reload(); });
+      status.append(' ', retry);
+    }
   }
 }
 

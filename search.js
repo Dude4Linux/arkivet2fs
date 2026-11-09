@@ -396,7 +396,7 @@ async function checkHits(run, merged, person, container, status) {
     } catch (error) {
       entry.checks = [];
       entry.checkError = error.message;
-      if (error.refused) {
+      if (daStopped(error)) {
         status.textContent = error.message;
         status.classList.add('error');
         return;
@@ -481,6 +481,15 @@ async function renderResults(criteria) {
     groups
   );
 
+  // While DA is down or refusing requests (daPause()), nothing is asked: the warning
+  // says until when, with "Try again now"
+  const pause = daPause();
+  if (pause) {
+    results.prepend(daWarning(daPauseError(pause, true).message, criteria));
+    for (const view of views) if (!view.query.skip) view.status.textContent = t('Not run');
+    return;
+  }
+
   // One query at a time: DA rate-limits automated traffic
   const merged = new Map();
   let refused = false;
@@ -513,8 +522,9 @@ async function renderResults(criteria) {
       if (run !== generation) return;
       view.status.textContent = error.message;
       view.status.classList.add('error');
-      if (error.refused) {
+      if (daStopped(error)) {
         refused = true;
+        results.prepend(daWarning(error.message, criteria));
         for (const rest of views.slice(i + 1)) if (!rest.query.skip) rest.status.textContent = t('Not run');
         break;
       }
@@ -524,6 +534,17 @@ async function renderResults(criteria) {
     groups.replaceChildren(el('section', {}, [el('p', { class: 'muted', text: t('No records found. Try removing details in the criteria, or a shorter surname.') })]));
   }
   if (run === generation && merged.size && !refused) await checkHits(run, merged, person, groups, checkStatus);
+}
+
+// The warning that DA is down or refusing requests, with "Try again now": the pause
+// ended and the same search run again
+function daWarning(message, criteria) {
+  const retry = el('button', { type: 'button', class: 'primary', text: t('Try again now') });
+  retry.addEventListener('click', () => {
+    clearDaPause();
+    renderResults(criteria);
+  });
+  return el('section', { class: 'da-warning', role: 'alert' }, [el('p', { text: message }), retry]);
 }
 
 // --- Page -----------------------------------------------------------------------------

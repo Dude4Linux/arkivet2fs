@@ -21,6 +21,15 @@ fixes, new features, changes that break what users have).
 - The linker's retry when the browser refuses a move to a FamilySearch page ("Navigation
   rejected.") no longer shows on the extension's Errors page: it was a note, not an
   error, since the retry goes through.
+- When Digitalarkivet is down or refuses requests, the search page and the linker say
+  so at the top, with the time it happened, and send it nothing more for a while: 5
+  minutes when it's down, 15 when it refuses. Pages already read are still shown.
+  **Try again now** asks again at once. A single page that fails while the rest of
+  Digitalarkivet answers no longer stops anything.
+- The extension asks for fewer sites: only www.digitalarkivet.no and
+  www.familysearch.org, not every address under them. Nothing changes in use. If
+  FamilySearch's sign-in page comes up while sources are attached, the linker asks you
+  to sign in and try again.
 
 ## 1.4.0 - 2026-11-07
 

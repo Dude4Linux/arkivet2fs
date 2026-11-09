@@ -568,7 +568,7 @@ function extractRecord(document, pageUrl) {
       // book: a ministerialbok or a klokkerbok of the parish (da_verify.js readSourcePage())
       const link = infobox.querySelector('#source-link');
       const href = link ? link.getAttribute('href') || '' : '';
-      if (/^https:\/\/([\w-]+\.)*digitalarkivet\.no\/.*\/source\/\d+$/.test(href)) info.sourceUrl = href;
+      if (/^https:\/\/www\.digitalarkivet\.no\/.*\/source\/\d+$/.test(href)) info.sourceUrl = href;
     }
 
     if (!info.sourceTitle) {
@@ -1080,10 +1080,11 @@ function extractRecord(document, pageUrl) {
 // (An emigrant protocol's "Load more" lists the whole protocol, thousands of
 // emigrants who aren't family, so it isn't followed.)
 // Whether an address (absolute, or relative to DA) is a page on DigitalArkivet
+// (www.digitalarkivet.no, the manifest's host)
 function onDigitalArkivet(address) {
   try {
     const url = new URL(address, 'https://www.digitalarkivet.no/');
-    return url.protocol === 'https:' && /(^|\.)digitalarkivet\.no$/.test(url.hostname);
+    return url.protocol === 'https:' && url.hostname === 'www.digitalarkivet.no';
   } catch (e) {
     return false;
   }
