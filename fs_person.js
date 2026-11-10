@@ -125,6 +125,13 @@
       residences: residences,
       emigration: moves('EMIGRATION', /^(emigra|utvandr)/i),
       immigration: moves('IMMIGRATION', /^(immigra|innvandr)/i),
+      // Occupations: the description is the body's text besides the date and place
+      occupations: all('OCCUPATION').map((el) => {
+        const v = conclusionValue(el);
+        let description = text(el.querySelector('[data-testid="conclusion-body"]'));
+        for (const part of [v.date, v.place]) if (part) description = description.replace(part, '');
+        return { ...v, description: description.replace(/\s+/g, ' ').trim() };
+      }),
       father: father,
       mother: mother,
       families: families

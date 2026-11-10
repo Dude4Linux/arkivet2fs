@@ -27,6 +27,7 @@
         </div>
         <p id="source-note" class="small" hidden></p>
         <p id="fs-check" class="small" hidden></p>
+        <div id="fs-fields" class="fs-fields" hidden></div>
         <label class="field" data-i18n>Title <input id="f-title" type="text"></label>
         <div class="field-row">
           <label class="field" data-i18n>Date <input id="f-date" type="text"></label>
@@ -44,6 +45,7 @@
         <p class="muted small" data-i18n>The parish kept two church books, and both have this entry. Each becomes a source of its own,
           attached to the same people; only the first gets the tags. The differences between them are in both sources' notes.</p>
         <p id="fs-check-g" class="small" hidden></p>
+        <div id="fs-fields-g" class="fs-fields" hidden></div>
         <table id="compare" class="compare"></table>
         <label class="field" data-i18n>Title <input id="g-title" type="text"></label>
         <div class="field-row">
@@ -71,6 +73,13 @@
         <button id="other-households" type="button" class="link small" hidden></button>
       </section>
 
+      <section id="changes" class="box changes" hidden>
+        <h2 data-i18n>Changes to the tree persons</h2>
+        <p class="muted small" data-i18n>Made after the source is attached, each with the source tagged to it.</p>
+        <ul id="changes-list"></ul>
+        <p class="changes-check"><button id="check-changes" type="button" data-i18n>Check with FamilySearch</button>
+          <span id="changes-status" class="muted small" role="status" data-i18n>FamilySearch's standard dates and places, from its own forms (nothing is saved).</span></p>
+      </section>
       <div class="actions">
         <button id="attach" type="button" class="primary" data-i18n>Create source and attach</button>
         <button id="create-only" type="button" class="secondary" data-i18n>Create source only</button>

@@ -305,7 +305,8 @@ yet.
   the standard place. `pickSuggestion()` skips the text as typed and takes the first
   suggestion with a kind-and-years line whose years hold the record's year (Vågå,
   Oppland for 1846, Vågå, Innlandet for 2021), else the first standard one.
-  - **To check:** the person created on 7 November: is the birth place standard?
+  - **To check:** the next person created from the linker (the 7 November one was
+    deleted): are the birth and death places standard?
 - **Test:** `npm test`; the workflow once in Chrome and once in Brave on the test tree
   (search, the linker's pairing, the SourceBox check; attach only with your OK).
 - **Release:** `sh tools/release v1.4.1`. Copies from 1.2.0 on are told by the update
@@ -358,7 +359,34 @@ user's approval.
     (`no`), `first-name`, `last-name`, as in Add Person;
   - a fact's Tag Sources: "Tag Source For Residence", the person's sources,
     `restore-source-select-button`, `restore-source-cancel-button`.
-  - **To check:** how a missing vital (no christening) is added.
+  - a missing vital: the highlight's own add button,
+    `[data-testid=highlight-CHRISTENING] [data-testid="conclusion:add:button"]` ("Add
+    Christening"), opens the form at once (no Edit step), with a Tag Sources panel
+    (`conclusionDetailOverlay:sources-wrapper`); its list has each source as a
+    `div[role=button]` whose `name` is the SourceBox ID and `aria-label` the title;
+    clicking one shows a preview with `source-view-tag-button` ("Tag To Christening")
+    and `source-view-close-button`. **To check:** whether Tag To saves at once or only
+    adds to the unsaved form.
+  - Custom Event: `conclusionDetailOverlay:title`, `:description`, `:date`, `:place`,
+    `:reason`; Occupation: `:description`, `:date`, `:place`, `:reason`; neither add
+    form has Tag Sources (tagged after saving, from the fact's edit form).
+  - the menu items have no testids (`role=menuitem`, found by their English text).
+  - **To check:** how an occupation shows on the person page (fs_person.js reads
+    `conclusionDisplay:OCCUPATION`'s body besides its date and place as the
+    description; none on the test tree had one).
+- **Done (in code and tests, not tried on FS):** `factAdditions()` (linker.js) gives
+  the suggestions; each row's facts table lists them, unticked, with the editable entry
+  shown once ticked and one reason for the row; `#changes` above the buttons lists the
+  ticked ones; `readPlan()` gives them as `additions` on each pair, and an emptied one
+  stops the plan. **Check with FamilySearch** (`prepareAdditions()`) fills each in FS's
+  form in the hidden window (`addFact`, `save: false`) and puts FS's standard date and
+  place in the boxes. `run()` saves them after the main source's attach and tags
+  (`addFact` with `save`), then `tagFact`. The SourceBox copy's fields are read in the
+  check (`editSource` with `read`) and shown with a choice per field.
+- **To try on the test tree, with your OK** (it saves): one addition of each kind (an
+  alternate name, a christening added, a birth changed, a residence, an occupation, a
+  custom event), each tagged; whether Tag To saves at once; how an occupation shows;
+  the field choices on a source already in the SourceBox.
 - **An existing SourceBox source:** the check reads its fields too (the Edit Source
   dialog, cancelled) and shows each field that differs side by side: keep FS's or use
   the record's. The record's by default for the fields the extension writes (title,

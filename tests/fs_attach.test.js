@@ -7,10 +7,19 @@ const assert = require('node:assert/strict');
 const { load, plain } = require('./harness.js');
 
 // fs_attach.js on a page at `url`; `step(name, args)` asks it as linker.js does
-function attachPage(url, body) {
+function attachPage(url, body, { clock = false } = {}) {
   let listener = null;
   const chrome = { runtime: { onMessage: { addListener(fn) { listener = fn; } } } };
   const w = load([], { url, chrome, fast: true });
+  // `clock`: the fast timers on a clock that moves on by each timer's whole delay, so a
+  // wait timed with Date.now() gives up after as many polls as on FS, not 20 s later
+  if (clock) {
+    let ahead = 0;
+    const fastTimeout = w.setTimeout;
+    w.setTimeout = (fn, ms, ...args) => fastTimeout(() => { ahead += Number(ms) || 0; fn(...args); }, ms);
+    const now = w.Date.now.bind(w.Date);
+    w.Date.now = () => now() + ahead;
+  }
   w.document.body.innerHTML = body;
   w.runFile('fs_attach.js');
   const step = (name, args) => new Promise((resolve) => listener({ linker: name, args }, {}, resolve));
@@ -145,6 +154,17 @@ test('editSource(): nothing different is cancelled, not saved', async () => {
   assert.equal(fs.cancelled, 1);
 });
 
+test('editSource() with read: FS\'s fields, cancelled, nothing written', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, { ...ON_FS, notes: 'Old notes\r\nline two' });
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01', read: true,
+    source: { title: TITLE, url: ON_FS['web-page'], citation: 'New citation', notes: 'New notes' } });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.fields), { date: ON_FS.date, title: TITLE, url: ON_FS['web-page'], citation: 'Old citation', notes: 'Old notes\nline two' });
+  assert.equal(fs.saved, null);
+  assert.equal(fs.cancelled, 1);
+});
+
 test('editSource(): a source Home doesn\'t show is found with the search', async () => {
   const page = sourceBox([['TEST-S04', '1850, Ola Nordmann - Census']], [['TEST-S01', TITLE], ['TEST-S04', '1850, Ola Nordmann - Census']]);
   // the wait for the row on Home runs out at once; the search then has real time
@@ -202,7 +222,7 @@ function personPage({ matches = [], afterCreate = 'card', lists = null } = {}) {
           list.innerHTML = [[typed], ...forms].map(([text, kind], i) =>
             `<li role="option" data-testid="suggestion-${i}"><span>${text}</span>${kind ? `<div>${kind}</div>` : ''}</li>`).join('');
           for (const [i, option] of [...list.querySelectorAll('[role="option"]')].entries()) {
-            option.addEventListener('click', () => { input.value = i ? forms[i - 1][0] : typed; list.innerHTML = ''; });
+            option.addEventListener('click', () => { input.value = i ? forms[i - 1][0] : typed; list.innerHTML = ''; dirty(); });
           }
           return;
         }
@@ -355,4 +375,326 @@ test('findPerson(): only a PID goes into the page check', async () => {
   const answer = await step('findPerson', { relation: 'child', anchor: '.*', person: LARS });
   assert.equal(answer.ok, false);
   assert.match(answer.error, /Not a FamilySearch PID/);
+});
+
+// --- The record's facts added to the tree person: FS's fact form --------------------
+// A made-up person page: a birth (with its pencil), the missing christening's add
+// button, Add Alternate Name, Add Event's menu. The form (`conclusion-dialog`): the
+// fields by name, date and place comboboxes that list the text as typed first, then
+// the standard forms; Save adds the fact to the page, Cancel leaves it as it was. A
+// fact's pencil opens its view: Edit, Close, Tag Sources (the person's sources by
+// SourceBox ID, each with a preview's Tag To). `birthSources` false: the birth has no
+// sources, and its pencil opens the form itself, whose Cancel doesn't close it (its
+// Close does), as FS has it. `late`: FS's list for the typed text comes 100 ms after
+// the list for the field's old value (with the text as typed first).
+const FACT_LISTS = {
+  'Vågå, Oppland, Norway': FS_LISTS['Vågå'], '23 August 1846': [['23 August 1846']], '1846': [['1846']],
+  // As FS lists a farm it doesn't know: the municipality, and farms of a like name elsewhere
+  'Bakken nedre, Vågå, Oppland, Norway': [['Vågå, Oppland, Norway', 'Municipality, 1781 - 2019'], ['Bakken, Oppland, Norway', 'Populated Place,'],
+    ['Bakkom, Gausdal, Kristians, Norway', 'Farm, 1781 - 1879</div><div>Alternate Name: Bakken']],
+  'Bakken, Vågå, Oppland, Norway': [['Bakkom, Gausdal, Kristians, Norway', 'Farm, 1781 - 1879</div><div>Alternate Name: Bakken'],
+    ['Bakken, Vågå, Oppland, Norway', 'Farm, 1781 - 2019']]
+};
+
+// `saveOff`: Save off while the date and place are what the form opened with (FS's
+// edit form, 2026-11-09); `stuck`: Save does nothing
+function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, saveOff = false, stuck = false } = {}) {
+  const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-LAR',
+    '<div id="vitals"><div data-testid="conclusionDisplay:BIRTH"><div data-testid="conclusion-body"><span data-testid="conclusion-date">1846</span> ' +
+    '<span data-testid="conclusion-place">Norway</span></div><button data-testid="pencil-edit-button">Edit</button></div>' +
+    '<div data-testid="highlight-CHRISTENING"><button data-testid="conclusion:add:button">Add Christening</button></div></div>' +
+    '<button data-testid="add-alternate-name">Add</button><button data-testid="add-new-otherEvent-button">Add Event</button><div id="events"></div>', { clock: true });
+  const { w } = page;
+  const d = w.document;
+  const saved = [], tagged = [], log = [];
+  let n = 0;
+  // FS wraps each field in a div of the field's name (seen on the Residence form, 2026-11-09)
+  const combo = (name, value) => `<div name="${name}"><input name="${name}" data-testid="conclusionDetailOverlay:${name}" role="combobox" aria-controls="list-${++n}" value="${value || ''}"><ul id="list-${n}"></ul></div>`;
+  const text = (name, value) => `<div name="${name}"><input name="${name}" data-testid="conclusionDetailOverlay:${name}" value="${value || ''}"></div>`;
+  const display = (type, body) => {
+    const el = d.createElement('div');
+    el.setAttribute('data-testid', 'conclusionDisplay:' + type);
+    el.innerHTML = `<div data-testid="conclusion-body">${body}</div><button data-testid="pencil-edit-button">Edit</button>`;
+    el.querySelector('[data-testid="pencil-edit-button"]').addEventListener('click', () => openView(type, el));
+    return el;
+  };
+  function dialog(html) {
+    const box = d.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.innerHTML = `<div data-testid="conclusion-dialog">${html}</div>`;
+    d.body.append(box);
+    return box;
+  }
+  // The form; on Save `onSave(values)`
+  function openForm(type, fieldsHtml, onSave, onCancel, direct = false) {
+    const box = dialog((direct ? '<button aria-label="Close">×</button>' : '') + '<div data-testid="conclusionDetailOverlay:addEditConclusion">' + fieldsHtml +
+      '<textarea name="justification" data-testid="conclusionDetailOverlay:reason"></textarea>' +
+      '<button data-testid="add-edit:cancel-action">Cancel</button><button data-testid="conclusionDetailOverlay:submit:button">Save</button></div>');
+    for (const input of box.querySelectorAll('[role="combobox"]')) {
+      let old = input.value;
+      const show = (typed, forms) => {
+        const list = d.getElementById(input.getAttribute('aria-controls'));
+        list.innerHTML = [[typed], ...forms].map(([t, kind]) => `<li role="option"><span>${t}</span>${kind ? `<div>${kind}</div>` : ''}</li>`).join('');
+        for (const [i, option] of [...list.querySelectorAll('[role="option"]')].entries()) {
+          option.addEventListener('click', () => { input.value = i ? forms[i - 1][0] : typed; list.innerHTML = ''; dirty(); });
+        }
+      };
+      input.addEventListener('input', () => {
+        const typed = input.value;
+        if (late) {
+          // The old value's places (a church in Lom) under the text as typed, at first
+          show(typed, old ? (FACT_LISTS[old] || [['Lom stavkirke, Lom, Oppland, Norway', 'Place of Worship, 1158 - Present']]) : []);
+          w.setTimeout(() => show(typed, FACT_LISTS[typed] || []), 100);
+        } else show(typed, FACT_LISTS[typed] || []);
+        old = typed;
+        dirty();
+      });
+    }
+    const values = () => Object.fromEntries([...box.querySelectorAll('input[name], textarea[name], select[name]')].map((i) => [i.name, i.value]));
+    const submit = box.querySelector('[data-testid="conclusionDetailOverlay:submit:button"]');
+    const opened = JSON.stringify([values().date, values().place]);
+    function dirty() { if (saveOff) submit.disabled = JSON.stringify([values().date, values().place]) === opened; }
+    dirty();
+    box.querySelector('[data-testid="add-edit:cancel-action"]').addEventListener('click', () => {
+      log.push('cancel ' + type);
+      if (direct) return;
+      box.remove();
+      if (onCancel) onCancel();
+    });
+    if (direct) box.querySelector('[aria-label="Close"]').addEventListener('click', () => { log.push('close ' + type); box.remove(); });
+    submit.addEventListener('click', () => {
+      if (stuck || submit.disabled) return;
+      const v = values();
+      saved.push({ type, ...v });
+      box.remove();
+      onSave(v);
+    });
+  }
+  function openView(type, el) {
+    const box = dialog('<button aria-label="Close">×</button><button data-testid="ConclusionDialog:edit:button">Edit</button><button>Tag Sources</button>');
+    box.querySelector('[aria-label="Close"]').addEventListener('click', () => { log.push('close ' + type); box.remove(); });
+    box.querySelector('[data-testid="ConclusionDialog:edit:button"]').addEventListener('click', () => {
+      box.remove();
+      openForm(type, combo('date', el.querySelector('[data-testid="conclusion-date"]').textContent) + combo('place', el.querySelector('[data-testid="conclusion-place"]').textContent),
+        (v) => { el.querySelector('[data-testid="conclusion-date"]').textContent = v.date; el.querySelector('[data-testid="conclusion-place"]').textContent = v.place; openView(type, el); },
+        () => openView(type, el));
+    });
+    [...box.querySelectorAll('button')].find((b) => b.textContent === 'Tag Sources').addEventListener('click', () => {
+      const list = d.createElement('div');
+      list.innerHTML = sources.map((id) => `<div role="button" name="${id}" aria-label="A source">A source</div>`).join('') +
+        '<button data-testid="restore-source-cancel-button">Close</button>';
+      d.body.append(list);
+      list.querySelector('[data-testid="restore-source-cancel-button"]').addEventListener('click', () => list.remove());
+      for (const item of list.querySelectorAll('[role="button"]')) {
+        item.addEventListener('click', () => {
+          list.innerHTML = '<button data-testid="source-view-tag-button">Tag To</button><button data-testid="source-view-close-button">Close</button>';
+          list.querySelector('[data-testid="source-view-tag-button"]').addEventListener('click', () => { tagged.push({ type, source: item.getAttribute('name'), fact: el.textContent }); list.remove(); });
+        });
+      }
+    });
+  }
+  const birth = d.querySelector('[data-testid="conclusionDisplay:BIRTH"]');
+  birth.querySelector('[data-testid="pencil-edit-button"]').addEventListener('click', () => {
+    if (birthSources) return openView('BIRTH', birth);
+    openForm('BIRTH', combo('date', birth.querySelector('[data-testid="conclusion-date"]').textContent) + combo('place', birth.querySelector('[data-testid="conclusion-place"]').textContent),
+      (v) => { birth.querySelector('[data-testid="conclusion-date"]').textContent = v.date; birth.querySelector('[data-testid="conclusion-place"]').textContent = v.place; },
+      null, true);
+  });
+  d.querySelector('[data-testid="conclusion:add:button"]').addEventListener('click', () => {
+    openForm('CHRISTENING', combo('date') + combo('place'), (v) => {
+      const slot = d.querySelector('[data-testid="highlight-CHRISTENING"]');
+      slot.replaceWith(display('CHRISTENING', `<span data-testid="conclusion-date">${v.date}</span> <span data-testid="conclusion-place">${v.place}</span>`));
+    });
+  });
+  d.querySelector('[data-testid="add-alternate-name"]').addEventListener('click', () => {
+    openForm('ALTERNATE_NAME', '<select name="nameType"><option value="BIRTH">Birth Name</option><option value="AKA">Also Known As</option></select>' +
+      '<select name="template"><option value="en">English</option><option value="no">Norwegian</option></select>' +
+      '<input name="nameTemplate.no.firstName" data-testid="first-name"><input name="nameTemplate.no.lastName" data-testid="last-name">',
+    (v) => d.getElementById('events').append(display('ALTERNATE_NAME', '<span data-testid="conclusion-name-type">Also Known As</span>' +
+      `<span data-testid="conclusion-name-template">${v['nameTemplate.no.firstName']} ${v['nameTemplate.no.lastName']}</span>`)));
+  });
+  d.querySelector('[data-testid="add-new-otherEvent-button"]').addEventListener('click', () => {
+    const menu = d.createElement('div');
+    menu.setAttribute('role', 'menu');
+    const types = { Residence: 'RESIDENCE', Occupation: 'OCCUPATION', Immigration: 'IMMIGRATION', 'Custom Event': 'OTHER_EVENT' };
+    menu.innerHTML = Object.keys(types).map((label) => `<div role="menuitem">${label}</div>`).join('');
+    d.body.append(menu);
+    for (const item of menu.children) {
+      item.addEventListener('click', () => {
+        menu.remove();
+        const type = types[item.textContent];
+        openForm(type, (type === 'OTHER_EVENT' ? text('title') : '') + text('description') + combo('date') + combo('place'), (v) =>
+          d.getElementById('events').append(display(type, [v.title, v.description, v.date, v.place].filter(Boolean).join(' '))));
+      });
+    }
+  });
+  return { ...page, saved, tagged, log };
+}
+
+const CHRISTENING = { fact: 'Christening', action: 'add', type: 'CHRISTENING', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+const REASON = 'From "1846, Lars Halvorsen - Vågå - Baptism", Digitalarkivet, Permanent ID pd99000000000001.';
+
+test('addFact(): prepared, a missing christening is filled with FS\'s standard place, then cancelled: nothing saved', async () => {
+  const { step, saved, log } = factPage();
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
+  assert.equal(answer.ok, true, answer.error);
+  const place = answer.fields.find((f) => f.name === 'place');
+  assert.equal(place.value, 'Vågå, Oppland, Norway');
+  assert.match(place.picked, /^Vågå, Oppland, Norway ?Municipality, 1781 - 2019$/);
+  assert.deepEqual(saved, []);
+  assert.deepEqual(log, ['cancel CHRISTENING']);
+});
+
+test('addFact(): saved, the christening with its date, place and reason, and how FS shows it', async () => {
+  const { step, saved } = factPage();
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(saved), [{ type: 'CHRISTENING', date: '23 August 1846', place: 'Vågå, Oppland, Norway', justification: REASON }]);
+  assert.match(answer.shown, /^23 August 1846 Vågå, Oppland, Norway/);
+});
+
+test('addFact(): a birth changed through its view\'s Edit, the view closed after', async () => {
+  const { step, saved, log, w } = factPage();
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(saved[0].type, 'BIRTH');
+  assert.equal(saved[0].date, '23 August 1846');
+  assert.equal(saved[0].place, 'Vågå, Oppland, Norway');
+  assert.deepEqual(log, ['close BIRTH']);
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+});
+
+test('addFact(): an edit FS has already (Save stays off: an earlier run saved it) is cancelled and answered as unchanged', async () => {
+  const { step, saved, log, w } = factPage({ saveOff: true });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '1846', place: 'Norway' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(answer.unchanged, true);
+  assert.deepEqual(saved, []);
+  assert.deepEqual(log, ['cancel BIRTH', 'close BIRTH']);
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);  // no form left open
+  // A real change turns Save on and is saved
+  const changed = await step('addFact', { pid: 'TEST-LAR', addition: { ...birth, value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } }, reason: REASON, save: true });
+  assert.equal(changed.ok, true, changed.error);
+  assert.equal(changed.unchanged, undefined);
+  assert.equal(saved[0].date, '23 August 1846');
+});
+
+test('addFact(): a form FS doesn\'t close after Save is cancelled, not left open, and the step fails', async () => {
+  const { step, saved, log, w } = factPage({ stuck: true });
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error, 'FamilySearch did not save the christening.');
+  assert.deepEqual(saved, []);
+  assert.deepEqual(log, ['cancel CHRISTENING']);
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+});
+
+test('addFact(): an alternate name (Also Known As, Norway\'s template) and an emigration as a custom event', async () => {
+  const { step, saved } = factPage();
+  const name = { fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Lars', surname: 'Halvorsøn', nameType: 'AKA' } };
+  assert.equal((await step('addFact', { pid: 'TEST-LAR', addition: name, reason: REASON, save: true })).ok, true);
+  assert.deepEqual(plain(saved[0]), { type: 'ALTERNATE_NAME', nameType: 'AKA', template: 'no', 'nameTemplate.no.firstName': 'Lars', 'nameTemplate.no.lastName': 'Halvorsøn', justification: REASON });
+  const emigration = { fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value: { date: '1846', place: 'Vågå, Oppland, Norway', description: 'Destination: Minnesota' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: emigration, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(saved[1]), { type: 'OTHER_EVENT', title: 'Emigration', description: 'Destination: Minnesota', date: '1846', place: 'Vågå, Oppland, Norway', justification: REASON });
+});
+
+test('addFact(): a farm\'s place stays as typed unless FS has that farm in that municipality', async () => {
+  const { step, saved } = factPage();
+  const residence = (place) => ({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1846', place, description: 'Bakken' } });
+  const unknown = await step('addFact', { pid: 'TEST-LAR', addition: residence('Bakken nedre, Vågå, Oppland, Norway'), reason: REASON, save: false });
+  assert.deepEqual(plain(unknown.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Bakken nedre, Vågå, Oppland, Norway', picked: '' });
+  const known = await step('addFact', { pid: 'TEST-LAR', addition: residence('Bakken, Vågå, Oppland, Norway'), reason: REASON, save: true });
+  assert.equal(known.ok, true, known.error);
+  assert.equal(saved[0].place, 'Bakken, Vågå, Oppland, Norway');
+  assert.match(known.fields.find((f) => f.name === 'place').picked, /Farm, 1781 - 2019/, 'the farm in Vågå, not Bakkom in Gausdal');
+});
+
+test('addFact(): a residence, its fields inside divs of the same name, as FS has them', async () => {
+  const { step, saved } = factPage();
+  const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1846', place: 'Vågå, Oppland, Norway', description: 'Nordgard' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(saved[0]), { type: 'RESIDENCE', description: 'Nordgard', date: '1846', place: 'Vågå, Oppland, Norway', justification: REASON });
+});
+
+test('addFact(): a vital FS has already is not added a second time; only on the person\'s page', async () => {
+  const { step, saved } = factPage();
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: { ...CHRISTENING, type: 'BIRTH' }, reason: REASON, save: true });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /already has a birth/);
+  assert.deepEqual(saved, []);
+  const other = await step('addFact', { pid: 'TEST-HAL', addition: CHRISTENING, reason: REASON, save: true });
+  assert.match(other.error, /sign in/);
+});
+
+test('tagFact(): the source tagged to the fact from its view, by the source\'s ID', async () => {
+  const { step, tagged, w } = factPage();
+  await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', match: ['23 August 1846'], sourceId: 'TEST-S01' });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(tagged.map((t) => [t.type, t.source])), [['CHRISTENING', 'TEST-S01']]);
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+  const missing = await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', sourceId: 'TEST-S09' });
+  assert.equal(missing.ok, false);
+  assert.match(missing.error, /not among the person's sources/);
+});
+
+test('tagFact(): an alternate name is found by the name itself, not by words another name has too', async () => {
+  const { step, tagged } = factPage();
+  const name = (given, surname) => ({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given, surname, nameType: 'AKA' } });
+  await step('addFact', { pid: 'TEST-LAR', addition: name('Lars Halvorsen', 'Bakken'), reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: name('Lars', 'Halvorsen'), reason: REASON, save: true });
+  const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'ALTERNATE_NAME', match: ['Lars', 'Halvorsen'], sourceId: 'TEST-S01' });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(tagged.map((t) => t.fact)), ['Also Known AsLars HalvorsenEdit']);
+});
+
+test('addFact(): a fact without sources, whose pencil opens the form itself, is changed and cancelled', async () => {
+  const { step, saved, log, w } = factPage({ birthSources: false });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+  const checked = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: false });
+  assert.equal(checked.ok, true, checked.error);
+  assert.deepEqual(saved, []);
+  assert.deepEqual(log, ['cancel BIRTH', 'close BIRTH'], 'Cancel leaves this form open: closed with its Close');
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(saved[0].date, '23 August 1846');
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+});
+
+test('addFact(): a form that doesn\'t open is closed again, so the next fact can open its own', async () => {
+  const { step, log, w } = factPage();
+  const d = w.document;
+  // A view whose Edit button never comes (FS changed it, or it is slow)
+  const pencil = d.querySelector('[data-testid="conclusionDisplay:BIRTH"] [data-testid="pencil-edit-button"]');
+  const bare = pencil.cloneNode(true);
+  pencil.replaceWith(bare);
+  bare.addEventListener('click', () => {
+    const box = d.createElement('div');
+    box.innerHTML = '<div data-testid="conclusion-dialog"><button aria-label="Close">×</button></div>';
+    d.body.append(box);
+    box.querySelector('[aria-label="Close"]').addEventListener('click', () => { log.push('close BIRTH'); box.remove(); });
+  });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, false);
+  assert.deepEqual(log, ['close BIRTH']);
+  const next = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
+  assert.equal(next.ok, true, next.error);
+});
+
+test('addFact(): the place is picked from FS\'s list for the typed text, not the list still shown for the old value', async () => {
+  const changed = factPage({ late: true });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+  const edit = await changed.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: false });
+  assert.equal(edit.ok, true, edit.error);
+  assert.match(edit.fields.find((f) => f.name === 'place').picked, /Municipality, 1781 - 2019/);
+  // An empty field: at first only the text as typed
+  const added = await factPage({ late: true }).step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
+  assert.match(added.fields.find((f) => f.name === 'place').picked, /Municipality, 1781 - 2019/);
 });

@@ -151,3 +151,23 @@ body.with-sidebar .linker-page { margin-right: 396px; }
 .sidebar .matches li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .sidebar .matches button { margin-top: 6px; height: 32px; }
 .sidebar .actions { margin: 14px 0 0; }
+
+/* Adding the record's facts to the tree person: a tickbox per fact, unticked, and the
+   suggested entry to edit once ticked */
+.person .additions { margin-top: 8px; font-size: 14px; }
+.person .additions ul { list-style: none; margin: 0; padding: 0; }
+.person .additions li { padding: 3px 0; }
+.person .additions label { display: inline-flex; align-items: center; gap: 6px; }
+.person .add-fields { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px 22px; }
+.person .add-fields[hidden], .person .add-reason[hidden] { display: none; }
+.person .add-fields input { flex: 1 1 160px; min-width: 0; }
+.person .add-fields input.description { flex-basis: 220px; }
+.person .add-reason { margin: 6px 0 0 22px; }
+.changes ul { margin: 0; padding-left: 20px; font-size: 15px; }
+.changes li { margin: 3px 0; }
+.changes-check { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.additions .checked-note { flex-basis: 100%; }
+.fs-fields { margin: 8px 0 12px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--box); }
+.fs-field { margin-top: 8px; }
+.fs-field-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.fs-field-value { margin: 4px 0 0; padding: 6px 8px; max-height: 12em; overflow: auto; white-space: pre-wrap; font: inherit; font-size: 14px; background: var(--input-bg); border: 1px solid var(--line); border-radius: 4px; }

@@ -534,7 +534,12 @@ function fakeFs(answers, rejected = []) {
       },
       async get(id) { return { id, url: urls[id] }; },
       async remove(id) { tabs.closed.push(id); },
-      async sendMessage(id, { linker, args }) { asked.push([linker, args]); return answers[linker](args, urls[id]); },
+      async sendMessage(id, { linker, args, action }) {
+        // fs_person.js on a details page: the tree person as FS has them now
+        if (action === 'readPerson') return answers.readPerson ? answers.readPerson(urls[id]) : { error: 'not read' };
+        asked.push([linker, args]);
+        return answers[linker](args, urls[id]);
+      },
       onUpdated: { addListener: (fn) => listeners.add(fn), removeListener: (fn) => listeners.delete(fn) }
     },
     scripting: { async executeScript() { return []; } }
@@ -545,11 +550,14 @@ function fakeFs(answers, rejected = []) {
 test('checkOnFamilySearch(): reads FS in an unfocused popup window behind the linker\'s, closed after', async () => {
   const { chrome, asked, windows, rejections } = fakeFs({
     findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
-    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] })
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] }),
+    editSource: ({ read, source }) => (read ? { ok: true, sourceId: 'TEST-S01', fields: { ...source } } : { ok: false, error: 'only read in the check' })
   }, ['https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S01']);
   const { win, state, $ } = checkedPage(chrome);
   await win.checkOnFamilySearch();
-  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo']);  // the refused navigation was tried again
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo', 'editSource']);  // the refused navigation was tried again
+  assert.equal(asked[2][1].read, true);  // its fields only read
+  assert.equal($('fs-fields').hidden, true);  // the same fields as here: nothing to choose
   assert.equal(rejections.size, 0);  // it was refused once
   assert.equal(windows.length, 1);
   assert.equal(windows[0].type, 'popup');  // no new tab in the user's tab strip
@@ -560,6 +568,65 @@ test('checkOnFamilySearch(): reads FS in an unfocused popup window behind the li
   assert.equal(windows[0].open, false);  // closed
   assert.equal(state.fsCheck.sources[0].id, 'TEST-S01');
   assert.equal($('source').classList.contains('in-sourcebox'), true);
+});
+
+test('the SourceBox copy with other fields: each shown with a choice, the record\'s by default, FS\'s notes kept with the new lines; the plan follows', async () => {
+  const fsNotes = 'Found by hand in the church book.\nFather: Halvor Larsen';
+  const { chrome } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    editSource: ({ source }) => ({ ok: true, sourceId: 'TEST-S01', fields: { ...source, citation: 'An older citation', notes: fsNotes, date: '' } })
+  });
+  const { win, state, $ } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  const box = $('fs-fields');
+  assert.equal(box.hidden, false);
+  const fields = [...box.querySelectorAll('.fs-field')];
+  // the date FS lacks is filled, not asked about; title and web page are the same
+  assert.deepEqual(plain(fields.map((f) => f.querySelector('strong').textContent)), ['Citation', 'Notes']);
+  assert.equal(fields[0].querySelector('pre').textContent, 'An older citation');
+  assert.equal(fields[0].querySelector('select').value, 'record');
+  assert.equal(fields[1].querySelector('select').value, 'merge');  // not the extension's older copy
+  let source = win.readPlan(false).source;
+  assert.equal(source.citation, $('f-citation').value.trim());
+  assert.ok(source.notes.startsWith(fsNotes + '\n\n'));  // FS's first, then what's new
+  assert.ok(source.notes.includes('Permanent ID: '));
+  assert.equal(source.notes.split('\n').filter((l) => l === 'Father: Halvor Larsen').length, 1);  // a line FS has isn't added again
+  // the choices changed: FS's citation and notes kept as they are
+  for (const select of box.querySelectorAll('select')) { select.value = 'fs'; select.dispatchEvent(new win.Event('change')); }
+  source = win.readPlan(false).source;
+  assert.equal(source.citation, 'An older citation');
+  assert.equal(source.notes, fsNotes);
+  assert.equal(source.date, $('f-date').value.trim());
+  // the title changed since the check: no choices, the fields as here
+  $('f-title').value += ' (2)';
+  win.showFsCheck();  // main() calls it on the title's change
+  assert.equal(box.hidden, true);
+  assert.equal(win.readPlan(false).source.notes, $('f-notes').value.trim());
+});
+
+test('the SourceBox copy is the extension\'s older one: the record\'s notes by default', async () => {
+  const { chrome } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    editSource: ({ source }) => ({ ok: true, sourceId: 'TEST-S01', fields: { ...source, notes: source.notes.split('\n')[0] + '\nAn older line' } })
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  assert.equal($('fs-fields').querySelector('select').value, 'record');
+  assert.equal(win.readPlan(false).source.notes, $('f-notes').value.trim());
+});
+
+test('the SourceBox source of this title names another record: said under the source', async () => {
+  const { chrome } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    editSource: () => ({ ok: false, otherRecord: true, sourceId: 'TEST-S01', other: 'pd99000000000001', error: 'another record' })
+  });
+  const { win, $ } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  assert.equal($('fs-fields').hidden, false);
+  assert.match($('fs-fields').textContent, /is of another record/);
 });
 
 test('run(): a source partly attached before is used, and attached only to those who lack it', async () => {
@@ -723,6 +790,333 @@ test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', ()
   assert.equal(w.fsPlace('Vaage', c), 'Vågå, Oppland, Norway');  // DA's old name, FS's municipality
   assert.equal(w.fsPlace('Nowhere', c), 'Nowhere, Oppland, Norway');
   assert.equal(w.fsPlace('', c), '');
+  // Oslo's neighbour Aker, added for searching, doesn't make Christiania two places
+  assert.equal(w.fsPlace('Christiania', c), 'Oslo, Oslo, Norway');
+  // a place the record only names (a census's birthplace): found anywhere in Norway,
+  // the county first, and never given the census's county when it isn't found there
+  assert.equal(w.fsPlace('Christiania', c, true), 'Oslo, Oslo, Norway');
+  assert.equal(w.fsPlace('Vaage', c, true), 'Vågå, Oppland, Norway');
+  assert.equal(w.fsPlace('Bergen', c, true), 'Bergen, Bergen, Norway');
+  assert.equal(w.fsPlace('Nowhere', c, true), 'Nowhere, Norway');
+});
+
+// --- Adding the record's facts to FamilySearch ---------------------------------------
+test('mergeDate(): the more specific where the two agree, the record\'s where they disagree', () => {
+  assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, '1846'), '16 July 1846');
+  assert.equal(w.mergeDate({ year: 1846 }, false, '16 July 1846'), '16 July 1846');
+  assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, '1849'), '16 July 1846');
+  assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, '18 July 1846'), '16 July 1846');
+  assert.equal(w.mergeDate({ year: 1846 }, false, 'abt 1846'), '1846');  // a year of record over FS's about
+  assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, 'before 1850'), '16 July 1846');
+  // a year from an age: FS's within three years stays, an empty one gets "about"
+  assert.equal(w.mergeDate({ year: 1848 }, true, '1847'), '1847');
+  assert.equal(w.mergeDate({ year: 1848 }, true, '1840'), 'about 1848');
+  assert.equal(w.mergeDate({ year: 1848 }, true, ''), 'about 1848');
+  assert.equal(w.mergeDate(null, false, '1847'), '1847');
+});
+
+test('mergePlace(): FS\'s when it names the record\'s place, else the record\'s in FS\'s form', () => {
+  const c = record('census-1865');
+  assert.equal(w.mergePlace('Vågå', 'Vågå, Oppland, Norway', c), 'Vågå, Oppland, Norway');
+  assert.equal(w.mergePlace('Vaage', 'Vaga, Oppland, Norway', c), 'Vaga, Oppland, Norway');  // one place by other names
+  assert.equal(w.mergePlace('Vågå', 'Vågå kirke, Vågå, Oppland, Norway', c), 'Vågå kirke, Vågå, Oppland, Norway');
+  assert.equal(w.mergePlace('Vågå herred*', 'Norway', c), 'Vågå, Oppland, Norway');  // FS's less specific
+  assert.equal(w.mergePlace('Vågå', 'Lom, Oppland, Norway', c), 'Vågå, Oppland, Norway');  // they disagree
+  assert.equal(w.mergePlace('Vågå', 'Lom, Oppland, Norway', c, true), 'Lom, Oppland, Norway');  // only implied
+  assert.equal(w.mergePlace('Vågå', '', c, true), 'Vågå, Oppland, Norway');
+  assert.equal(w.mergePlace('', 'Lom, Oppland, Norway', c), 'Lom, Oppland, Norway');
+  assert.equal(w.cleanPlace('1029P Audnedal'), 'Audnedal');
+});
+
+test('a row offers the additions unticked; ticked and edited they reach the plan and the summary, and outlive a redraw', () => {
+  const { win, state, $ } = checkedPage();
+  state.fs = LARS_1846;  // no christening on FS
+  const lars = state.rows.find((r) => r.person.name === 'Lars');
+  lars.showFacts();
+  const box = lars.node.querySelector('.additions');
+  assert.ok(box);
+  const items = [...box.querySelectorAll('li')];
+  const christening = items.find((li) => /Add the christening/.test(li.textContent));
+  const tick = christening.querySelector('input[type=checkbox]');
+  assert.equal(tick.checked, false);
+  assert.equal(christening.querySelector('.add-fields').hidden, true);
+  assert.equal($('changes').hidden, true);
+  assert.deepEqual(plain(win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR').additions), []);
+
+  tick.checked = true;
+  tick.dispatchEvent(new win.Event('change'));
+  const place = christening.querySelector('input.place');
+  assert.equal(place.value, 'Vågå, Oppland, Norway');
+  place.value = 'Vågå kirke, Vågå, Oppland, Norway';
+  place.dispatchEvent(new win.Event('input'));
+  assert.equal($('changes').hidden, false);
+  assert.match($('changes-list').textContent, /^Lars \(TEST-LAR\): add the christening: 23 August 1846, Vågå kirke, Vågå, Oppland, Norway$/);
+  const reason = lars.node.querySelector('.add-reason textarea');
+  assert.match(reason.value, /^From ".+", Digitalarkivet, Permanent ID pd99\d+\.$/);
+
+  lars.showFacts();  // redrawn: the tick and the place stay
+  const again = [...lars.node.querySelectorAll('.additions li')].find((li) => /Add the christening/.test(li.textContent));
+  assert.equal(again.querySelector('input[type=checkbox]').checked, true);
+  assert.equal(again.querySelector('input.place').value, 'Vågå kirke, Vågå, Oppland, Norway');
+  const added = plain(win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR').additions);
+  assert.equal(added.length, 1);
+  assert.equal(added[0].type, 'CHRISTENING');
+  assert.deepEqual(added[0].value, { date: '23 August 1846', place: 'Vågå kirke, Vågå, Oppland, Norway' });
+  assert.equal(added[0].reason, reason.value.trim());
+
+  // emptied: the plan says so instead of saving nothing
+  const date = again.querySelector('input.date');
+  for (const input of [date, again.querySelector('input.place')]) { input.value = ''; input.dispatchEvent(new win.Event('input')); }
+  assert.throws(() => win.readPlan(true), /"Add the christening" for Lars is empty/);
+});
+
+// The christening FS lacks, ticked on Lars's row
+function withChristening(chrome) {
+  const page = checkedPage(chrome);
+  page.state.fs = LARS_1846;
+  const lars = page.state.rows.find((r) => r.person.name === 'Lars');
+  lars.showFacts();
+  const item = [...lars.node.querySelectorAll('.additions li')].find((li) => /Add the christening/.test(li.textContent));
+  const tick = item.querySelector('input[type=checkbox]');
+  tick.checked = true;
+  tick.dispatchEvent(new page.win.Event('change'));
+  return page;
+}
+
+test('A fact ticked to be added ticks its tag, unticked with it; it is tagged after saving, not when attaching', () => {
+  const page = checkedPage(fakeFs({}).chrome);
+  page.state.fs = LARS_1846;
+  const lars = page.state.rows.find((r) => r.person.name === 'Lars');
+  lars.showFacts();
+  const tagBox = [...lars.node.querySelectorAll('.tags label')].find((l) => l.textContent === 'Christening').querySelector('input');
+  const tick = (on) => {
+    const box = [...lars.node.querySelectorAll('.additions li')].find((li) => /Add the christening/.test(li.textContent)).querySelector('input[type=checkbox]');
+    box.checked = on;
+    box.dispatchEvent(new page.win.Event('change'));
+  };
+  const pair = () => page.win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR');
+  tagBox.checked = false;
+  tick(true);
+  assert.equal(tagBox.checked, true);
+  assert.ok(!pair().tags.includes('Christening'));  // left to the tag step after the christening is saved
+  assert.equal(pair().additions[0].type, 'CHRISTENING');
+  tick(false);
+  assert.equal(tagBox.checked, false);  // ticked by the addition, unticked with it
+  assert.ok(!pair().tags.includes('Christening'));
+  // Ticked by the user before: it stays, and is set when attaching once the addition is unticked
+  tagBox.checked = true;
+  tick(true);
+  tick(false);
+  assert.equal(tagBox.checked, true);
+  assert.ok(pair().tags.includes('Christening'));
+});
+
+test('prepareAdditions(): the ticked facts are filled in FS\'s forms in the hidden window, not saved, and FS\'s standard place goes into the box', async () => {
+  const { chrome, asked, windows } = fakeFs({
+    addFact: ({ addition, save }, url) => (url.endsWith('/tree/person/details/TEST-LAR') && !save ? {
+      ok: true,
+      fields: [{ name: 'date', value: addition.value.date, picked: addition.value.date }, { name: 'place', value: 'Vågå, Oppland, Norway', picked: 'Vågå Oppland, Norway Municipality, 1838 - 2019' }]
+    } : { ok: false, error: 'saved or wrong page' })
+  });
+  const { win, state, $ } = withChristening(chrome);
+  const lars = state.rows.find((r) => r.person.name === 'Lars');
+  const place = () => [...lars.node.querySelectorAll('.additions li')].find((li) => /Add the christening/.test(li.textContent)).querySelector('input.place');
+  place().value = 'Vaagaa';
+  place().dispatchEvent(new win.Event('input'));
+  await win.prepareAdditions();
+  assert.deepEqual(plain(asked.map(([name, args]) => [name, args.pid, args.save, args.addition.value.place])), [['addFact', 'TEST-LAR', false, 'Vaagaa']]);
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0].open, false);  // the hidden window closed
+  assert.equal(place().value, 'Vågå, Oppland, Norway');  // FS's standard form, the row redrawn
+  const note = lars.node.querySelector('.checked-note');
+  assert.equal(note.hidden, false);
+  assert.match(note.textContent, /^Checked with FamilySearch: Date: 23 August 1846; Place: Vågå, Oppland, Norway$/);
+  assert.match($('changes-status').textContent, /^Checked with FamilySearch: look the dates/);
+  assert.equal(plain(win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR').additions)[0].value.place, 'Vågå, Oppland, Norway');
+  // edited after: the note goes
+  place().value = 'Vågå kirke, Vågå, Oppland, Norway';
+  place().dispatchEvent(new win.Event('input'));
+  assert.equal(lars.node.querySelector('.checked-note').hidden, true);
+});
+
+test('run(): a ticked fact is saved on the tree person once the source is attached, then tagged with it', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: (args, url) => (url.endsWith('/tree/person/details/TEST-LAR') ? { ok: true, fields: [], shown: 'Christening 23 August 1846 Vågå' } : { ok: false, error: 'wrong page' }),
+    tagFact: () => ({ ok: true })
+  });
+  const { win, $ } = withChristening(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name, args]) => name + (args.pid ? ' ' + args.pid : ''))),
+    ['findSource', 'createSource', 'attach TEST-LAR', 'attach TEST-HAL', 'addFact TEST-LAR', 'tagFact TEST-LAR']);
+  assert.ok(!asked[2][1].tags.includes('Christening'));  // tagged once saved, below
+  const [, add] = asked[4];
+  assert.equal(add.save, true);
+  assert.equal(add.addition.type, 'CHRISTENING');
+  assert.deepEqual(plain(add.addition.value), { date: '23 August 1846', place: 'Vågå, Oppland, Norway' });
+  assert.match(add.reason, /^From ".+", Digitalarkivet, Permanent ID pd99\d+\.$/);
+  const [, tag] = asked[5];
+  assert.deepEqual(plain([tag.type, tag.sourceId, tag.title]), ['CHRISTENING', 'TEST-S05', $('f-title').value]);
+  assert.ok(tag.match.includes('1846'));  // the fact of that year, if FS has several
+  assert.match($('log').textContent, /Lars: add the christening: 23 August 1846, Vågå, Oppland, Norway\./);
+  assert.match($('log').textContent, /The source is tagged to it\./);
+  assert.deepEqual(tabs.closed, [2]);  // all done: the work tab closed
+});
+
+test('run(): a fact FS has by now (saved by an earlier run) is not saved again, only tagged; the rows learn it', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    readPerson: (url) => (url.endsWith('/TEST-LAR') ? { person: { ...LARS_1846, christening: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } } } : { error: 'not here' }),
+    addFact: () => { throw new Error('not saved twice'); },
+    tagFact: () => ({ ok: true, already: true })
+  });
+  const { win, $, state } = withChristening(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'createSource', 'attach', 'attach', 'tagFact']);
+  assert.match($('log').textContent, /Lars has this on FamilySearch already \(add the christening: 23 August 1846, Vågå, Oppland, Norway\); not changed\./);
+  assert.match($('log').textContent, /The source was tagged to it already\./);
+  assert.deepEqual(tabs.closed, [2]);
+  // The page now knows FS has it: not offered again
+  const lars = state.rows.find((r) => r.person.name === 'Lars');
+  assert.ok(![...lars.node.querySelectorAll('.additions li')].some((li) => /Add the christening/.test(li.textContent)));
+});
+
+test('run(): a change FS finds it has already (its Save stays off) is logged as such and tagged, not a failure', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => ({ ok: true, fields: [], unchanged: true }),
+    tagFact: () => ({ ok: true })
+  });
+  const { win, $ } = withChristening(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)).slice(-2), ['addFact', 'tagFact']);
+  assert.match($('log').textContent, /Lars has this on FamilySearch already \(add the christening: .*\); not changed\./);
+  assert.doesNotMatch($('log').textContent, /left open/);
+  assert.deepEqual(tabs.closed, [2]);
+});
+
+test('onTreeAlready(): the same vital in FS\'s standard form; a residence of the year; an alternate name', () => {
+  const tree = { name: 'Kjersti Halvorsdatter', altNames: ['Kjersti Larsen'], birth: { date: '4 July 1864', place: 'Oslo, Norway' }, residences: [{ date: '1900', place: 'Vågå, Oppland, Norway' }] };
+  const edit = (date, place) => ({ action: 'edit', type: 'BIRTH', value: { date, place } });
+  assert.equal(w.onTreeAlready(tree, edit('4 July 1864', 'Oslo, Oslo, Norway')), true);
+  assert.equal(w.onTreeAlready(tree, edit('4 July 1864', 'Christiania, Norway')), true);
+  assert.equal(w.onTreeAlready(tree, edit('5 July 1864', 'Oslo, Oslo, Norway')), false);
+  assert.equal(w.onTreeAlready(tree, edit('4 July 1864', 'Bakken nedre, Oslo, Oslo, Norway')), false);
+  assert.equal(w.onTreeAlready(tree, { action: 'add', type: 'RESIDENCE', value: { date: '1900', place: 'Bakken nedre, Vågå, Oppland, Norway' } }), true);
+  assert.equal(w.onTreeAlready(tree, { action: 'add', type: 'RESIDENCE', value: { date: '1865', place: 'Vågå, Oppland, Norway' } }), false);
+  assert.equal(w.onTreeAlready(tree, { action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Kjersti', surname: 'Larsen' } }), true);
+  assert.equal(w.onTreeAlready(tree, { action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Kjersti', surname: 'Olsen' } }), false);
+});
+
+test('run(): a fact not saved is not tagged, and leaves the FS tab open; nothing is added where the source was not attached', async () => {
+  const failing = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => ({ ok: false, error: 'FamilySearch did not save the christening: Invalid date' }),
+    tagFact: () => { throw new Error('not tagged without the fact'); }
+  });
+  let page = withChristening(failing.chrome);
+  await page.win.run(true);
+  assert.deepEqual(plain(failing.asked.map(([name]) => name)).slice(-1), ['addFact']);
+  assert.match(page.$('log').textContent, /Not changed for Lars \(add the christening: .*\): FamilySearch did not save the christening: Invalid date/);
+  assert.match(page.$('log').textContent, /The FamilySearch tab is left open where it stopped\./);
+  assert.deepEqual(failing.tabs.closed, []);
+
+  const unattached = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: ({ pid }) => (pid === 'TEST-LAR' ? { ok: false, error: 'refused' } : { ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => { throw new Error('nothing added without the source'); }
+  });
+  page = withChristening(unattached.chrome);
+  await page.win.run(true);
+  assert.equal(unattached.asked.some(([name]) => name === 'addFact'), false);
+  assert.match(page.$('log').textContent, /Nothing added to Lars \(TEST-LAR\): the source is not attached\./);
+});
+
+test('additionText(): an alternate name as written, given names before the surname', () => {
+  const name = { fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Astri', surname: 'Larsdatter', nameType: 'AKA' } };
+  assert.equal(w.additionText(name), 'Astri Larsdatter (Also known as)');
+});
+
+test('factAdditions(): a christening FS lacks; a birth date FS has as a year only', () => {
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  const halvor = state.people.find((p) => p.name === 'Halvor Larsen');
+  const adds = (person, pid, name) => plain(win.factAdditions(person, state.record, { pid }, name)).map((a) => [a.fact, a.action, a.value]);
+  state.fs = LARS_1846;
+  assert.deepEqual(adds(lars, 'TEST-LAR'), [['Christening', 'add', { date: '23 August 1846', place: 'Vågå, Oppland, Norway' }]]);
+  // only the family card's lifespan known: nothing offered
+  assert.deepEqual(adds(halvor, 'TEST-HAL'), []);
+  // FS's year and country: the record's day, FS's place kept (the record gives none)
+  state.fs = { ...LARS_1846, birth: { date: '1846', place: 'Norway' }, christening: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+  const birth = plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' }));
+  assert.deepEqual(birth.map((a) => [a.fact, a.action, a.current, a.value]), [['Birth', 'edit', '1846, Norway', { date: '16 July 1846', place: 'Norway' }]]);
+  // a name the row gives that FS has neither as the name nor as an alternate one
+  assert.deepEqual(adds(lars, 'TEST-LAR', 'Lars Halvorsøn')[0], ['Name', 'name', { given: 'Lars', surname: 'Halvorsøn', nameType: 'AKA' }]);
+  state.fs = { ...state.fs, altNames: ['Lars Halvorsøn'] };
+  assert.deepEqual(adds(lars, 'TEST-LAR', 'Lars Halvorsøn').filter(([fact]) => fact === 'Name'), []);
+});
+
+test('factAdditions(): a burial\'s death date into FS\'s year, the burial, residence and occupation added', () => {
+  const { win, state } = checkedPage();
+  const b = record('burial-1854');
+  const lars = w.recordPeople(b)[0];
+  state.record = b;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '1854', place: 'Kongsvinger, Hedmark, Norway' }, residences: [], occupations: [] };
+  assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }, 'Lars Larsen Holt-Sletten')).map((a) => [a.fact, a.action, a.value]), [
+    // the farm after the patronymic is an address: the name is FS's
+    ['Death', 'edit', { date: '12 April 1854', place: 'Kongsvinger, Hedmark, Norway' }],  // the parish of burial doesn't replace FS's place
+    ['Burial', 'add', { date: '18 April 1854', place: 'Vinger, Hedmark, Norway' }],
+    ['Residence', 'add', { date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen' }],
+    ['Occupation', 'add', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem' }]
+  ]);
+  // FS has the residence of that year and the occupation: not offered again
+  state.fs = { ...state.fs, residences: [{ date: '1854', place: 'Vinger' }], occupations: [{ description: 'lægdslem' }] };
+  assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).map((a) => a.fact)), ['Death', 'Burial']);
+});
+
+test('factAdditions(): a census residence has the farm in its place and the farm and district as its description', () => {
+  const { win, state } = checkedPage();
+  const c = record('census-1865');
+  const lars = w.recordPeople(c).find((p) => p.current);
+  state.record = c;
+  state.fs = { pid: 'TEST-LAR', name: lars.name, birth: { date: '1848' }, residences: [], occupations: [{ description: 'Tjener' }] };
+  const residence = plain(win.factAdditions(lars, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Residence');
+  assert.deepEqual(residence.value, { date: '1865', place: 'Fjeld nordre, Vågå, Oppland, Norway', description: 'Fjeld nordre, Bryn' });
+});
+
+test('factAdditions(): a census birthplace in another county isn\'t given the census\'s county', () => {
+  const { win, state } = checkedPage();
+  const c = record('census-1865');
+  const lars = { ...w.recordPeople(c).find((p) => p.current), birthPlace: 'Christiania' };
+  state.record = c;
+  state.fs = { pid: 'TEST-LAR', name: lars.name, birth: { date: '4 July 1848' }, residences: [], occupations: [] };
+  const birth = plain(win.factAdditions(lars, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
+  assert.equal(birth.value.place, 'Oslo, Oslo, Norway');
+  const nowhere = plain(win.factAdditions({ ...lars, birthPlace: 'Nowhere' }, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
+  assert.equal(nowhere.value.place, 'Nowhere, Norway');
+});
+
+test('factAdditions(): an emigration as a custom event with its destination, unless FS has one that year', () => {
+  const { win, state } = checkedPage();
+  const e = record('emigration-1902');
+  const lars = w.recordPeople(e).find((p) => p.current);
+  state.record = e;
+  state.fs = { pid: 'TEST-LAR', name: 'Lars Halvorsen', birth: { date: '1843' }, emigration: [], residences: [{ date: '1902' }], occupations: [{ description: 'Farmer' }] };
+  assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), [
+    { fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value: { date: '5 September 1902', place: 'Oslo, Oslo, Norway', description: 'Destination: Minnesota' } }
+  ]);
+  state.fs = { ...state.fs, emigration: [{ date: '1902' }] };
+  assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), []);
+  assert.equal(win.additionReason(e), 'From "' + e.title + '", Digitalarkivet, Permanent ID ' + e.permanentId + '.');
 });
 
 test('newPersonRelations(): what the record says comes first, then each paired person as child, spouse or parent', () => {
@@ -841,4 +1235,14 @@ test('run(): a source Home shows by its title is checked and written over like o
   assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'createSource', 'editSource']);
   assert.equal(asked[2][1].sourceId, 'TEST-S06');
   assert.match($('log').textContent, /is of another record; nothing was changed/);
+});
+
+test('fsMessage(): the fact steps\' messages in Bokmål, the fact named in it', () => {
+  const nb = load([...SHARED, 'linker.js'], { html: 'linker.html', lang: 'nb', fast: true });
+  assert.equal(nb.fsMessage('FamilySearch already has a christening for this person; change it instead.'),
+    'FamilySearch har allerede ' + nb.t('Christening').toLowerCase() + ' for denne personen; endre den i stedet.');
+  assert.equal(nb.fsMessage('FamilySearch did not save the custom event: Invalid date'), 'FamilySearch lagret ikke egendefinert hendelse: Invalid date');
+  assert.equal(nb.fsMessage('FamilySearch shows no button to add the burial.'), 'FamilySearch viser ingen knapp for å legge til ' + nb.t('Burial').toLowerCase() + '.');
+  // English as it came
+  assert.equal(w.fsMessage('FamilySearch did not save the birth.'), 'FamilySearch did not save the birth.');
 });

@@ -4,6 +4,34 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.5.0 - unreleased
+
+- The linker can add the record's facts to the tree persons. Under each person's
+  facts, **Add to FamilySearch** lists what the record could add: a christening,
+  death, burial, residence or occupation the tree lacks, an emigration (as a custom
+  event titled Emigration), a name as an alternate name, and a birth, christening,
+  death or burial that differs. FamilySearch keeps one of each, so the suggestion
+  combines the two, the more precise part of each. Everything is unticked; tick and
+  edit what you want, and edit the reason if you like. Ticking a birth, christening,
+  death, burial or residence ticks its tag too. The ticked changes are listed above
+  the buttons.
+- **Check with FamilySearch** fills the ticked changes in FamilySearch's own forms in
+  the background and puts FamilySearch's standard date and place for the record's year
+  in the boxes, to look over. Nothing is saved. A residence's place starts with the
+  farm, and stays as written when FamilySearch doesn't know the farm. A birthplace a
+  census gives is looked for in all of Norway, not only in the census's county: a
+  person counted in Troms but born in Christiania is born in Oslo, not in a
+  "Christiania, Troms".
+- After the source is attached, the ticked changes are saved on each person's page,
+  and the source is tagged to each fact added or changed. The person is read again
+  first: a change FamilySearch has by now (saved in an earlier run, from a record
+  opened again) isn't made twice, only tagged, and the change is no longer offered.
+  A form FamilySearch doesn't save is cancelled, not left open.
+- When the source is already in your SourceBox with other fields, the linker shows
+  FamilySearch's beside a choice: use the record's, or keep FamilySearch's. The notes
+  keep FamilySearch's with the record's new lines added, unless they are an older copy
+  from the extension.
+
 ## 1.4.1 - unreleased
 
 - Old spellings of a name match better. A final j for i is read as i everywhere: a

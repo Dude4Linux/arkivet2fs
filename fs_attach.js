@@ -7,7 +7,8 @@
 //   createSource — in the SourceBox: Create Source, fill the form, Save, and find the
 //                  new source's row (its ID, from data-testid="row-<ID>-title")
 //   editSource   — in the SourceBox: the source's Edit, write the linker's fields over
-//                  those that differ, a change reason, Save (Cancel when none differ)
+//                  those that differ, a change reason, Save (Cancel when none differ);
+//                  with `read`, FS's fields only, Cancel
 //   attach       — in the SourceBox: the row's Attach, "By ID" with the PID, the
 //                  reason, Attach
 //   tag          — on the person's Sources tab: open the source's row, Add Tags, add
@@ -18,6 +19,10 @@
 //                  possible matches FS lists (nothing is saved; the dialog stays open)
 //   createPerson — in that dialog: Create Person, and the new person's PID
 //   cancelAdd    — in that dialog: Cancel
+//   addFact      — on a tree person's page: an alternate name, a missing fact or event,
+//                  or a vital changed, in FS's fact form; `save` false: the fields as
+//                  FS took them (standard places) read back, Cancel, nothing saved
+//   tagFact      — there: the fact's view, Tag Sources, the source by its ID, Tag To
 // Nothing here runs by itself: the user starts it on the linker page, after reviewing.
 // Injected again for each step and page, so it installs its listener only once.
 
@@ -42,6 +47,10 @@ if (!window.__arkivet2fsAttach) {
   // Set an input's value so React sees it: the native setter (React tracks the value
   // set through it), then the events FS's fields listen for (input, change, blur)
   function setValue(element, value) {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+      element = element && element.querySelector('input, textarea');
+      if (!element) throw new Error('No field to fill in');
+    }
     const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(element, value || '');
     element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -181,7 +190,7 @@ if (!window.__arkivet2fsAttach) {
   // form as Create Source with a change reason. Only fields that differ are written; a
   // field the linker has empty keeps what FS has. Nothing differs: Cancel, so the
   // source's history on FS gets no change.
-  async function editSource({ sourceId, source, reason }) {
+  async function editSource({ sourceId, source, reason, read }) {
     checkSourceBox();
     const findButton = () => byTestId('row-' + sourceId + '-edit-button');
     let button;
@@ -204,6 +213,14 @@ if (!window.__arkivet2fsAttach) {
       if (cancel) cancel.click();
       return { ok: false, otherRecord: true, sourceId, other: [...theirs][0] || '',
         error: 'The source of this title in the SourceBox is of another record' + (theirs.size ? ' (' + [...theirs][0] + ')' : '') + '; nothing was changed.' };
+    }
+    // Only read (the linker's check): FS's fields, the dialog cancelled
+    if (read) {
+      const fields = Object.fromEntries(Object.keys(FIELDS).map((key) => [key, fieldText(key).replace(/\r\n/g, '\n')]));
+      const cancel = byTestId('source-cancel-button');
+      if (cancel) cancel.click();
+      await waitGone(() => byTestId('source-save-button'), 'the Edit Source form to close', 10000).catch(() => {});
+      return { ok: true, sourceId, fields };
     }
     const changed = [];
     const missing = [];
@@ -390,8 +407,13 @@ if (!window.__arkivet2fsAttach) {
   // FS's suggestion to take for a typed date or place. FS's fact dialogs list the text
   // as typed first ("Vågå, Oppland"), then the standard forms, a place's with a line
   // of its kind and years ("Municipality, 1781 - 2019"): the typed entry is skipped,
-  // and of the places the first whose years hold `year` (Vågå, Oppland for 1846;
-  // Vågå, Innlandet from 2020) is taken, else the first with such a line
+  // and of the places named like the typed one (the same first part, or as an
+  // "Alternate Name:", å as aa: Vaagaa is Vågå; with a farm, the same municipality
+  // too) the first whose years hold `year` (Vågå, Oppland for 1846; Vågå, Innlandet
+  // from 2020) is taken, else the first. None named so: the text as typed (null when
+  // FS doesn't list it), since FS also lists places around the name ("Bakken nedre,
+  // Vågå" brings the municipality, and farms called Bakken elsewhere) and the farm
+  // would be lost
   function pickSuggestion(options, typed, year) {
     const lines = (o) => [...o.querySelectorAll('*')].filter((e) => !e.children.length && clean(e.textContent)).map((e) => clean(e.textContent));
     const fold = (text) => clean(text).toLowerCase();
@@ -406,7 +428,34 @@ if (!window.__arkivet2fsAttach) {
       const to = /^\d/.test(m[2]) ? Number(m[2]) : Infinity;
       return year >= from && year <= to;
     };
-    return (year && kinds.find(holds)) || kinds[0];
+    const key = (part) => fold(part).replace(/å/g, 'aa').replace(/[æä]/g, 'ae').replace(/[øö]/g, 'o').replace(/[^a-z0-9]/g, '');
+    const parts = (text) => String(text || '').split(',').map(key);
+    const want = parts(typed);
+    const named = kinds.filter((o) => {
+      const [name, ...more] = lines(o);
+      const have = parts(name);
+      // A farm's place (farm, municipality, county, country): the same municipality
+      if (want.length >= 4 && have.length >= 4 && have[1] !== want[1]) return false;
+      const alternates = more.filter((l) => /^Alternate Names?:/i.test(l)).flatMap((l) => l.replace(/^Alternate Names?:\s*/i, '').split(',').map(key));
+      return have[0] === want[0] || alternates.includes(want[0]);
+    });
+    if (!named.length) return rest === options ? null : options[0];
+    return (year && named.find(holds)) || named[0];
+  }
+
+  // Polls of 100 ms, counted (not timed), so the tests' fast timers run them at once
+  async function settledOptions(options, first) {
+    const texts = (list) => list.map((o) => clean(o.textContent)).join('\n');
+    const start = texts(first);
+    let last = start, list = first, still = 0;
+    for (let i = 0; i < 50; i++) {
+      await sleep(100);
+      const now = options();
+      if (texts(now) !== last) { last = texts(now); list = now; still = 0; continue; }
+      still++;
+      if (last !== start ? still >= 3 : still >= 15) break;
+    }
+    return list;
   }
 
   async function comboField(form, name, value, year) {
@@ -422,8 +471,16 @@ if (!window.__arkivet2fsAttach) {
     let found = [];
     try { found = await waitFor(() => { const o = options(); return o.length ? o : null; }, 'suggestions', 5000); } catch (e) { /* none */ }
     if (!found.length) return { name, value, picked: '' };
+    // The list first shown can still be the field's old value's (seen on a birth's
+    // place, 2026-11-09: FS's answer for the typed place came 100 ms later): the list
+    // once it changes and holds still, or as first shown when it doesn't change
+    found = await settledOptions(options, found);
+    if (!found.length) return { name, value, picked: '' };
     const option = pickSuggestion(found, value, year);
-    const picked = clean(option.textContent);
+    if (!option) return { name, value: input.value, picked: '' };
+    // The text as typed is not a standard form
+    const typed = clean(option.textContent).toLowerCase() === clean(value).toLowerCase();
+    const picked = typed ? '' : clean(option.textContent);
     option.click();
     await sleep(300);
     return { name, value: input.value, picked };
@@ -537,7 +594,214 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true };
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, cancelAdd };
+  // --- The record's facts added to the tree person ----------------------------------
+  // FS's fact form (`conclusion-dialog`, looked at on 2026-11-09): opened by the add
+  // buttons, or for an existing fact by its pencil (a view of the fact with its sources
+  // and Tag Sources) and Edit. Its fields carry their testids and names: title,
+  // description, date and place (comboboxes), justification (the reason); Save
+  // (`conclusionDetailOverlay:submit:button`), Cancel (`add-edit:cancel-action`; from
+  // Edit it goes back to the view, which closes with its Close button).
+
+  const conclusionDialog = () => byTestId('conclusion-dialog');
+  const VITALS = ['BIRTH', 'CHRISTENING', 'DEATH', 'BURIAL'];
+  // The add-event menu's items (no testids; the English page's text)
+  const EVENT_ITEMS = { RESIDENCE: /^residence$/i, OCCUPATION: /^occupation$/i, OTHER_EVENT: /^custom event$/i };
+  const displays = (type) => [...document.querySelectorAll('[data-testid="conclusionDisplay:' + type + '"]')];
+  // The fact's English name in messages (linker.js fsMessage() translates them)
+  const factName = (type) => (type === 'OTHER_EVENT' ? 'custom event' : String(type).toLowerCase().replace(/_/g, ' '));
+  const yearIn = (text) => { const m = String(text || '').match(/\b(\d{4})\b/); return m ? Number(m[1]) : null; };
+
+  function onPersonPage(pid) {
+    pid = String(pid || '').toUpperCase();
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(pid)) throw new Error('Not a FamilySearch PID: ' + pid);
+    if (!new RegExp('/tree/person/details/' + pid + '(/|$)', 'i').test(location.pathname)) {
+      throw new Error('FamilySearch did not open the tree person ' + pid + '. Please sign in to FamilySearch and try again.');
+    }
+    return pid;
+  }
+
+  // The form of a fact, empty for an addition, FS's for an edit
+  async function openFactForm(addition) {
+    // FS takes its time closing a dialog while its window isn't drawn
+    await waitGone(conclusionDialog, 'the last form to close', 20000);
+    const { type, action } = addition;
+    let opener;
+    if (action === 'name') {
+      opener = await waitFor(() => byTestId('add-alternate-name'), 'Add Alternate Name');
+    } else if (action === 'edit') {
+      const display = await waitFor(() => displays(type)[0], 'the ' + factName(type) + ' to change');
+      opener = byTestId('pencil-edit-button', display);
+    } else if (VITALS.includes(type)) {
+      opener = document.querySelector('[data-testid="highlight-' + type + '"] [data-testid="conclusion:add:button"]');
+      if (!opener && displays(type).length) throw new Error('FamilySearch already has a ' + factName(type) + ' for this person; change it instead.');
+    } else {
+      (await waitFor(() => byTestId('add-new-otherEvent-button'), 'Add Event')).click();
+      opener = await waitFor(() => [...document.querySelectorAll('[role="menuitem"]')].find((i) => EVENT_ITEMS[type] && EVENT_ITEMS[type].test(clean(i.textContent))), 'the event menu');
+    }
+    if (!opener) throw new Error('FamilySearch shows no button to ' + (action === 'edit' ? 'change' : 'add') + ' the ' + factName(type) + '.');
+    opener.click();
+    const form = () => { const d = conclusionDialog(); return d && byTestId('conclusionDetailOverlay:reason', d) ? d : null; };
+    try {
+      if (action === 'edit') {
+        // A fact with sources opens its view (Edit there), one without the form itself
+        // (seen on a death with no sources, 2026-11-09)
+        const next = await waitFor(() => form() || byTestId('ConclusionDialog:edit:button', conclusionDialog() || document), 'the ' + factName(type) + ' to change');
+        if (next.getAttribute('data-testid') === 'ConclusionDialog:edit:button') next.click();
+      }
+      return await waitFor(form, 'the form');
+    } catch (error) {
+      // Not left open, which would hold up the next fact
+      await closeFactDialog();
+      throw error;
+    }
+  }
+
+  async function fillFactForm(form, addition, reason) {
+    const v = addition.value || {};
+    const fields = [];
+    if (addition.action === 'name') {
+      const set = (name, value) => {
+        const select = form.querySelector('select[name="' + name + '"]');
+        if (!select || ![...select.options].some((o) => o.value === value) || select.value === value) return;
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, value);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      set('nameType', v.nameType || 'AKA');
+      set('template', 'no');
+      await sleep(300);
+      const now = conclusionDialog() || form;
+      setValue(await waitFor(() => byTestId('first-name', now), 'the name fields'), v.given);
+      setValue(byTestId('last-name', now), v.surname);
+      fields.push({ name: 'given', value: v.given || '' }, { name: 'surname', value: v.surname || '' });
+    } else {
+      // FS wraps each field in a div of the same name: the input itself
+      const input = (name) => form.querySelector('input[name="' + name + '"], textarea[name="' + name + '"]');
+      if (addition.title && input('title')) { setValue(input('title'), addition.title); fields.push({ name: 'title', value: addition.title }); }
+      if (v.description && input('description')) { setValue(input('description'), v.description); fields.push({ name: 'description', value: v.description }); }
+      const year = yearIn(v.date);
+      if (v.date) fields.push(await comboField(form, 'date', v.date, year));
+      if (v.place) fields.push(await comboField(form, 'place', v.place, year));
+    }
+    setValue(byTestId('conclusionDetailOverlay:reason', conclusionDialog() || form), reason || '');
+    return fields;
+  }
+
+  // Out of the form, and the fact's view (after an edit) closed
+  async function closeFactDialog() {
+    const d = conclusionDialog();
+    const cancel = d && byTestId('add-edit:cancel-action', d);
+    if (cancel) {
+      cancel.click();
+      // A form opened without a view may stay after Cancel: closed with its Close then
+      await waitFor(() => !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog()), 'the form to close', 3000).catch(() => {});
+    }
+    const view = conclusionDialog();
+    const close = view && view.querySelector('button[aria-label="Close"]');
+    if (close) close.click();
+    await waitGone(conclusionDialog, 'the form to close', 20000).catch(() => {});
+  }
+
+  // addFact: the addition filled into FS's form; `save` false: the fields as FS took
+  // them (the places picked) read back and the form cancelled, nothing saved
+  async function addFact({ pid, addition, reason, save }) {
+    onPersonPage(pid);
+    const type = addition.type;
+    const before = new Set(displays(type).map((e) => clean(e.textContent)));
+    const form = await openFactForm(addition);
+    let fields;
+    try {
+      fields = await fillFactForm(form, addition, reason);
+      await sleep(300);
+    } catch (error) {
+      await closeFactDialog();
+      throw error;
+    }
+    if (!save) {
+      await closeFactDialog();
+      return { ok: true, fields };
+    }
+    const submit = await waitFor(() => byTestId('conclusionDetailOverlay:submit:button', conclusionDialog() || document), 'the Save button');
+    // FS's message in the form, if it shows one
+    const problem = () => {
+      const d = conclusionDialog();
+      const alert = d && d.querySelector('[role="alert"], [aria-invalid="true"]');
+      return alert ? clean(alert.textContent || alert.getAttribute('aria-label')).slice(0, 200) : '';
+    };
+    // FS keeps an edit's Save off while the form holds what FS has already (saved by
+    // an earlier run): nothing to change. The form is never left open.
+    const off = () => submit.disabled || submit.getAttribute('aria-disabled') === 'true';
+    if (off()) await sleep(1000);
+    if (off()) {
+      const why = problem();
+      await closeFactDialog();
+      if (!why && addition.action === 'edit') return { ok: true, fields, unchanged: true };
+      throw new Error('FamilySearch did not take the ' + factName(type) + (why ? ': ' + why : '.'));
+    }
+    submit.click();
+    // Saved: the form closes (an edit's back to its view, closed then); still open: FS's message
+    try {
+      await waitFor(() => !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog()), 'the form to close', 20000);
+    } catch (error) {
+      const why = problem();
+      await closeFactDialog();
+      throw new Error('FamilySearch did not save the ' + factName(type) + (why ? ': ' + why : '.'));
+    }
+    await closeFactDialog();
+    // The fact as FS shows it now: the one not there before (an edit: the only one)
+    let shown = '';
+    try {
+      const el = await waitFor(() => (addition.action === 'edit' ? displays(type)[0] : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
+      shown = clean(el.textContent);
+    } catch (e) { /* saved, not seen yet */ }
+    return { ok: true, fields, shown };
+  }
+
+  // tagFact: the source tagged to the fact, from the fact's view: Tag Sources, the
+  // source (its SourceBox ID), Tag To. The fact is the one whose text has `match`
+  // (the date, a description) among the facts of its type, else the last one.
+  async function tagFact({ pid, type, match, sourceId, title }) {
+    onPersonPage(pid);
+    await waitGone(conclusionDialog, 'the last form to close', 20000);
+    const all = await waitFor(() => { const d = displays(type); return d.length ? d : null; }, 'the ' + factName(type));
+    const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
+    // An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann Olsen too
+    const nameOf = (e) => clean((byTestId('conclusion-name-template', e) || {}).textContent).toLowerCase();
+    const fact = (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === words.join(' '))) ||
+      all.find((e) => words.every((w) => clean(e.textContent).toLowerCase().includes(w))) || all[all.length - 1];
+    const pencil = byTestId('pencil-edit-button', fact);
+    if (!pencil) throw new Error('FamilySearch shows no way to open the ' + factName(type) + '.');
+    pencil.click();
+    const view = await waitFor(conclusionDialog, 'the fact');
+    // Tagged already (FS's tag dialog after attaching may have done it): left as it is
+    await sleep(500);
+    if (title && [...view.querySelectorAll('[data-testid="source-heading-section"]')].some((h) => clean(h.textContent).includes(clean(title)))) {
+      await closeFactDialog();
+      return { ok: true, already: true };
+    }
+    const tagButton = await waitFor(() => [...view.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
+    tagButton.click();
+    const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
+    if (!item) {
+      const closeList = byTestId('restore-source-cancel-button');
+      if (closeList) closeList.click();
+      await closeFactDialog();
+      throw new Error('The source is not among the person\'s sources on FamilySearch, so it could not be tagged.');
+    }
+    item.click();
+    (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
+    // FS may ask for a reason; then saved with it
+    await sleep(800);
+    const reason = conclusionDialog() && byTestId('conclusionDetailOverlay:reason', conclusionDialog());
+    if (reason) {
+      const submit = byTestId('conclusionDetailOverlay:submit:button', conclusionDialog());
+      if (submit) submit.click();
+    }
+    await waitGone(() => byTestId('source-view-tag-button'), 'the tag to be saved', 15000).catch(() => {});
+    await closeFactDialog();
+    return { ok: true };
+  }
+
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, cancelAdd, addFact, tagFact };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const step = request && request.linker && STEPS[request.linker];

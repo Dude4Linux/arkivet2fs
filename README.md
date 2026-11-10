@@ -190,6 +190,25 @@ Below the source, each person in the record has a row:
   years about, so 17 in the 1865 census fits a birth in 1848 or 1849. FamilySearch's
   side starts with the family card's years and fills in from the tree person's own
   page, read in the background once the page is shown (it only reads).
+- **Adding the record's facts to the tree.** Under the table, **Add to FamilySearch**
+  lists what the record could add to the tree person: a christening, death, burial,
+  residence or occupation the tree lacks, an emigration (as a custom event titled
+  Emigration, since FamilySearch has no emigration fact), a name the tree doesn't have
+  (as an alternate name, Also Known As unless you choose another type), and a birth,
+  christening, death or burial that differs. FamilySearch keeps one of each of those,
+  so the suggestion combines the two: the more precise part of each, such as the
+  record's "16 July 1846" over FamilySearch's "1846" and FamilySearch's "Vågå, Oppland,
+  Norway" over the record's "Vågå", with FamilySearch's value shown beside it.
+  Everything is unticked. Tick what you want and edit the boxes; the reason ("From
+  <source title>, Digitalarkivet, Permanent ID <id>.") can be edited too. Ticking a
+  birth, christening, death, burial or residence also ticks its tag. The ticked
+  changes are listed above the buttons. **Check with FamilySearch** fills each one in
+  FamilySearch's own form in the background window, takes FamilySearch's standard date
+  and place for the record's year, and cancels (nothing is saved); the boxes then show
+  FamilySearch's forms for you to look over. A residence's place starts with the farm
+  ("Bakken nedre, Vågå, Oppland, Norway"); when FamilySearch doesn't know the farm in
+  that municipality, the place stays as written rather than lose the farm. A couple's
+  marriage can't be added yet.
 - **New person on FamilySearch.** For someone in the record who isn't in the tree
   yet, choose **New person on FamilySearch…** in the tree person list. A form opens
   at the side, filled in from the record: the given names and the patronymic as the
@@ -253,6 +272,14 @@ A person who has the source is highlighted in green too, as in FS's Source Linke
 two church books, a green edge only for one who has just one of them), and their row
 says so. If you change the title, or the check failed, **Check the SourceBox again**.
 
+The check also reads the source's fields in the SourceBox (FamilySearch's Edit Source
+form, cancelled). Where they differ from the ones here, both filled in, they're listed
+under the source with FamilySearch's text and a choice: use the record's (the default),
+or keep FamilySearch's. For the notes, the default keeps FamilySearch's and adds the
+record's lines they lack below, unless FamilySearch's notes are an older copy made by
+the extension; then the record's replace them. If a source of the same title in the
+SourceBox is of another record, the linker says so: give this source another title.
+
 The family comes from the FS person you started the search from. From the toolbar
 icon, the linker uses the last person you searched for when their name is in the
 record. Otherwise, type the FS ID at the top.
@@ -263,7 +290,7 @@ The page lists each step as it goes:
 1. It creates the source in your SourceBox. If a source with the same title is
    already there, in any folder, it uses that one instead and updates it: the title,
    date, web page, citation and notes as you reviewed them here replace FamilySearch's
-   (a field left empty here keeps FamilySearch's), with "Updated from the record on
+   (a field left empty here keeps FamilySearch's, as does one you chose to keep), with "Updated from the record on
    Digitalarkivet." as the reason for the change. The button then reads **Update source
    and attach** (**Create or update sources and attach** with two church books, one
    source there and one not).
@@ -271,7 +298,11 @@ The page lists each step as it goes:
    already has the source is left as they are, so a source attached to some of the
    people before is attached only to the rest.
 3. It adds the ticked tags. Tags already there are kept. A residence is tagged only
-   when the person has exactly one.
+   when the person has exactly one. A fact the linker adds is tagged in step 4, once
+   it's there.
+4. It makes the ticked changes to the tree persons, on each one's page, with your
+   reason, and tags the source to each fact it added or changed. Only people who now
+   have the source get them.
 
 When every step has gone through, the FamilySearch tab is closed and you're back on the
 linker, with the steps listed. If a step failed, the tab stays open where it stopped.

@@ -884,6 +884,295 @@ function factsTable(person, record, tree, reading) {
   return el('table', { class: 'facts' }, [el('thead', {}, [head]), el('tbody', {}, rows)]);
 }
 
+// --- Adding the record's facts to FamilySearch ----------------------------------------
+// What a row's record facts could add to the tree person, or change, each with a
+// suggested entry the user edits and ticks: [{fact, action, type, title, current,
+// value: {date, place, description} or {given, surname}}]. The actions: 'name' (an
+// alternate name), 'add' (a fact FS doesn't have) and 'edit' (FS's birth, christening,
+// death or burial written over: FS keeps one of each, so the suggestion combines the
+// two). Only once the tree person's page is read: the lifespan can't tell what's there.
+
+const VITAL_TYPES = { Birth: 'BIRTH', Christening: 'CHRISTENING', Death: 'DEATH', Burial: 'BURIAL' };
+const FS_APPROX = /\b(abt|about|ca|circa|est|estimated|calc|calculated|omkring|omtrent)\b/i;
+
+// A date combining the record's and FS's: the more specific where they agree, the
+// record's where they disagree. A year from an age doesn't replace FS's within three.
+function mergeDate(da, approx, fsText) {
+  const has = String(fsText || '').trim();
+  if (!da || !da.year) return has;
+  const mine = fsDateText(da, approx);
+  if (!has) return mine;
+  const fs = parseFsDate(has);
+  if (!fs) return approx ? has : mine;  // FS's before, after or between
+  if (approx) return Math.abs(fs.year - da.year) <= 3 ? has : mine;
+  if (fs.year !== da.year || (da.month && fs.month && da.month !== fs.month) || (da.day && fs.day && da.day !== fs.day)) return mine;
+  const detail = (d) => (d.month ? 1 : 0) + (d.day ? 1 : 0);
+  return detail(da) > detail(fs) || (detail(da) === detail(fs) && FS_APPROX.test(has)) ? mine : has;
+}
+
+// DA's place name without its marks: "Vågå herred*" → "Vågå", "1029P Audnedal" → "Audnedal"
+function cleanPlace(place) {
+  return String(place || '').replace(/\*/g, '').replace(/^\d{3,4}[A-Z]?\s+/, '')
+    .replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
+}
+// Whether FS's place names the record's (by any of its names: Vaage, Vågå, Vaga)
+function placeIn(name, fsText) {
+  const names = new Set(placeAliases(name).flatMap((n) => [foldPlace(n), asciiPlace(n)]));
+  return String(fsText || '').split(',').some((part) => {
+    const p = part.replace(/\b(church|kirke|kirkested|prestegjeld|parish|sogn|herred|municipality|kommune)\b/gi, '').trim();
+    return names.has(foldPlace(p)) || names.has(asciiPlace(p));
+  });
+}
+// A place combining the record's and FS's: FS's when it names the record's place,
+// else the record's in FS's form. A place the record only implies (`weak`: a death in
+// the parish of the burial) fills an empty one only. `elsewhere`: a place the record
+// names but isn't in (a census's birthplace), so not given the record's county.
+function mergePlace(daPlace, fsText, record, weak, elsewhere) {
+  const has = String(fsText || '').trim();
+  const name = cleanPlace(daPlace);
+  if (!name) return has;
+  if (!has) return fsPlace(name, record, elsewhere);
+  if (weak || placeIn(name, has)) return has;
+  return fsPlace(name, record, elsewhere);
+}
+
+// A name split as FS's form takes it: the given names up to the patronymic, which is
+// the surname; a word after it (a farm, an address) left out. No patronymic: the last
+// word is the surname.
+function nameParts(name) {
+  const words = String(name || '').split(/\s+/).filter(Boolean);
+  const k = words.findIndex((w, i) => i > 0 && isPatronymic(w));
+  if (k > 0) return { given: words.slice(0, k).join(' '), surname: words[k], rest: words.slice(k + 1).join(' ') };
+  if (words.length > 1) return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], rest: '' };
+  return { given: words.join(' '), surname: '', rest: '' };
+}
+const sameNameKey = (name) => String(name || '').toLowerCase().replace(/[.,'"]/g, '').replace(/\s+/g, ' ').trim();
+
+// The emigrant protocol's place of departure: "Oslo police district, ..." → Oslo
+function departurePlace(record) {
+  const m = String(record.sourceTitle || '').match(/^(.+?) police (?:district|station|chamber)/i);
+  return m ? m[1] : '';
+}
+
+// The year of an FS date, or null
+const fsYear = (text) => (parseFsDate(text) || {}).year || Number((String(text || '').match(/\b1[5-9]\d\d\b|\b20\d\d\b/) || [])[0]) || null;
+
+function factAdditions(person, record, tree, name) {
+  const full = tree && fullTree(tree.pid);
+  if (!full) return [];
+  const da = recordFacts(person, record);
+  const out = [];
+  const place = recordPlace(record);
+  const year = (daDateParts(record.recordDate) || {}).year;
+
+  // A name FS has neither as the name nor as an alternate one
+  const parts = nameParts(name || stripVariants(person.name));
+  if (parts.surname) {
+    const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
+    if (!known.includes(sameNameKey(parts.given + ' ' + parts.surname))) {
+      out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { given: parts.given, surname: parts.surname, nameType: 'AKA' } });
+    }
+  }
+
+  // Birth, christening, death, burial: added, or FS's combined with the record's
+  // A birthplace is the record's own place only on a baptism; a census's is anywhere
+  const vitalPlace = { Birth: [da.Birth && da.Birth.place, false, true], Christening: [place, false], Death: [place, true], Burial: [place, false] };
+  for (const [fact, type] of Object.entries(VITAL_TYPES)) {
+    const f = da[fact];
+    if (!f || !f.year) continue;
+    const fs = full[fact.toLowerCase()] || null;
+    const date = f.date && f.date.year ? f.date : { year: f.year };
+    const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(vitalPlace[fact][0], fs && fs.place, record, vitalPlace[fact][1], vitalPlace[fact][2]) };
+    if (!fs || !(fs.date || fs.place)) out.push({ fact, action: 'add', type, value });
+    else if (value.date !== String(fs.date || '').trim() || value.place !== String(fs.place || '').trim()) {
+      out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), value });
+    }
+  }
+
+  // A residence of a year FS has none of: the farm in the place ("Bakken nedre, Vågå,
+  // Oppland, Norway"; not when it is the parish's own name), and as its description
+  if (da.Residence && year && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
+    const census = record.census || {};
+    const isCensus = record.recordTypeInfo && record.recordTypeInfo.type === 'census';
+    const description = isCensus ? joined(census.residence, census.district) : person.residence || '';
+    const parish = fsPlace(cleanPlace(place), record);
+    const farm = cleanPlace(isCensus ? census.residence : person.residence);
+    const where = farm && !placeIn(farm, parish) ? joined(farm, parish) : parish;
+    out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
+  }
+  // An emigration: a custom event (FS has no Emigration to add), unless FS has one that year
+  if (da.Emigration && da.Emigration.year && !(full.emigration || []).some((e) => fsYear(e.date) === da.Emigration.year)) {
+    const fields = record.fields || {};
+    const to = fields['destination'] || fields['migrating to'] || '';
+    out.push({ fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration',
+      value: { date: fsDateText(da.Emigration.date), place: fsPlace(departurePlace(record), record), description: to ? 'Destination: ' + to : '' } });
+  }
+  // An occupation FS doesn't have in the same words
+  if (da.Occupation && !(full.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(da.Occupation.text))) {
+    out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date: year ? String(year) : '', place: fsPlace(cleanPlace(place), record), description: da.Occupation.text } });
+  }
+  return out;
+}
+
+// The reason written on FS with an addition (English, as the source is)
+function additionReason(record, title) {
+  return 'From "' + (title || record.title || record.sourceTitle || '') + '", Digitalarkivet, Permanent ID ' + (record.permanentId || '') + '.';
+}
+
+// The additions' fields and ticks as the user left them, by row, tree person and
+// fact, so a redrawn row (details read, a name edited) keeps them
+const NAME_TYPES = [['AKA', 'Also known as'], ['BIRTH', 'Birth name'], ['MARRIED', 'Married name'], ['NICK', 'Nickname']];
+const additionKey = (person, pid, a) => [person.key, pid, a ? a.fact + ':' + a.action : 'reason'].join('|');
+const hasDescription = (a) => ['RESIDENCE', 'OCCUPATION', 'OTHER_EVENT'].includes(a.type);
+
+// What an addition says, as the row's tickbox and the summary write it
+function additionLabel(a) {
+  if (a.action === 'name') return t('Add the alternate name');
+  if (a.type === 'OTHER_EVENT') return t('Add the {fact} as a custom event', { fact: t(a.fact).toLowerCase() });
+  if (a.action === 'edit') return t('Change the {fact}', { fact: t(a.fact).toLowerCase() });
+  return t('Add the {fact}', { fact: t(a.fact).toLowerCase() });
+}
+function additionText(a) {
+  const v = a.value;
+  if (a.action === 'name') return [v.given, v.surname].filter(Boolean).join(' ') + ' (' + t((NAME_TYPES.find(([id]) => id === v.nameType) || NAME_TYPES[0])[1]) + ')';
+  return [v.description, v.date, v.place].filter(Boolean).join(', ');
+}
+
+// The additions of a row paired with a tree person whose page was read: a tickbox
+// (unticked) and the suggested entry, editable, each; one reason for them all
+function additionsBox(row, person, pid, list) {
+  const store = state.additionEdits || (state.additionEdits = {});
+  const changed = () => { showChanges(); };
+  const items = list.map((a) => {
+    const key = additionKey(person, pid, a);
+    const kept = store[key] || { checked: false, value: { ...a.value } };
+    // Filled in FS's own dialog (prepareAdditions()): its standard date and place
+    const checkedNote = el('div', { class: 'muted small checked-note', hidden: !kept.fs, text: kept.fs ? fsCheckedText(kept.fs) : '' });
+    const box = el('input', { type: 'checkbox' });
+    box.checked = kept.checked;
+    const input = (field, label, cls) => {
+      const node = el('input', { type: 'text', class: cls || field, placeholder: t(label), 'aria-label': t(label) });
+      node.value = kept.value[field] || '';
+      node.addEventListener('input', () => { kept.value[field] = node.value; delete kept.fs; store[key] = kept; checkedNote.hidden = true; changed(); });
+      return node;
+    };
+    let fields;
+    if (a.action === 'name') {
+      const type = el('select', { 'aria-label': t('Name type') }, NAME_TYPES.map(([id, label]) => el('option', { value: id, text: t(label) })));
+      type.value = kept.value.nameType || 'AKA';
+      type.addEventListener('change', () => { kept.value.nameType = type.value; store[key] = kept; changed(); });
+      fields = [input('given', 'Given names'), input('surname', 'Surname'), type];
+    } else {
+      fields = [...(hasDescription(a) ? [input('description', 'Description')] : []), input('date', 'Date'), input('place', 'Place')];
+    }
+    const body = el('div', { class: 'add-fields', hidden: !kept.checked }, [...fields, checkedNote]);
+    box.addEventListener('change', () => {
+      kept.checked = box.checked;
+      // The fact's tag ticked with it, and unticked with it when ticked by it
+      if (box.checked) kept.tagged = row.tickTag(a.fact, true);
+      else if (kept.tagged) { row.tickTag(a.fact, false); kept.tagged = false; }
+      store[key] = kept;
+      body.hidden = !box.checked;
+      changed();
+    });
+    const current = a.action === 'edit' ? el('span', { class: 'muted', text: ' ' + t('FamilySearch has: {current}', { current: a.current }) }) : null;
+    return { a, kept, node: el('li', {}, [el('label', {}, [box, document.createTextNode(additionLabel(a))]), current, body]) };
+  });
+  const reasonKey = additionKey(person, pid, null);
+  const reason = el('textarea', { rows: '2', class: 'reason', 'aria-label': t('Reason for the changes') });
+  reason.value = store[reasonKey] != null ? store[reasonKey] : additionReason(state.record, $('f-title') && $('f-title').value.trim());
+  reason.addEventListener('input', () => { store[reasonKey] = reason.value; changed(); });
+  const reasonWrap = el('div', { class: 'add-reason' }, [el('div', { class: 'label muted', text: t('Reason for the changes') }), reason]);
+  const anyTicked = () => items.some((i) => i.kept.checked);
+  reasonWrap.hidden = !anyTicked();
+  for (const i of items) i.node.querySelector('input[type=checkbox]').addEventListener('change', () => { reasonWrap.hidden = !anyTicked(); });
+  row.additions = () => items.filter((i) => i.kept.checked).map((i) => ({ ...i.a, key: additionKey(person, pid, i.a), value: { ...i.kept.value }, reason: reason.value.trim() }));
+  return el('div', { class: 'additions' }, [
+    el('div', { class: 'label muted', text: t('Add to FamilySearch') }),
+    el('ul', {}, items.map((i) => i.node)), reasonWrap]);
+}
+
+// What FS's dialog made of an addition's date and place
+function fsCheckedText(fs) {
+  if (fs.error) return t('Not checked with FamilySearch: {error}', { error: fs.error });
+  const standard = (fs.fields || []).filter((f) => (f.name === 'date' || f.name === 'place'));
+  if (!standard.length) return t('Checked with FamilySearch.');
+  return t('Checked with FamilySearch: {fields}', {
+    fields: standard.map((f) => t(f.name === 'date' ? 'Date' : 'Place') + ': ' + (f.picked ? f.value : t('{value} (not standardized)', { value: f.value }))).join('; ')
+  });
+}
+
+// The ticked additions filled in FS's own dialogs in the hidden window, each cancelled:
+// FS's standard date and place (the place of the record's year) go into the boxes, to
+// be looked over before anything is saved. run() picks them again the same way.
+async function prepareAdditions() {
+  if (state.running || state.preparing) return;
+  const store = state.additionEdits || {};
+  const todo = (state.rows || []).map((row) => ({ row, pid: row.pid(), additions: row.additions ? row.additions() : [] }))
+    .map((r) => ({ ...r, additions: r.additions.filter((a) => a.action !== 'name' && (a.value.date || a.value.place)) }))
+    .filter((r) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/i.test(r.pid || '') && r.additions.length);
+  const status = $('changes-status');
+  if (!todo.length) { status.textContent = t('Nothing with a date or place to check.'); return; }
+  state.preparing = true;
+  $('check-changes').disabled = true;
+  status.textContent = t('Filling the changes in FamilySearch\'s forms (nothing is saved)…');
+  let tab = null, done = 0, failed = 0;
+  const fill = async (pid, a) => {
+    const answer = await step(tab.id, 'addFact', { pid, addition: a, reason: a.reason, save: false });
+    if (!answer.ok) throw new Error(answer.error);
+    return answer.fields || [];
+  };
+  try {
+    tab = await hiddenTab();
+    for (const { row, pid, additions } of todo) {
+      await navigate(tab.id, personDetailsUrl(pid));
+      for (const a of additions) {
+        const kept = store[a.key];
+        if (!kept) continue;
+        let fields;
+        try {
+          try { fields = await fill(pid, a); } catch (e) {
+            // a covered window may not be drawn (Windows, macOS): once more on top
+            await tab.show();
+            try { await navigate(tab.id, personDetailsUrl(pid)); fields = await fill(pid, a); } finally { await tab.back(); }
+          }
+        } catch (e) {
+          kept.fs = { error: e.message || String(e) };
+          failed++;
+          continue;
+        }
+        for (const f of fields) if ((f.name === 'date' || f.name === 'place') && f.picked && f.value) kept.value[f.name] = f.value;
+        kept.fs = { fields };
+        done++;
+      }
+      row.showFacts();
+    }
+    status.textContent = failed ? t('Checked with FamilySearch: {done}; not checked: {failed}.', { done, failed })
+      : t('Checked with FamilySearch: look the dates and places over before saving.');
+  } catch (e) {
+    status.textContent = t('Not checked with FamilySearch: {error}', { error: e.message || String(e) });
+  } finally {
+    if (tab) tab.close();
+    state.preparing = false;
+    $('check-changes').disabled = false;
+    showChanges();
+  }
+}
+
+// Above the buttons: every change ticked, by tree person, made after the attach
+function showChanges() {
+  const box = $('changes');
+  if (!box) return;
+  const lines = [];
+  for (const row of state.rows || []) {
+    const pid = row.pid();
+    if (!pid || !row.additions) continue;
+    for (const a of row.additions()) lines.push(row.label() + ' (' + pid + '): ' + additionLabel(a).toLowerCase() + ': ' + additionText(a));
+  }
+  box.hidden = !lines.length;
+  $('changes-list').replaceChildren(...lines.map((line) => el('li', { text: line })));
+}
+
 // One person of the record: name (editable, with surname suggestions), role, the
 // tree person to attach to, tags, reason
 function personRow(person, family, suggestion, why) {
@@ -933,6 +1222,13 @@ function personRow(person, family, suggestion, why) {
   row.pid = () => (select.value === 'other' ? otherPid.value.trim().toUpperCase() : select.value);
   row.touched = () => touched;
   row.tags = () => TAGS.map(([id]) => id).filter((id) => tagBoxes[id].checked);
+  // A fact ticked to be added ticks its tag (additionsBox()); true when it changed the box
+  row.tickTag = (id, on) => {
+    const box = tagBoxes[id];
+    if (!box || box.checked === on) return false;
+    box.checked = on;
+    return true;
+  };
   row.reason = () => reason.value.trim();
   row.tree = () => family.find((tree) => tree.pid === select.value) || null;
   row.label = () => nameInput.value.trim() || role;
@@ -940,7 +1236,11 @@ function personRow(person, family, suggestion, why) {
   row.showFacts = () => {
     const pid = row.pid();
     const tree = row.tree() || (PID_PATTERN.test(pid) ? { pid, name: '' } : null);
-    facts.replaceChildren(factsTable(person, state.record, tree, !!state.detailsPending && state.detailsPending.has(pid)));
+    const reading = !!state.detailsPending && state.detailsPending.has(pid);
+    const list = tree && !reading ? factAdditions(person, state.record, tree, nameInput.value.trim()) : [];
+    row.additions = () => [];
+    facts.replaceChildren(factsTable(person, state.record, tree, reading), ...(list.length ? [additionsBox(row, person, pid, list)] : []));
+    showChanges();
   };
   row.showCheck = () => {
     const check = rowCheckText(state.fsCheck, row.pid());
@@ -1544,13 +1844,10 @@ function onFamilySearch(address) {
 // The plan from the page: the source, and each paired person (PIDs checked)
 // (with the other church book's entry, `parallel`, its source: no tags, a distinct title)
 function readPlan(attach) {
-  const sourceOf = (prefix) => {
-    const v = (id) => $(prefix + '-' + id).value.trim();
-    return { title: v('title'), date: v('date'), url: v('url'), citation: v('citation'), notes: v('notes') };
-  };
-  const source = sourceOf('f');
+  const sourceOf = (prefix, i) => withFsChoices(reviewedSource(prefix), i);
+  const source = sourceOf('f', 0);
   if (!source.title) throw new Error(t('The source needs a title.'));
-  const parallel = state.parallel ? sourceOf('g') : null;
+  const parallel = state.parallel ? sourceOf('g', 1) : null;
   if (parallel && !parallel.title) throw new Error(t('The source of the other church book needs a title.'));
   if (parallel && parallel.title === source.title) throw new Error(t('The two sources need different titles: FamilySearch would take them for one.'));
   const pairs = [];
@@ -1561,7 +1858,17 @@ function readPlan(attach) {
       if (!PID_PATTERN.test(pid)) throw new Error(t('"{pid}" (for {name}) is not a FamilySearch ID like XXXX-XXX.', { pid, name: row.label() }));
       if (pairs.some((p) => p.pid === pid)) throw new Error(t('{pid} is chosen for two people in the record.', { pid }));
       const tags = row.tags();
-      pairs.push({ pid, label: row.label(), reason: row.reason(), tags: tags.filter((tag) => tag !== 'Residence'), residence: tags.includes('Residence') });
+      const additions = row.additions ? row.additions() : [];
+      for (const a of additions) {
+        const v = a.value;
+        const empty = a.action === 'name' ? !(v.given || v.surname) : !(v.date || v.place || v.description);
+        if (empty) throw new Error(t('"{what}" for {name} is empty: fill it in or untick it.', { what: additionLabel(a), name: row.label() }));
+      }
+      // A fact added is tagged once saved (saveAdditions()), not when attaching: the
+      // person hasn't it yet, or has another (a residence of another year)
+      const later = additions.filter((a) => a.action === 'add').map((a) => a.fact);
+      const now = tags.filter((tag) => !later.includes(tag));
+      pairs.push({ pid, label: row.label(), reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions });
     }
     if (!pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
   }
@@ -1607,6 +1914,23 @@ function fsMessage(text) {
   }
   if ((m = text.match(/^FamilySearch did not open the tree person (\S*)\. Please sign in to FamilySearch and try again\.$/))) {
     return t('FamilySearch did not open the tree person {pid}. Please sign in to FamilySearch and try again.', { pid: m[1] });
+  }
+  // The fact steps' messages, with the fact's English name
+  const fact = (name) => t(name === 'custom event' ? 'Custom event' : name.charAt(0).toUpperCase() + name.slice(1)).toLowerCase();
+  if ((m = text.match(/^FamilySearch already has a (.+) for this person; change it instead\.$/))) {
+    return t('FamilySearch already has a {fact} for this person; change it instead.', { fact: fact(m[1]) });
+  }
+  if ((m = text.match(/^FamilySearch shows no button to (add|change) the (.+)\.$/))) {
+    return t(m[1] === 'add' ? 'FamilySearch shows no button to add the {fact}.' : 'FamilySearch shows no button to change the {fact}.', { fact: fact(m[2]) });
+  }
+  if ((m = text.match(/^FamilySearch shows no way to open the (.+)\.$/))) return t('FamilySearch shows no way to open the {fact}.', { fact: fact(m[1]) });
+  if ((m = text.match(/^FamilySearch did not save the ([a-z ]+)(?:\.|: (.*))$/s))) {
+    return m[2] === undefined ? t('FamilySearch did not save the {fact}.', { fact: fact(m[1]) })
+      : t('FamilySearch did not save the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
+  }
+  if ((m = text.match(/^FamilySearch did not take the ([a-z ]+)(?:\.|: (.*))$/s))) {
+    return m[2] === undefined ? t('FamilySearch did not take the {fact}.', { fact: fact(m[1]) })
+      : t('FamilySearch did not take the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
   }
   if ((m = text.match(/^FamilySearch did not show (.*) in time\.$/))) return t('FamilySearch did not show {what} in time.', { what: t(m[1]) });
   return tMessage(text);
@@ -1706,6 +2030,99 @@ function showFsCheck() {
   $('attach').textContent = $('intro-action').textContent = t(withAttach);
   $('create-only').textContent = t(only);
   for (const row of state.rows || []) row.showCheck();
+  showSourceDiffs();
+}
+
+// --- The SourceBox's copy of the source, field by field ----------------------------
+const SOURCE_FIELDS = [['title', 'Title'], ['date', 'Date'], ['url', 'Web page'], ['citation', 'Citation'], ['notes', 'Notes']];
+
+// The source's fields as reviewed here ('f' the main one, 'g' the other church book's)
+function reviewedSource(prefix) {
+  const v = (id) => $(prefix + '-' + id).value.trim();
+  return { title: v('title'), date: v('date'), url: v('url'), citation: v('citation'), notes: v('notes') };
+}
+
+const sameText = (a, b) => String(a || '').replace(/\r\n/g, '\n').trim() === String(b || '').replace(/\r\n/g, '\n').trim();
+
+// The SourceBox's copy of source i, when the check read it and the title is still the one checked
+function fsSource(i) {
+  const check = state.fsCheck;
+  const source = check && check.sources && check.sources[i];
+  if (!source || !source.id || !source.fields) return null;
+  return $(i ? 'g-title' : 'f-title').value.trim() === source.title ? source : null;
+}
+
+// The fields that differ, both filled (an empty one here keeps FS's; one empty on FS is
+// filled from here): [{key, label, fs, ours}]
+function sourceDiffs(fs, ours) {
+  return SOURCE_FIELDS.filter(([key]) => (ours[key] || '').trim() && (fs[key] || '').trim() && !sameText(fs[key], ours[key]))
+    .map(([key, label]) => ({ key, label, fs: fs[key].replace(/\r\n/g, '\n').trim(), ours: ours[key] }));
+}
+
+// FS's notes with the record's lines they lack added below
+function mergeNotes(fs, ours) {
+  const have = new Set(fs.split('\n').map((l) => l.trim()).filter(Boolean));
+  const added = ours.split('\n').filter((l) => l.trim() && !have.has(l.trim()));
+  return added.length ? fs.trim() + '\n\n' + added.join('\n') : fs.trim();
+}
+
+// FS's notes are an older copy of the extension's: they start with the same line
+// ("Permanent ID: pd…"), so the record's are written over them
+function olderCopy(fs, ours) {
+  const first = (text) => (String(text).split('\n').find((l) => l.trim()) || '').trim();
+  return /^Permanent ID: /.test(first(ours)) && first(fs) === first(ours);
+}
+
+// The choice for a differing field: 'record', 'fs', or for the notes 'merge'
+function fieldChoice(i, d) {
+  const kept = (state.fieldChoices || {})[i + ':' + d.key];
+  if (kept) return kept;
+  return d.key === 'notes' && !olderCopy(d.fs, d.ours) ? 'merge' : 'record';
+}
+
+// The source as it will be written: the choices applied to the fields here
+function withFsChoices(source, i) {
+  const fs = fsSource(i);
+  if (!fs) return source;
+  const out = { ...source };
+  for (const d of sourceDiffs(fs.fields, source)) {
+    const choice = fieldChoice(i, d);
+    if (choice === 'fs') out[d.key] = d.fs;
+    else if (choice === 'merge') out[d.key] = mergeNotes(d.fs, d.ours);
+  }
+  return out;
+}
+
+// Under each source found in the SourceBox: its differing fields, FS's beside a choice
+function showSourceDiffs() {
+  [['fs-fields', 'f'], ['fs-fields-g', 'g']].forEach(([id, prefix], i) => {
+    const box = $(id);
+    if (!box) return;
+    const fs = fsSource(i);
+    const other = state.fsCheck && state.fsCheck.sources && state.fsCheck.sources[i];
+    if (other && other.otherRecord && $(prefix + '-title').value.trim() === other.title) {
+      box.hidden = false;
+      box.replaceChildren(el('p', { class: 'small bad', text: t('The source of this title in your SourceBox is of another record; give this source another title (add a name or the date).') }));
+      return;
+    }
+    const diffs = fs ? sourceDiffs(fs.fields, reviewedSource(prefix)) : [];
+    box.hidden = !diffs.length;
+    if (!diffs.length) { box.replaceChildren(); return; }
+    const choices = state.fieldChoices || (state.fieldChoices = {});
+    box.replaceChildren(
+      el('div', { class: 'label muted', text: t('Your SourceBox has this source with other fields. For each: keep FamilySearch\'s, or use the record\'s as above?') }),
+      ...diffs.map((d) => {
+        const select = el('select', { 'aria-label': t(d.label) }, [
+          el('option', { value: 'record', text: t('Use the record\'s (as above)') }),
+          ...(d.key === 'notes' ? [el('option', { value: 'merge', text: t('Keep FamilySearch\'s, with the record\'s new lines added') })] : []),
+          el('option', { value: 'fs', text: t('Keep FamilySearch\'s') })]);
+        select.value = fieldChoice(i, d);
+        select.addEventListener('change', () => { choices[i + ':' + d.key] = select.value; });
+        return el('div', { class: 'fs-field' }, [
+          el('div', { class: 'fs-field-head' }, [el('strong', { text: t(d.label) }), select]),
+          el('pre', { class: 'fs-field-value', text: d.fs })]);
+      }));
+  });
 }
 
 // The buttons' words: a source already in the SourceBox is updated, not created
@@ -1759,13 +2176,25 @@ async function updateSource(tabId, sourceId, source) {
 
 // The sources of these titles in the SourceBox, and who each is attached to (in the
 // tab, which goes to each page in turn)
-async function lookUpSources(tabId, titles, active = false) {
+async function lookUpSources(tabId, titles, active = false, sources = []) {
   const out = [];
   for (const [i, title] of titles.entries()) {
     await navigate(tabId, SOURCEBOX_URL, active);
-    out.push({ ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' });
+    const found = { ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' };
+    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active));
+    out.push(found);
   }
   return out;
+}
+
+// FS's fields of a source found by its title (the Edit Source dialog, cancelled):
+// `fields`, or `otherRecord` when it names another record
+async function readSourceFields(tabId, sourceId, source, active = false) {
+  await navigate(tabId, SOURCEBOX_URL, active);
+  const read = await step(tabId, 'editSource', { sourceId, source, read: true });
+  if (read.otherRecord) return { otherRecord: read.other || true };
+  if (!read.ok) return { fieldsError: read.error };
+  return { fields: read.fields };
 }
 
 async function lookUpSource(tabId, title, active = true) {
@@ -1786,6 +2215,7 @@ async function checkOnFamilySearch() {
   const titles = [$('f-title').value.trim()];
   if (state.parallel) titles.push($('g-title').value.trim());
   if (!titles.every(Boolean)) return;
+  const sources = ['f', ...(state.parallel ? ['g'] : [])].map(reviewedSource);
   const generation = state.checkGeneration = (state.checkGeneration || 0) + 1;
   state.fsCheck = { checking: true };
   showFsCheck();
@@ -1793,10 +2223,10 @@ async function checkOnFamilySearch() {
   try {
     tab = await hiddenTab();
     try {
-      result = { sources: await lookUpSources(tab.id, titles) };
+      result = { sources: await lookUpSources(tab.id, titles, false, sources) };
     } catch (e) {
       await tab.show();
-      try { result = { sources: await lookUpSources(tab.id, titles) }; } finally { await tab.back(); }
+      try { result = { sources: await lookUpSources(tab.id, titles, false, sources) }; } finally { await tab.back(); }
     }
   } catch (e) {
     result = { error: e.message || String(e) };
@@ -1806,6 +2236,88 @@ async function checkOnFamilySearch() {
   if (generation !== state.checkGeneration) return;
   state.fsCheck = result;
   showFsCheck();
+}
+
+// A pair's additions saved on the tree person's page, each then tagged with the source
+// from the fact's own view (so a residence is tagged even when the person has several)
+async function saveAdditions(tabId, pair, sourceId, title) {
+  // What FS has now: an earlier run (or the user) may have added it since the person's
+  // page was read, and the same change made twice changes nothing
+  const fresh = await readNow(tabId, pair.pid);
+  if (!fresh) await navigate(tabId, personDetailsUrl(pair.pid));
+  let changed = false;
+  for (const a of pair.additions) {
+    const what = additionLabel(a).toLowerCase() + ': ' + additionText(a);
+    if (fresh && onTreeAlready(fresh, a)) {
+      log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
+    } else {
+      const saved = await step(tabId, 'addFact', { pid: pair.pid, addition: a, reason: a.reason, save: true });
+      if (!saved.ok) { log(t('Not changed for {name} ({what}): {error}', { name: pair.label, what, error: saved.error }), 'bad'); continue; }
+      if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
+      else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changed = true; }
+    }
+    const match = a.action === 'name' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]];
+    const tagged = await step(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
+    if (!tagged.ok) log(t('The source is not tagged to it: {error}', { error: tagged.error }), 'near');
+    else log(t(tagged.already ? 'The source was tagged to it already.' : 'The source is tagged to it.'), 'ok');
+  }
+  // The person as FS has them now, for the rows and the next time the record is opened
+  if (changed) await readNow(tabId, pair.pid);
+  for (const row of state.rows || []) if (row.pid() === pair.pid && row.showFacts) row.showFacts();
+}
+
+// The tree person read again in the work tab (fs_person.js), kept for the page and
+// for later linker pages (`tree:<PID>`, `person:<PID>`); null when FS didn't answer
+async function readNow(tabId, pid) {
+  const answer = await readInTab(tabId, pid);
+  if (!answer.person || answer.person.pid !== pid) return null;
+  await keepTree(pid, answer.person);
+  return answer.person;
+}
+async function keepTree(pid, person) {
+  if (state.fs && state.fs.pid === pid) state.fs = { ...state.fs, ...person };
+  if (state.trees && state.trees[pid]) state.trees[pid] = person;
+  (state.details || (state.details = {}))[pid] = person;
+  try { await chrome.storage.session.set({ ['tree:' + pid]: person }); } catch (e) { /* only a cache */ }
+  try {
+    const key = 'person:' + pid;
+    const kept = (await chrome.storage.local.get(key))[key];
+    if (kept) await chrome.storage.local.set({ [key]: { ...kept, ...person } });
+  } catch (e) { /* only a cache */ }
+}
+
+// Whether the tree person (gatherPerson()'s shape) has an addition already: the name,
+// the vital with the same date and place, a residence of the year, the occupation, an
+// emigration of the year
+function onTreeAlready(tree, a) {
+  const v = a.value || {};
+  if (a.action === 'name') {
+    return [tree.name, ...(tree.altNames || [])].map(sameNameKey).includes(sameNameKey([v.given, v.surname].filter(Boolean).join(' ')));
+  }
+  const vital = Object.keys(VITAL_TYPES).find((k) => VITAL_TYPES[k] === a.type);
+  if (vital) {
+    const fs = tree[vital.toLowerCase()];
+    return Boolean(fs && (fs.date || fs.place) && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
+  }
+  const year = fsYear(v.date);
+  if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year);
+  if (a.type === 'OCCUPATION') return (tree.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(v.description));
+  if (a.type === 'OTHER_EVENT') return Boolean(year) && (tree.emigration || []).some((e) => fsYear(e.date) === year);
+  return false;
+}
+// Two FS dates the same (none asked: any); two places the same when each one's first
+// part is named in the other ("Oslo, Oslo, Norway" and FS's standard "Oslo, Norway";
+// not "Bakken nedre, Vågå, ..." and "Vågå, ...")
+function sameFsDate(has, want) {
+  if (!String(want || '').trim()) return true;
+  const a = parseFsDate(has), b = parseFsDate(want);
+  if (!a || !b) return sameNameKey(has) === sameNameKey(want);
+  return a.year === b.year && (a.month || 0) === (b.month || 0) && (a.day || 0) === (b.day || 0);
+}
+function sameFsPlace(has, want) {
+  if (!String(want || '').trim()) return true;
+  const first = (text) => String(text || '').split(',')[0].trim();
+  return Boolean(first(has)) && placeIn(first(want), has) && placeIn(first(has), want);
 }
 
 async function run(attach) {
@@ -1882,6 +2394,18 @@ async function run(attach) {
         if (result.ok) logTags(pair, result);
         else log(t('Tags for {name} not set: {error}', { name: pair.label, error: result.error }), 'bad');
       }
+      // The record's facts ticked for the tree persons who have the (main) source now
+      if (i === 0) {
+        const withSource = new Set(persons.map((p) => p.pid.toUpperCase()));
+        for (const pair of pairs) {
+          if (!(pair.additions || []).length) continue;
+          if (!withSource.has(pair.pid.toUpperCase())) {
+            log(t('Nothing added to {name} ({pid}): the source is not attached.', { name: pair.label, pid: pair.pid }), 'bad');
+            continue;
+          }
+          await saveAdditions(tabId, pair, sourceId, source.title);
+        }
+      }
     }
     // What FS has now, for the notes and rows
     state.fsCheck = { sources: checked };
@@ -1923,18 +2447,27 @@ function fsDateText(d, approx) {
 }
 
 // A record's place as FS names places, municipality, county, Norway: DA's own name
-// when it knows the municipality ("Vaage" → "Vågå, Oppland, Norway"), else the place
-// with the record's county
-function fsPlace(place, record) {
+// when it knows the municipality ("Vaage" → "Vågå, Oppland, Norway"; one in the
+// record's county first), else the place with the record's county. `elsewhere`: a place
+// the record names but isn't in, such as a census's birthplace, which can lie in any
+// county ("Christiania" in a census of Troms is Oslo): the record's county only when
+// the place is found there, else "<place>, Norway".
+function fsPlace(place, record, elsewhere) {
   const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name) return '';
   if (/,/.test(name)) return name;
   const county = record.county && !/,/.test(record.county) ? record.county : '';
   for (const tryName of [name, name.replace(/s$/, '')]) {
-    const codes = municipalityCodes(joined(tryName, county));
-    if (codes.length === 1) return joined(municipalityName(codes[0]), countyName(codes[0].slice(0, 2)), 'Norway');
+    const code = oneMunicipality(municipalityCodes(joined(tryName, county)));
+    if (code) return joined(municipalityName(code), countyName(code.slice(0, 2)), 'Norway');
   }
-  return joined(name, county, 'Norway');
+  return joined(name, elsewhere ? '' : county, 'Norway');
+}
+// The one municipality of a place's codes, leaving out the neighbours
+// municipalityCodes() adds for searching (Oslo's Aker), or null
+function oneMunicipality(codes) {
+  const own = codes.filter((code) => !codes.some((other) => (MUNICIPALITY_NEIGHBOURS[other] || []).includes(code)));
+  return own.length === 1 ? own[0] : null;
 }
 
 // The form's values for a row: {given, surname, sex, birthDate, birthPlace, deathDate,
@@ -1945,19 +2478,9 @@ function newPersonDraft(row) {
   const facts = recordFacts(person, record);
   const words = (row.name || stripVariants(person.name)).split(/\s+/).filter(Boolean);
   const notes = [];
-  let given = words.join(' ');
-  let surname = '';
   // The patronymic is the surname; a word after it (a farm, an address) is left out
-  const k = words.findIndex((w, i) => i > 0 && isPatronymic(w));
-  if (k > 0) {
-    given = words.slice(0, k).join(' ');
-    surname = words[k];
-    const rest = words.slice(k + 1).join(' ');
-    if (rest) notes.push(t('Left out of the name: {rest} (a farm is an address; add it if it is a family name).', { rest }));
-  } else if (words.length > 1) {
-    given = words.slice(0, -1).join(' ');
-    surname = words[words.length - 1];
-  }
+  let { given, surname, rest } = nameParts(words.join(' '));
+  if (rest) notes.push(t('Left out of the name: {rest} (a farm is an address; add it if it is a family name).', { rest }));
   // A child by given name only: the father's patronymic
   const surnames = words.length === 1 ? surnameSuggestions(person, state.people, record, null).map((x) => x.name.split(/\s+/).pop()) : [];
   if (!surname && surnames.length === 1) surname = surnames[0];
@@ -1966,7 +2489,8 @@ function newPersonDraft(row) {
   if (facts.Birth && facts.Birth.date) birthDate = fsDateText(facts.Birth.date);
   else if (facts.Birth && facts.Birth.year) birthDate = fsDateText({ year: facts.Birth.year }, facts.Birth.approx);
   else if (facts.Christening && facts.Christening.year) birthDate = fsDateText({ year: facts.Christening.year }, true);
-  const birthPlace = fsPlace((facts.Birth && facts.Birth.place) || (facts.Christening ? recordPlace(record) : ''), record);
+  const bornAt = facts.Birth && facts.Birth.place;
+  const birthPlace = fsPlace(bornAt || (facts.Christening ? recordPlace(record) : ''), record, Boolean(bornAt));
   const deathDate = facts.Death ? fsDateText(facts.Death.date) : '';
   const deathPlace = facts.Burial || facts.Death ? fsPlace(recordPlace(record), record) : '';
   // What FS's form doesn't take: add it on the person's page later
@@ -2244,7 +2768,9 @@ if (typeof chrome !== 'undefined' && chrome.storage) {
   });
   $('attach').addEventListener('click', () => run(true));
   $('create-only').addEventListener('click', () => run(false));
+  $('check-changes').addEventListener('click', () => prepareAdditions());
   for (const id of ['f-title', 'g-title']) $(id).addEventListener('change', () => showFsCheck());
+  for (const p of ['f', 'g']) for (const f of ['date', 'url', 'citation', 'notes']) $(p + '-' + f).addEventListener('change', () => showSourceDiffs());
   $('other-households').addEventListener('click', () => { state.showAll = !state.showAll; showHouseholds(); });
   localizePage();
   document.querySelector('.topbar').append(languageMenu());
