@@ -194,11 +194,14 @@ const FS_LISTS = {
   '16 jul 1846': [['16 July 1846']],
 };
 
-function personPage({ matches = [], afterCreate = 'card', lists = null } = {}) {
+// `children`: PIDs the couple's card shows as their children already
+function personPage({ matches = [], afterCreate = 'card', lists = null, children = [] } = {}) {
   const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-HAL',
     '<section data-testid="section-card-family">' +
     '<div data-testid="family-TEST-HAL_TEST-AST"><div data-testid="couple-persons"><a href="/tree/person/details/TEST-HAL">Halvor Larsen</a>' +
-    '<a href="/tree/person/details/TEST-AST">Astri Larsdatter</a></div><button data-testid="add-child">Add Child</button></div>' +
+    '<a href="/tree/person/details/TEST-AST">Astri Larsdatter</a></div>' +
+    children.map((pid) => `<div data-testid="child-person"><a href="/tree/person/details/${pid}">Lars Halvorsen</a></div>`).join('') +
+    '<button data-testid="add-child">Add Child</button></div>' +
     '<button data-testid="add-spouse">Add Spouse</button><button data-testid="add-parent">Add Parent</button></section>');
   const { w } = page;
   const d = w.document;
@@ -242,11 +245,24 @@ function personPage({ matches = [], afterCreate = 'card', lists = null } = {}) {
       for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) filled[name] = dialog.querySelector(`input[name="${name}"]`).value;
       dialog.innerHTML = '<div data-testid="find-results">' + (matches.length ? `<h3>Possible Matches Found (${matches.length})</h3>` +
         matches.map((m) => `<div><div data-testid="person"><span data-testid="fullName">${m.name}</span><span data-testid="lifespan">${m.lifespan}</span>` +
-          `<button data-testid="pid">${m.pid}</button><div data-testid="birth-event">Birth ${m.born}</div></div>` +
-          `<div data-testid="spouses"><div data-testid="person"><span data-testid="fullName">${m.spouse}</span><button data-testid="pid">TEST-SP1</button></div></div>` +
+          (m.bare ? '</div>' : `<button data-testid="pid">${m.pid}</button><div data-testid="birth-event">Birth ${m.born}</div></div>` +
+          `<div data-testid="spouses"><div data-testid="person"><span data-testid="fullName">${m.spouse}</span><button data-testid="pid">TEST-SP1</button></div></div>`) +
           '<button data-testid="add-person-match-button">Add Match</button></div>').join('') : '<h3>No Match Found</h3>') +
         '<button data-testid="cancel-button">Cancel</button><button data-testid="create-new-button">Create Person</button></div>';
       dialog.querySelector('[data-testid="cancel-button"]').addEventListener('click', () => { filled.cancelled = true; dialog.remove(); });
+      // Add Match: FS links that person as the couple's child
+      for (const [i, button] of [...dialog.querySelectorAll('[data-testid="add-person-match-button"]')].entries()) {
+        button.addEventListener('click', () => {
+          filled.matched = matches[i].pid;
+          setTimeout(() => {
+            dialog.remove();
+            const child = d.createElement('div');
+            child.setAttribute('data-testid', 'child-person');
+            child.innerHTML = `<a href="/tree/person/details/${matches[i].pid}">${matches[i].name}</a>`;
+            d.querySelector('[data-testid="family-TEST-HAL_TEST-AST"]').append(child);
+          }, 5);
+        });
+      }
       dialog.querySelector('[data-testid="create-new-button"]').addEventListener('click', () => {
         filled.created = true;
         if (afterCreate === 'more') { dialog.innerHTML = '<h3>Add a relationship type</h3><button data-testid="cancel-button">Cancel</button>'; return; }
@@ -328,6 +344,48 @@ test('createPerson(): a dialog step it doesn\'t know is left to the user', async
   const answer = await step('createPerson', {});
   assert.equal(answer.ok, false);
   assert.match(answer.error, /asks for more in its dialog .*: Add a relationship type/);
+});
+
+const MATCHES = [
+  { name: 'Ole Halvorsen', lifespan: '1844–1900', pid: 'TEST-OL2', born: '1844', spouse: 'Kari' },
+  { name: 'Lars Halvorsen', lifespan: '1846–1920', pid: 'TEST-LA2', born: '16 July 1846', spouse: 'Marte Johanne' }];
+
+test('addMatch(): the match\'s Add Match links them as the couple\'s child; that one, not another', async () => {
+  const { step, filled } = personPage({ matches: MATCHES });
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  const answer = await step('addMatch', { pid: 'TEST-LA2', relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST' });
+  assert.deepEqual(plain(answer), { ok: true, linked: true });
+  assert.equal(filled.matched, 'TEST-LA2');
+  assert.equal(filled.created, undefined);
+});
+
+test('addMatch(): a child the couple\'s card has already: FS\'s dialog cancelled, nothing linked', async () => {
+  const { step, filled } = personPage({ matches: MATCHES, children: ['TEST-LA2'] });
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  const answer = await step('addMatch', { pid: 'TEST-LA2', relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST' });
+  assert.deepEqual(plain(answer), { ok: true, already: true });
+  assert.equal(filled.matched, undefined);
+  assert.equal(filled.cancelled, true);
+});
+
+test('addMatch(): a PID FS doesn\'t list among its matches is not added', async () => {
+  const { step, filled } = personPage({ matches: MATCHES });
+  await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  const answer = await step('addMatch', { pid: 'TEST-SP1', relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST' });  // a match's spouse
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /no longer lists this person/);
+  assert.equal(filled.matched, undefined);
+});
+
+test('addMatch(): a match box FS shows without a PID is never taken for another match\'s', async () => {
+  // Ole's box names no PID: looking up from his button reaches the list that holds
+  // Lars's PID too, and his button must not count as Lars's
+  const { step, filled } = personPage({ matches: [{ ...MATCHES[0], bare: true }, MATCHES[1]] });
+  const found = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: LARS });
+  assert.deepEqual(plain(found.matches.map((m) => m.pid)), ['TEST-LA2']);
+  const answer = await step('addMatch', { pid: 'TEST-LA2', relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST' });
+  assert.deepEqual(plain(answer), { ok: true, linked: true });
+  assert.equal(filled.matched, 'TEST-LA2');
 });
 
 test('cancelAdd(): FS\'s dialog cancelled, nothing created', async () => {

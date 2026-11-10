@@ -149,6 +149,14 @@ another day -2. That separates namesakes:
 several men of the same name in one census, for example. Hits scoring below 0 are
 dimmed.
 
+A record you've attached in the linker says so on its hit, in this search and every
+later one (when you search the spouse, say): "✓ Attached 10 November 2026 to Lars
+Halvorsen, Halvor Larsen", linked to who has the source on FamilySearch, and
+**Review again** instead of **Review & Attach**. A hit the person searched for has is
+tinted. The search page you came from shows it as soon as the linker is done. A run
+where a step failed says "⚠ Not all done". The extension keeps this for the last 300
+records, in the browser only.
+
 ### 3. From a DA record to a FamilySearch source
 
 Click **Review & Attach** on a hit, or open a DA record and click the extension's
@@ -216,12 +224,16 @@ Below the source, each person in the record has a row:
   a family name), sex, birth and death, with places written as FamilySearch names them
   ("Vaage" becomes "Vågå, Oppland, Norway"), and the relationship to someone paired
   here as the record tells it (a baptized child of the paired father and mother, a
-  wife of the paired husband, ...). Check and change what you like, then **Find on
+  wife of the paired husband, ...). For a child you choose the father and the mother
+  from everyone paired on the page, or only one; the record's other suggestions are
+  buttons. Check and change what you like, then **Find on
   FamilySearch**: FamilySearch's own Add Child, Add Spouse or Add Parent form is filled
   in on the tree person's page in a tab, with FamilySearch's standard dates and places,
   and FamilySearch looks for people who may be the same. They're listed at the side.
-  **Pair with this person** pairs the row with one of them (nothing is changed on
-  FamilySearch); **Create person** creates the person on FamilySearch as that relative,
+  **Use this person** links one of them on FamilySearch as that relative (with
+  FamilySearch's Add Match, unless the family already has them so: a person made
+  before whose links were removed is put back in the family) and pairs the row with
+  them; **Create person** creates the person on FamilySearch as that relative,
   pairs the row with them and closes the tab. Nothing is saved before you click one of
   them; **Cancel** closes the form and FamilySearch's dialog. A christening or burial,
   which FamilySearch's form doesn't take, is listed in the form for you to add on the

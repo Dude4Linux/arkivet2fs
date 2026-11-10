@@ -4,24 +4,32 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
-## 1.5.0 - unreleased
+## 1.5.0 - 2026-11-10
 
 - The linker can add the record's facts to the tree persons. Under each person's
   facts, **Add to FamilySearch** lists what the record could add: a christening,
   death, burial, residence or occupation the tree lacks, an emigration (as a custom
-  event titled Emigration), a name as an alternate name, and a birth, christening,
-  death or burial that differs. FamilySearch keeps one of each, so the suggestion
-  combines the two, the more precise part of each. Everything is unticked; tick and
+  event titled Emigration, from the protocol's police district, with the destination,
+  or the protocol's own when the entry has none: "Emigrants to America"), a name as
+  an alternate name, and a birth, christening, death or burial that differs.
+  FamilySearch keeps one of each, so the suggestion combines the two, the more
+  precise part of each. Everything is unticked; tick and
   edit what you want, and edit the reason if you like. Ticking a birth, christening,
   death, burial or residence ticks its tag too. The ticked changes are listed above
   the buttons.
 - **Check with FamilySearch** fills the ticked changes in FamilySearch's own forms in
   the background and puts FamilySearch's standard date and place for the record's year
   in the boxes, to look over. Nothing is saved. A residence's place starts with the
-  farm, and stays as written when FamilySearch doesn't know the farm. A birthplace a
+  farm, and stays as written when FamilySearch doesn't know the farm. An emigrant's
+  residence is their home anywhere in Norway, not a place in the police district they
+  left from, and a residence abroad ("Amerika", an American going back) isn't offered,
+  since FamilySearch would take it for a village of that name. A birthplace a
   census gives is looked for in all of Norway, not only in the census's county: a
-  person counted in Troms but born in Christiania is born in Oslo, not in a
-  "Christiania, Troms".
+  person counted in Troms but born in Christiania is born in "Kristiania, Oslo,
+  Norway", not in a "Christiania, Troms". A place in Oslo is written "Kristiania"
+  when the record says Kristiania or Christiania, or abbreviates them (Chra., Kria.),
+  and Digitalarkivet's county Bergen is FamilySearch's Hordaland ("Bergen, Hordaland,
+  Norway").
 - After the source is attached, the ticked changes are saved on each person's page,
   and the source is tagged to each fact added or changed. The person is read again
   first: a change FamilySearch has by now (saved in an earlier run, from a record
@@ -31,8 +39,32 @@ fixes, new features, changes that break what users have).
   FamilySearch's beside a choice: use the record's, or keep FamilySearch's. The notes
   keep FamilySearch's with the record's new lines added, unless they are an older copy
   from the extension.
+- The search page marks the records you've attached in the linker, in every search:
+  "✓ Attached 10 November 2026 to Lars Halvorsen, Halvor Larsen", linked to who has
+  the source on FamilySearch, with **Review again**. The page you came from is marked
+  as soon as the linker is done; "⚠ Not all done" when a step failed.
+- A person FamilySearch finds for a new person is linked to the family you chose
+  when you use them (**Use this person**, which was **Pair with this person**), with
+  FamilySearch's Add Match, unless the family has them already. A person made before
+  whose relationships were taken off came back unlinked.
+- A new person's relationship is yours to choose: for a child, the father and the
+  mother, each any person paired on the page (or none), set to what the record
+  suggests, whose suggestions stay as buttons; for a spouse or parent, the person.
+  When the two parents aren't a couple on FamilySearch, the form says so, since
+  FamilySearch adds a child of two only to a couple.
+- A census's grandchildren are read as such: "Sønnesøn" and "Sønnedatter" are the
+  children of the head's son (the one their patronymic names) and his wife, the
+  "Sønnekone", not of the head. They, a "Søster" and a "Sønnekone" were read as the
+  head's sons before. Positions spelt with ö ("Sönnesön", "Sönnekone") are read too.
+- An 1891 household whose head has household number 1 and the rest "000" is one
+  household again, not one per resident; its "Familiens overhode" is its head.
+- This release also brings the changes of 1.4.1, which wasn't released on its own
+  (listed below): old spellings of names and patronymics match better, a farm name in
+  place of the patronymic no longer counts against a record, the pages wait while
+  Digitalarkivet is down or refuses requests, the extension asks for fewer sites, and
+  a new person gets FamilySearch's standard places.
 
-## 1.4.1 - unreleased
+## 1.4.1 - not released on its own (in 1.5.0)
 
 - Old spellings of a name match better. A final j for i is read as i everywhere: a
   search for Sirj also finds Siri and Siry, and Sirj counts as a form of Sigrid, as

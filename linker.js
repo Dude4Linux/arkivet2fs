@@ -268,7 +268,7 @@ function recordSex(person) {
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
   if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
   if (/(sen|søn|son)(\s|$)/i.test(last) && !FEMALE_ROLE.test(person.role || '')) return 'Male';
-  const role = (person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, '');
+  const role = foldRole((person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, ''));
   if (FEMALE_ROLE.test(role) && !MALE_ROLE.test(role)) return 'Female';
   if (MALE_ROLE.test(role) && !FEMALE_ROLE.test(role)) return 'Male';
   return '';
@@ -319,7 +319,7 @@ const KIN_TERMS = [
   ['kin', /^(sviger\S*|svoger|sted\S+|pleie\S+|foster\S*|sønne\S+|datter\S+|barnebarn|bedste\S+|farbro(de)?r|morbro(de)?r|faster|moster|tante|onkel|nevø|niece|broder\S+|søster\S+|fætter|kusine|frænde|sl(e|æ)gt\S*)$/]
 ];
 function censusKin(person) {
-  const role = (person.role || '').split(',')[0].replace(/\[.*?\]/g, '').trim().toLowerCase();
+  const role = foldRole(person.role).split(',')[0].replace(/\[.*?\]/g, '').trim().toLowerCase();
   const m = role.match(/^(?:(hans|hendes|husbondens|husfaderens|husmoderens|konens|hustruens|mandens|deres)\s+)?(\S+)$/);
   if (!m) return '';
   for (const [kind, re] of KIN_TERMS) if (re.test(m[2])) return /^(konens|hustruens|mandens)$/.test(m[1] || '') ? 'kin' : kind;
@@ -782,7 +782,7 @@ function recordFacts(person, record) {
       facts.Death = { text: dateText(d), date: d, year: diedYear };
     }
   } else if (type === 'emigration' && mine) {
-    event('Emigration', fields['destination'] || fields['migrating to'] || '');
+    event('Emigration', emigrationDestination(record));
   }
   // Where they lived: a census's residence, else the record's residence of the person
   const census = record.census || {};
@@ -948,10 +948,20 @@ function nameParts(name) {
 }
 const sameNameKey = (name) => String(name || '').toLowerCase().replace(/[.,'"]/g, '').replace(/\s+/g, ' ').trim();
 
-// The emigrant protocol's place of departure: "Oslo police district, ..." → Oslo
+// The emigrant protocol's place of departure: "Oslo police district, ..." → Oslo; DA
+// leaves some titles Norwegian: "Bergen Politidistrikt, ..." → Bergen
 function departurePlace(record) {
-  const m = String(record.sourceTitle || '').match(/^(.+?) police (?:district|station|chamber)/i);
-  return m ? m[1] : '';
+  const m = String(record.sourceTitle || '').match(/^(.+?)\s+(?:police\s+(?:district|station|chamber)|politi(?:distrikt|kammer|stasjon|mester))/i);
+  return m ? m[1].trim() : '';
+}
+// Where an emigrant went: the record's destination ("Minnesota"), else the protocol's
+// own ("Emigrants to America", when the record leaves the destination empty), or ''
+function emigrationDestination(record) {
+  const fields = record.fields || {};
+  const own = fields['destination'] || fields['migrating to'] || '';
+  if (own) return own;
+  const m = String(record.sourceTitle || '').match(/\bEmigrants to ([^,]+?)(?:,|$)/i);
+  return m ? m[1].trim() : '';
 }
 
 // The year of an FS date, or null
@@ -990,20 +1000,24 @@ function factAdditions(person, record, tree, name) {
   }
 
   // A residence of a year FS has none of: the farm in the place ("Bakken nedre, Vågå,
-  // Oppland, Norway"; not when it is the parish's own name), and as its description
-  if (da.Residence && year && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
+  // Oppland, Norway"; not when it is the parish's own name), and as its description.
+  // An emigrant protocol's residence is the emigrant's home, anywhere in Norway, not in
+  // the police district; one abroad ("Amerika": an American going back) isn't added,
+  // since FS would place it in a village of that name somewhere.
+  const kind = (record.recordTypeInfo || {}).type;
+  const isCensus = kind === 'census';
+  const home = cleanPlace(isCensus ? (record.census || {}).residence : person.residence);
+  if (da.Residence && year && !placeAbroad(home) && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
     const census = record.census || {};
-    const isCensus = record.recordTypeInfo && record.recordTypeInfo.type === 'census';
     const description = isCensus ? joined(census.residence, census.district) : person.residence || '';
     const parish = fsPlace(cleanPlace(place), record);
-    const farm = cleanPlace(isCensus ? census.residence : person.residence);
-    const where = farm && !placeIn(farm, parish) ? joined(farm, parish) : parish;
-    out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
+    const where = kind === 'emigration' ? fsPlace(home, record, true)
+      : home && !placeIn(home, parish) ? joined(home, parish) : parish;
+    if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
   }
   // An emigration: a custom event (FS has no Emigration to add), unless FS has one that year
   if (da.Emigration && da.Emigration.year && !(full.emigration || []).some((e) => fsYear(e.date) === da.Emigration.year)) {
-    const fields = record.fields || {};
-    const to = fields['destination'] || fields['migrating to'] || '';
+    const to = emigrationDestination(record);
     out.push({ fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration',
       value: { date: fsDateText(da.Emigration.date), place: fsPlace(departurePlace(record), record), description: to ? 'Destination: ' + to : '' } });
   }
@@ -2242,13 +2256,14 @@ async function checkOnFamilySearch() {
 }
 
 // A pair's additions saved on the tree person's page, each then tagged with the source
-// from the fact's own view (so a residence is tagged even when the person has several)
+// from the fact's own view (so a residence is tagged even when the person has several);
+// what was changed on FS ("alternate name: Lars Halvorsen"), for rememberDone()
 async function saveAdditions(tabId, pair, sourceId, title) {
   // What FS has now: an earlier run (or the user) may have added it since the person's
   // page was read, and the same change made twice changes nothing
   const fresh = await readNow(tabId, pair.pid);
   if (!fresh) await navigate(tabId, personDetailsUrl(pair.pid));
-  let changed = false;
+  const changes = [];
   for (const a of pair.additions) {
     const what = additionLabel(a).toLowerCase() + ': ' + additionText(a);
     if (fresh && onTreeAlready(fresh, a)) {
@@ -2257,7 +2272,7 @@ async function saveAdditions(tabId, pair, sourceId, title) {
       const saved = await step(tabId, 'addFact', { pid: pair.pid, addition: a, reason: a.reason, save: true });
       if (!saved.ok) { log(t('Not changed for {name} ({what}): {error}', { name: pair.label, what, error: saved.error }), 'bad'); continue; }
       if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
-      else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changed = true; }
+      else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changes.push(what); }
     }
     const match = a.action === 'name' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]];
     const tagged = await step(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
@@ -2265,8 +2280,9 @@ async function saveAdditions(tabId, pair, sourceId, title) {
     else log(t(tagged.already ? 'The source was tagged to it already.' : 'The source is tagged to it.'), 'ok');
   }
   // The person as FS has them now, for the rows and the next time the record is opened
-  if (changed) await readNow(tabId, pair.pid);
+  if (changes.length) await readNow(tabId, pair.pid);
   for (const row of state.rows || []) if (row.pid() === pair.pid && row.showFacts) row.showFacts();
+  return changes;
 }
 
 // The tree person read again in the work tab (fs_person.js), kept for the page and
@@ -2323,6 +2339,43 @@ function sameFsPlace(has, want) {
   return Boolean(first(has)) && placeIn(first(want), has) && placeIn(first(has), want);
 }
 
+// What a run did, for the search page (search.js doneLine()): chrome.storage.local
+// `done`, the latest first, at most MAX_DONE: {key, ids, time, ok, attach, sources:
+// [{id, title, book, persons: [{pid, name}]}], changes: [{pid, name, what}]}. `ids` are
+// the DA permanent IDs of everyone in the record and the other church book's entry, so
+// a hit of any of them is marked, in any search; `key` (the record's principal) is the
+// record, whose older entry the new one replaces. Only PIDs, names and source IDs.
+const MAX_DONE = 300;
+const DA_ID = /^[a-z]{2}\d{14,}$/;
+function doneIds() {
+  const ids = new Set();
+  const add = (id) => { if (DA_ID.test(id || '')) ids.add(id); };
+  add(state.record && state.record.primaryPersonId);
+  for (const p of state.people || []) add(p.id);
+  for (const p of (state.record && state.record.people) || []) add(p.id);
+  for (const p of (state.parallel && state.parallel.record && state.parallel.record.people) || []) add(p.id);
+  const params = new URLSearchParams(location.search);
+  for (const name of ['rec', 'also']) add(((params.get(name) || '').match(/([a-z]{2}\d{14,})(?:[/?#]|$)/) || [])[1]);
+  return [...ids];
+}
+async function rememberDone({ sources, changes, ok, attach }) {
+  const ids = doneIds();
+  if (!ids.length) return;
+  const key = (state.record && state.record.primaryPersonId) || ids[0];
+  const entry = {
+    key, ids, time: Date.now(), ok, attach,
+    sources: sources.map((s) => ({ id: s.id, title: s.title, book: s.book || '', persons: s.persons.map((p) => ({ pid: p.pid, name: p.name || '' })) })),
+    changes
+  };
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+  try {
+    const { done = [] } = await chrome.storage.local.get('done');
+    await chrome.storage.local.set({ done: [entry, ...done.filter((e) => e && e.key !== key)].slice(0, MAX_DONE) });
+  } catch (e) {
+    console.warn('arkivet2fs: what was done is not kept for the search page', e);
+  }
+}
+
 async function run(attach) {
   if (state.running || (state.adding && state.adding.busy)) return;
   let plan;
@@ -2332,6 +2385,8 @@ async function run(attach) {
   $('log').replaceChildren();
   $('progress').hidden = false;
   let tabId = null;
+  const checked = [];  // each source as FS has it now
+  const changes = [];  // the facts changed on the tree persons
   try {
     log(t('Opening the SourceBox on FamilySearch…'));
     tabId = await openTab(SOURCEBOX_URL);
@@ -2340,7 +2395,6 @@ async function run(attach) {
     if (plan.parallel) {
       sources.push({ source: plan.parallel, pairs: plan.pairs.map((p) => ({ ...p, tags: [], residence: false })), book: $('parallel-heading').textContent });
     }
-    const checked = [];
     for (const [i, { source, pairs, book }] of sources.entries()) {
       if (i > 0) await navigate(tabId, SOURCEBOX_URL);
       if (book) log(book);
@@ -2406,7 +2460,8 @@ async function run(attach) {
             log(t('Nothing added to {name} ({pid}): the source is not attached.', { name: pair.label, pid: pair.pid }), 'bad');
             continue;
           }
-          await saveAdditions(tabId, pair, sourceId, source.title);
+          const made = await saveAdditions(tabId, pair, sourceId, source.title);
+          for (const what of made || []) changes.push({ pid: pair.pid, name: pair.label, what });
         }
       }
     }
@@ -2419,10 +2474,13 @@ async function run(attach) {
   } catch (e) {
     log(e.message || String(e), 'bad');
   } finally {
+    const failed = Boolean($('log').querySelector('.bad'));
+    // For the search page: the hits of this record say what was done
+    if (checked.length) await rememberDone({ sources: checked, changes, ok: !failed, attach });
     // All done: the FS tab is closed and the linker shown again. A step that failed
     // leaves it open where it stopped, for the user to see.
     if (tabId !== null) {
-      if ($('log').querySelector('.bad')) log(t('The FamilySearch tab is left open where it stopped.'), 'near');
+      if (failed) log(t('The FamilySearch tab is left open where it stopped.'), 'near');
       else await closeWorkTab(tabId);
     }
     state.running = false;
@@ -2454,18 +2512,34 @@ function fsDateText(d, approx) {
 // record's county first), else the place with the record's county. `elsewhere`: a place
 // the record names but isn't in, such as a census's birthplace, which can lie in any
 // county ("Christiania" in a census of Troms is Oslo): the record's county only when
-// the place is found there, else "<place>, Norway".
+// the place is found there, else "<place>, Norway". Bergen, a county of its own on DA,
+// is in Hordaland as FS has it; Oslo is Kristiania when the record names it so
+// (Kristiania, Christiania or a clerk's abbreviation: Chra., Kria., ...).
 function fsPlace(place, record, elsewhere) {
   const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name) return '';
   if (/,/.test(name)) return name;
   const county = record.county && !/,/.test(record.county) ? record.county : '';
-  for (const tryName of [name, name.replace(/s$/, '')]) {
-    const code = oneMunicipality(municipalityCodes(joined(tryName, county)));
-    if (code) return joined(municipalityName(code), countyName(code.slice(0, 2)), 'Norway');
+  const names = [...new Set([name, name.replace(/s$/, ''), name.replace(/\.$/, '')])];
+  // with the record's county first; one anywhere also alone (the county Bergen is also
+  // the town, which makes "Vaage, Bergen" two places)
+  const tries = [...names.map((n) => joined(n, county)), ...(elsewhere && county ? names : [])];
+  for (const tryName of tries) {
+    const code = oneMunicipality(municipalityCodes(tryName));
+    if (!code) continue;
+    const municipality = code === '0301' && namesKristiania(name) ? 'Kristiania' : municipalityName(code);
+    return joined(municipality, fsCounty(countyName(code.slice(0, 2))), 'Norway');
   }
   return joined(name, elsewhere ? '' : county, 'Norway');
 }
+// Whether a place is Oslo under its old name: a word of it is one of Oslo's
+// PLACE_ALIASES but "oslo" (Christiania, Kristiania, Chra., Chria., Chrania, Kria.)
+function namesKristiania(name) {
+  const old = PLACE_ALIASES.find((names) => names[0] === 'oslo').slice(1);
+  return name.toLowerCase().split(/[^a-zæøå]+/).some((word) => old.includes(word));
+}
+// A DA county as FS names it: DA's Bergen is FS's Hordaland
+const fsCounty = (name) => (name === 'Bergen' ? 'Hordaland' : name);
 // The one municipality of a place's codes, leaving out the neighbours
 // municipalityCodes() adds for searching (Oslo's Aker), or null
 function oneMunicipality(codes) {
@@ -2512,6 +2586,14 @@ function newPersonRelations(row) {
   const me = people.indexOf(row.person);
   const paired = state.rows.filter((r) => r !== row && PID_PATTERN.test(r.pid()));
   const seen = (r) => {
+    // A census: within the household (a grandchild's parents are the head's son and
+    // his wife, not the head and his)
+    if (isCensus()) {
+      if (r.person.household !== row.person.household) return { child: false, spouse: false, parent: false };
+      const found = householdRelatives(state.record, people, r.person);
+      const has = (list) => list.includes(row.person);
+      return { child: has(found.child), spouse: has(found.spouse), parent: has(found.father) || has(found.mother) };
+    }
     const view = { ...state.record, people: people.map((p) => ({ ...p, current: p === r.person })) };
     const found = relativesInRecord(view);
     const has = (list) => list.some((p) => view.people.indexOf(p) === me);
@@ -2552,8 +2634,7 @@ function openNewPerson(row) {
     r.checked = draft.sex === v;
     return el('label', {}, [r, document.createTextNode(' ' + t(label))]);
   });
-  const relation = el('select', { id: 'np-relation', 'aria-label': t('Relationship') },
-    relations.map((o, i) => el('option', { value: String(i), text: o.label + (o.record ? '' : ' ' + t('(not in the record)')) })));
+  const relation = relationFields(relations);
   const chips = el('div', { class: 'suggest' }, (draft.surnames.length > 1 ? draft.surnames : []).map((name) => {
     const b = el('button', { type: 'button', class: 'chip', text: name });
     b.addEventListener('click', () => { $('np-surname').value = name; });
@@ -2575,7 +2656,7 @@ function openNewPerson(row) {
     field('birthPlace', 'Birthplace', draft.birthPlace),
     field('deathDate', 'Death date', draft.deathDate),
     field('deathPlace', 'Death place', draft.deathPlace),
-    el('label', { class: 'field' }, [document.createTextNode(t('Relationship') + ' '), relation]),
+    relation,
     relations.length ? el('p', { class: 'muted small', text: t('Deceased. FamilySearch\'s own Add Person form is filled with these in a tab (dates and places as FamilySearch suggests them), and it looks for people who may be the same. Nothing is saved before you choose.') })
       : el('p', { class: 'small bad', text: t('Pair someone in the record first: the new person is added to the tree as their relative.') }),
     ...draft.notes.map((n) => el('p', { class: 'muted small', text: n })),
@@ -2587,12 +2668,101 @@ function openNewPerson(row) {
   $('np-given').focus();
 }
 
+// A paired row's sex: FS's, else the record's (a church book's father or mother, a
+// patronymic, a census position)
+function rowSex(r) {
+  const tree = fullTree(r.pid()) || treePool(state.fs, state.trees).find((o) => o.pid === r.pid());
+  if (tree && /^(male|female)$/i.test(tree.gender || '')) return tree.gender.charAt(0).toUpperCase() + tree.gender.slice(1).toLowerCase();
+  const kind = roleKind(r.person);
+  return kind === 'father' ? 'Male' : kind === 'mother' ? 'Female' : recordSex(r.person);
+}
+
+// The relationship: child (a father and a mother, each any paired person or none),
+// spouse or parent (of a paired person), set to the record's suggestion; the
+// record's suggestions are chips that set it again
+function relationFields(relations) {
+  const paired = state.rows.filter((r) => r !== state.adding.row && PID_PATTERN.test(r.pid()));
+  const person = (id, label) => el('label', { class: 'field' }, [document.createTextNode(t(label) + ' '),
+    el('select', { id: 'np-' + id }, [el('option', { value: '', text: t('None') }),
+      ...paired.map((r) => el('option', { value: r.pid(), text: r.label() + ' (' + r.pid() + ')' }))])]);
+  const kind = el('select', { id: 'np-kind', 'aria-label': t('Relationship') },
+    [['child', 'Child'], ['spouse', 'Spouse'], ['parent', 'Parent']].map(([v, label]) => el('option', { value: v, text: t(label) })));
+  const childBox = el('div', { id: 'np-parents' }, [person('father', 'Father'), person('mother', 'Mother')]);
+  const ofBox = el('div', { id: 'np-of-box' }, [person('of', 'Of')]);
+  const note = el('p', { id: 'np-couple', class: 'small near' });
+  const show = () => {
+    childBox.hidden = kind.value !== 'child';
+    ofBox.hidden = kind.value === 'child';
+    const { father, mother } = { father: childBox.querySelector('#np-father').value, mother: childBox.querySelector('#np-mother').value };
+    const couple = kind.value === 'child' && father && mother && father !== mother ? coupleOnFs(father, mother) : null;
+    note.textContent = couple === false ? t('{a} and {b} aren\'t a couple on FamilySearch: add their marriage there first, or choose one parent.',
+      { a: labelOf(father), b: labelOf(mother) }) : '';
+    note.hidden = !note.textContent;
+  };
+  const labelOf = (pid) => (paired.find((r) => r.pid() === pid) || { label: () => pid }).label();
+  const apply = (o) => {
+    kind.value = o.relation;
+    if (o.relation === 'child') {
+      // which of the two is the father: by sex, else as the record lists them
+      const two = [o.anchor, o.other].map((pid) => paired.find((r) => r.pid() === pid)).filter(Boolean);
+      let father = two.find((r) => rowSex(r) === 'Male'), mother = two.find((r) => rowSex(r) === 'Female');
+      for (const r of two.filter((x) => x !== father && x !== mother)) {
+        if (!father) father = r;
+        else if (!mother) mother = r;
+      }
+      childBox.querySelector('#np-father').value = father ? father.pid() : '';
+      childBox.querySelector('#np-mother').value = mother ? mother.pid() : '';
+    } else ofBox.querySelector('#np-of').value = o.anchor;
+    show();
+  };
+  for (const s of childBox.querySelectorAll('select')) s.addEventListener('change', show);
+  kind.addEventListener('change', show);
+  const suggested = relations.filter((o) => o.record);
+  const chips = el('div', { class: 'suggest' }, suggested.map((o) => {
+    const b = el('button', { type: 'button', class: 'chip', text: o.label });
+    b.addEventListener('click', () => apply(o));
+    return b;
+  }));
+  const box = el('div', { class: 'field' }, [el('div', { text: t('Relationship') }), kind,
+    ...(suggested.length ? [el('div', { class: 'muted small', text: t('The record suggests:') }), chips] : []), childBox, ofBox, note]);
+  if (relations.length) apply(relations[0]);
+  else show();
+  return box;
+}
+
+// Whether two tree persons are a couple on FS, as far as their pages read here tell
+// (FS adds a child of two only in the couple's family card): null when unknown
+function coupleOnFs(a, b) {
+  for (const [x, y] of [[a, b], [b, a]]) {
+    const tree = fullTree(x);
+    if (tree && Array.isArray(tree.families)) return tree.families.some((f) => f.spouse && f.spouse.pid === y);
+  }
+  return null;
+}
+
+// The relationship chosen: {relation, anchor, other, label}, or {error}
+function readRelation() {
+  const kind = $('np-kind').value;
+  const label = (pid) => (state.rows.find((r) => r.pid() === pid) || { label: () => pid }).label();
+  if (kind === 'child') {
+    const father = $('np-father').value, mother = $('np-mother').value;
+    if (!father && !mother) return { error: t('Choose the father, the mother or both.') };
+    if (father && father === mother) return { error: t('The father and the mother are the same person.') };
+    const [a, b] = father ? [father, mother] : [mother, ''];
+    return { relation: 'child', anchor: a, other: b,
+      label: b ? t('Child of {a} and {b}', { a: label(a), b: label(b) }) : t('Child of {name}', { name: label(a) }) };
+  }
+  const of = $('np-of').value;
+  if (!of) return { error: t('Choose the person the new one is related to.') };
+  return { relation: kind, anchor: of, other: '',
+    label: kind === 'parent' ? t('Parent of {name}', { name: label(of) }) : t('Spouse of {name}', { name: label(of) }) };
+}
+
 // The form's values as fs_attach.js findPerson takes them
 function readNewPerson() {
   const v = (id) => $('np-' + id).value.trim();
   const sex = (document.querySelector('input[name="np-sex"]:checked') || {}).value || 'unknown';
-  const relation = state.adding.relations[Number($('np-relation').value)];
-  return { person: { given: v('given'), surname: v('surname'), sex, birthDate: v('birthDate'), birthPlace: v('birthPlace'), deathDate: v('deathDate'), deathPlace: v('deathPlace') }, relation };
+  return { person: { given: v('given'), surname: v('surname'), sex, birthDate: v('birthDate'), birthPlace: v('birthPlace'), deathDate: v('deathDate'), deathPlace: v('deathPlace') }, relation: readRelation() };
 }
 
 async function findNewPerson() {
@@ -2601,7 +2771,7 @@ async function findNewPerson() {
   const { person, relation } = readNewPerson();
   const results = $('np-results');
   if (!person.given && !person.surname) { results.replaceChildren(el('p', { class: 'small bad', text: t('A name is needed.') })); return; }
-  if (!relation) return;
+  if (!relation || relation.error) { results.replaceChildren(el('p', { class: 'small bad', text: relation ? relation.error : '' })); return; }
   adding.busy = true;
   adding.relation = relation;
   adding.person = person;
@@ -2637,8 +2807,8 @@ function showMatches(found) {
   items.push(el('h3', { text: matches.length ? t('FamilySearch found {n} who may be the same', { n: matches.length }) : t('FamilySearch found no one who may be the same.') }));
   const list = el('ul', { class: 'matches' });
   for (const m of matches) {
-    const use = el('button', { type: 'button', class: 'secondary', text: t('Pair with this person') });
-    use.addEventListener('click', () => useMatch(m));
+    const use = el('button', { type: 'button', class: 'secondary', text: t('Use this person') });
+    use.addEventListener('click', () => useMatch(m, use));
     list.append(el('li', {}, [
       el('a', { href: fsPageUrl(personPageUrl(m.pid)), target: '_blank', rel: 'noopener', text: m.name || m.pid }),
       el('div', { class: 'muted small', text: joined(m.lifespan, m.pid) }),
@@ -2646,7 +2816,11 @@ function showMatches(found) {
       ...(m.spouses && m.spouses.length ? [el('div', { class: 'small', text: t('Spouse: {names}', { names: m.spouses.join(', ') }) })] : []),
       use]));
   }
-  if (matches.length) items.push(list);
+  if (matches.length) {
+    const relation = state.adding && state.adding.relation;
+    if (relation) items.push(el('p', { class: 'muted small', text: t('Using one adds them on FamilySearch as {relation}, unless they are already.', { relation: lowerFirst(relation.label) }) }));
+    items.push(list);
+  }
   const create = el('button', { type: 'button', class: 'primary', id: 'np-create', text: t('Create person') });
   create.addEventListener('click', () => createNewPerson());
   items.push(el('p', { class: 'muted small', text: matches.length ? t('None of them? Create the person as a new one.') : t('Create the person on FamilySearch:') }), create);
@@ -2664,10 +2838,11 @@ async function createNewPerson() {
     await chrome.tabs.update(adding.tabId, { active: true });
     const made = await step(adding.tabId, 'createPerson', {});
     if (!made.ok) throw new Error(made.error);
+    await refreshFamily(adding.tabId, [adding.relation.anchor, adding.relation.other]);
     await closeWorkTab(adding.tabId);
     adding.tabId = null;
     const name = (adding.person.given + ' ' + adding.person.surname).trim();
-    adding.row.pairWith(made.pid, t('new on FamilySearch: {name}, {relation}', { name, relation: adding.relation.label.charAt(0).toLowerCase() + adding.relation.label.slice(1) }));
+    adding.row.pairWith(made.pid, t('new on FamilySearch: {name}, {relation}', { name, relation: lowerFirst(adding.relation.label) }));
     adding.busy = false;
     closeNewPerson();
   } catch (e) {
@@ -2677,12 +2852,49 @@ async function createNewPerson() {
   }
 }
 
-// A match FS found is the person: paired, nothing saved on FS
-async function useMatch(match) {
+const lowerFirst = (text) => text.charAt(0).toLowerCase() + text.slice(1);
+
+// A match FS found is the person: linked in the relation chosen (FS's Add Match in
+// its open dialog: a person made before, whose links were taken off, would otherwise
+// stay outside the family), unless FS shows them so already, then paired
+async function useMatch(match, button) {
   const adding = state.adding;
-  if (!adding || adding.busy) return;
-  adding.row.pairWith(match.pid, t('found on FamilySearch: {name}', { name: match.name || match.pid }));
-  closeNewPerson();
+  if (!adding || adding.busy || adding.tabId === null) return;
+  const relation = adding.relation;
+  adding.busy = true;
+  if (button) button.disabled = true;
+  const results = $('np-results');
+  results.append(el('p', { class: 'muted small', text: t('Linking {name} on FamilySearch as {relation}…', { name: match.name || match.pid, relation: lowerFirst(relation.label) }) }));
+  try {
+    await chrome.tabs.update(adding.tabId, { active: true });
+    const done = await step(adding.tabId, 'addMatch', { pid: match.pid, relation: relation.relation, anchor: relation.anchor, other: relation.other });
+    if (!done.ok) throw new Error(done.error);
+    // The family as FS has it now (the cached pages left out the link)
+    if (done.linked) await refreshFamily(adding.tabId, [relation.anchor, relation.other, match.pid]);
+    await closeWorkTab(adding.tabId);
+    adding.tabId = null;
+    const why = done.already ? t('found on FamilySearch: {name}, {relation} there already', { name: match.name || match.pid, relation: lowerFirst(relation.label) })
+      : t('found on FamilySearch: {name}, linked as {relation}', { name: match.name || match.pid, relation: lowerFirst(relation.label) });
+    adding.row.pairWith(match.pid, why);
+    adding.busy = false;
+    closeNewPerson();
+  } catch (e) {
+    results.append(el('p', { class: 'small bad', text: fsMessage(e.message || String(e)) }),
+      el('p', { class: 'muted small', text: t('The FamilySearch tab is left open where it stopped.') }));
+    adding.busy = false;
+    if (button) button.disabled = false;
+  }
+}
+
+// The tree persons read again after a link was added on FS (the pages kept from
+// before don't have it)
+async function refreshFamily(tabId, pids) {
+  for (const pid of pids.filter(Boolean)) {
+    if (!(await readNow(tabId, pid))) {
+      if (state.details) delete state.details[pid];
+      try { await chrome.storage.session.remove('tree:' + pid); } catch (e) { /* only a cache */ }
+    }
+  }
 }
 
 // The sidebar closed; FS's dialog cancelled and its tab closed (nothing was saved)

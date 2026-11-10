@@ -18,6 +18,8 @@
 //                  Add Parent, fill FS's form with the new person, Next, and give the
 //                  possible matches FS lists (nothing is saved; the dialog stays open)
 //   createPerson — in that dialog: Create Person, and the new person's PID
+//   addMatch     — in that dialog: a match's Add Match, which links that person in
+//                  the relation (nothing when the page shows them so already)
 //   cancelAdd    — in that dialog: Cancel
 //   addFact      — on a tree person's page: an alternate name, a missing fact or event,
 //                  or a vital changed, in FS's fact form; `save` false: the fields as
@@ -487,15 +489,23 @@ if (!window.__arkivet2fsAttach) {
   }
 
   // The possible matches FS lists: [{pid, name, lifespan, events, spouses}]
+  // A match's own box: the nearest ancestor of its Add Match button that names a PID,
+  // and holds no other match's button (else null: whose PID it is can't be told)
+  function matchBox(button, dialog) {
+    let box = button.parentElement;
+    while (box && box !== dialog && !box.querySelector('[data-testid="pid"]')) box = box.parentElement;
+    return box && box !== dialog && box.querySelectorAll('[data-testid="add-person-match-button"]').length === 1 ? box : null;
+  }
+
   function addMatches(dialog) {
     return [...dialog.querySelectorAll('[data-testid="add-person-match-button"]')].map((button) => {
-      let box = button.parentElement;
-      while (box && box !== dialog && !box.querySelector('[data-testid="pid"]')) box = box.parentElement;
-      const persons = [...(box || dialog).querySelectorAll('[data-testid="person"]')];
+      const box = matchBox(button, dialog);
+      if (!box) return {};
+      const persons = [...box.querySelectorAll('[data-testid="person"]')];
       const main = persons.find((p) => !p.closest('[data-testid="spouses"]')) || persons[0];
       const text = (id, root) => clean((byTestId(id, root) || {}).textContent);
       const spouses = persons.filter((p) => p !== main && p.closest('[data-testid="spouses"]')).map((p) => text('fullName', p));
-      const events = [...(box || dialog).querySelectorAll('[data-testid$="-event"]')]
+      const events = [...box.querySelectorAll('[data-testid$="-event"]')]
         .filter((e) => !e.closest('[data-testid="spouses"]')).map((e) => clean(e.textContent));
       return { pid: text('pid', main), name: text('fullName', main), lifespan: text('lifespan', main), events, spouses };
     }).filter((m) => m.pid);
@@ -585,6 +595,64 @@ if (!window.__arkivet2fsAttach) {
       }
     }
     throw new Error('FamilySearch did not show the new person in time. Look for them on the FamilySearch tab, and type their PID on the linker page.');
+  }
+
+  // The family cards (data-testid="family-<PID>_<PID>") outside the dialog, as
+  // {ids, node}: a couple's card names both and holds their children; the parents'
+  // card names them and holds the person among their children
+  function familyCards() {
+    const dialog = addDialog();
+    return [...document.querySelectorAll('[data-testid^="family-"]')]
+      .filter((c) => !(dialog && dialog.contains(c)) && /^family-[A-Z0-9]{4}-[A-Z0-9]{2,4}(_[A-Z0-9-]+)?$/i.test(c.getAttribute('data-testid')))
+      .map((c) => ({ ids: c.getAttribute('data-testid').replace(/^family-/, '').toUpperCase().split('_'), node: c }));
+  }
+  const cardHas = (card, pid) => new RegExp('\\b' + pid + '\\b').test(card.node.textContent) ||
+    [...card.node.querySelectorAll('a[href*="/tree/person/"]')].some((a) => (a.getAttribute('href') || '').toUpperCase().includes(pid));
+
+  // Whether the page (the anchor's) shows `pid` in the relation already: a child in
+  // the couple's card (with no other parent, in a card of the anchor's), a spouse
+  // named by a card with the anchor, a parent by the card holding the anchor
+  function linkedOnPage(relation, anchor, other, pid) {
+    const cards = familyCards();
+    if (relation === 'child') return cards.some((c) => c.ids.includes(anchor) && (!other || c.ids.includes(other)) && !c.ids.includes(pid) && cardHas(c, pid));
+    if (relation === 'spouse') return cards.some((c) => c.ids.includes(anchor) && c.ids.includes(pid));
+    return cards.some((c) => c.ids.includes(pid) && !c.ids.includes(anchor) && cardHas(c, anchor));
+  }
+
+  // One of the matches findPerson gave, added in FS's dialog (its Add Match): FS
+  // links that person in the relation the dialog was opened for (a child of the
+  // couple, ...). Not when the page shows them so already: then the dialog is
+  // cancelled, nothing changed. The match must be in the open dialog.
+  async function addMatch({ pid, relation, anchor, other }) {
+    pid = (pid || '').toUpperCase();
+    anchor = (anchor || '').toUpperCase();
+    other = (other || '').toUpperCase();
+    const ok = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
+    if (![pid, anchor].every((p) => ok.test(p)) || (other && !ok.test(other))) throw new Error('Not a FamilySearch PID: ' + [pid, anchor, other].join(' '));
+    if (linkedOnPage(relation, anchor, other, pid)) {
+      await cancelAdd();
+      return { ok: true, already: true };
+    }
+    const dialog = addDialog();
+    if (!dialog) throw new Error('FamilySearch no longer shows its Add Person form.');
+    const button = [...dialog.querySelectorAll('[data-testid="add-person-match-button"]')].find((b) => {
+      const box = matchBox(b, dialog);
+      return box && [...box.querySelectorAll('[data-testid="pid"]')].some((e) => !e.closest('[data-testid="spouses"]') && clean(e.textContent).toUpperCase() === pid);
+    });
+    if (!button) throw new Error('FamilySearch no longer lists this person among its matches. Search again.');
+    button.click();
+    // The dialog closes and the family card shows the person
+    const start = Date.now();
+    while (Date.now() - start < 30000) {
+      await sleep(250);
+      const open = addDialog();
+      if (!open && linkedOnPage(relation, anchor, other, pid)) return { ok: true, linked: true };
+      if (open && !byTestId('add-person-match-button', open) && Date.now() - start > 8000) {
+        // A step this code doesn't know: left to the user, in FS's own dialog
+        throw new Error('FamilySearch asks for more in its dialog (finish it there): ' + clean(open.textContent).slice(0, 200));
+      }
+    }
+    throw new Error('FamilySearch did not show the person in the family in time. Look on the FamilySearch tab whether the link was added.');
   }
 
   async function cancelAdd() {
@@ -809,7 +877,7 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true };
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, cancelAdd, addFact, tagFact };
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Only the steps themselves, not what every object has (constructor, toString)

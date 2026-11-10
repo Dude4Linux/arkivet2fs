@@ -30,6 +30,58 @@ test('roleKind(): DA roles and census positions, in Norwegian or English', () =>
   assert.equal(kind('d, fl'), 'child');
   assert.equal(kind('fl, d'), '');
   assert.equal(kind('fadder', 'Godparent'), '');
+  // whole words: \b takes ø for a boundary, which read these as the code "s", a son
+  assert.equal(kind('sønnesøn', 'Sønnesøn [grandson]'), 'grandchild');
+  assert.equal(kind('sønnedatter'), 'grandchild');
+  assert.equal(kind('Søns Søn'), 'grandchild');
+  assert.equal(kind('sønnekone'), 'childInLaw');
+  assert.equal(kind('svigersøn', 'Svigersøn [son-in-law]'), 'childInLaw');
+  assert.equal(kind('søster', 'Søster [sister]'), '');
+  assert.equal(kind('søn', 'Søn [son]'), 'child');
+  // spelt with ö, as some clerks wrote it; 1891's head
+  assert.equal(kind('Sönnesön'), 'grandchild');
+  assert.equal(kind('Sönnekone'), 'childInLaw');
+  assert.equal(kind('Familiens overhode', 'Familiens overhode [head of household]'), 'head');
+});
+
+test('relativesInRecord(): an 1891 page, the grandchildren the son\'s and his wife\'s', () => {
+  const r = record('census-1891-grandchildren');
+  const of = (i) => w.relativesInRecord(open(record('census-1891-grandchildren'), i));
+  assert.deepEqual(names(of(0).spouse), ['Astri Larsdatter']);
+  assert.deepEqual(names(of(0).child), ['Halvard Halvardsen']);  // the son only
+  assert.deepEqual(names(of(2).spouse), ['Eldbjørg Halbrandsdatter']);
+  assert.equal(of(2).child.length, 6);
+  for (const i of [4, 5, 6, 7, 8, 9]) {
+    assert.deepEqual(plain(of(i).father.map((p) => p.id)), [r.people[2].id], r.people[i].name);
+    assert.deepEqual(names(of(i).mother), ['Eldbjørg Halbrandsdatter']);
+  }
+});
+
+// An 1891-like household: the head's married son with his wife and their children,
+// and an unmarried son
+const HOUSEHOLD_1891 = () => ({ recordTypeInfo: { type: 'census' }, recordDate: '1891', fields: {}, people: [
+  { name: 'Halvor Larsen', role: 'husfader', roleEnglish: 'Husfader [head of household]', birthYear: '1820' },
+  { name: 'Kjersti Olsdatter', role: 'hustru', roleEnglish: 'Hustru [wife]', birthYear: '1824' },
+  { name: 'Lars Halvorsen', role: 'søn', roleEnglish: 'Søn [son]', birthYear: '1850' },
+  { name: 'Astri Olsdatter', role: 'sønnekone', roleEnglish: 'Sønnekone', birthYear: '1855' },
+  { name: 'Ole Larsen', role: 'sønnesøn', roleEnglish: 'Sønnesøn [grandson]', birthYear: '1880' },
+  { name: 'Marte Larsdatter', role: 'sønnedatter', roleEnglish: 'Sønnedatter [granddaughter]', birthYear: '1884' },
+  { name: 'Johan Peder Halvorsen', role: 'søn', roleEnglish: 'Søn [son]', birthYear: '1860' }] });
+
+test("relativesInRecord(): a census grandchild's parents are the son named by the patronymic and his wife", () => {
+  const head = w.relativesInRecord(open(HOUSEHOLD_1891(), 0));
+  assert.deepEqual(names(head.child), ['Lars Halvorsen', 'Johan Peder Halvorsen']);  // not the grandchildren
+  const ole = w.relativesInRecord(open(HOUSEHOLD_1891(), 4));
+  assert.deepEqual(names(ole.father), ['Lars Halvorsen']);
+  assert.deepEqual(names(ole.mother), ['Astri Olsdatter']);
+  const son = w.relativesInRecord(open(HOUSEHOLD_1891(), 2));
+  assert.deepEqual(names(son.spouse), ['Astri Olsdatter']);
+  assert.deepEqual(names(son.child), ['Ole Larsen', 'Marte Larsdatter']);
+  assert.deepEqual(names(son.father), ['Halvor Larsen', 'Kjersti Olsdatter']);
+  const wife = w.relativesInRecord(open(HOUSEHOLD_1891(), 3));
+  assert.deepEqual(names(wife.spouse), ['Lars Halvorsen']);
+  assert.deepEqual(names(wife.child), ['Ole Larsen', 'Marte Larsdatter']);
+  assert.deepEqual(names(w.relativesInRecord(open(HOUSEHOLD_1891(), 6)).child), []);  // the unmarried son
 });
 
 test("relativesInRecord(): a baptized child's parents", () => {

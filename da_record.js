@@ -322,16 +322,16 @@ function extractRecord(document, pageUrl) {
   // "Husmoderens Tante" → "... Tante [aunt]"); only there, since occupations use them
   // in passing ("Gaar sin Moder tilhaande")
   const RELATIVES = [
-    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar'], 'head of household'],
+    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar', 'Familiens overhode', 'Familieoverhode'], 'head of household'],
     [['Husmoder', 'Husmor', 'Huusmoder'], 'woman of the house'],
     [['Søn', 'Sønn', 'Sön'], 'son'], [['Datter', 'Dotter', 'Dattér'], 'daughter'],
     [['Børn', 'Born', 'Barn'], 'children'],
     [['Fader', 'Far'], 'father'], [['Moder', 'Mor'], 'mother'],
     [['Broder', 'Bror'], 'brother'], [['Søster', 'Syster'], 'sister'],
-    [['Svigersøn', 'Svigersønn'], 'son-in-law'], [['Svigerdatter'], 'daughter-in-law'],
+    [['Svigersøn', 'Svigersønn', 'Svigersön'], 'son-in-law'], [['Svigerdatter', 'Sønnekone', 'Sönnekone'], 'daughter-in-law'],
     [['Svigerfader', 'Svigerfar'], 'father-in-law'], [['Svigermoder', 'Svigermor'], 'mother-in-law'],
-    [['Sønnesøn', 'Sønnesønn', 'Dattersøn', 'Dattersønn'], 'grandson'],
-    [['Sønnedatter', 'Datterdatter'], 'granddaughter'],
+    [['Sønnesøn', 'Sønnesønn', 'Dattersøn', 'Dattersønn', 'Sönnesön', 'Dattersön'], 'grandson'],
+    [['Sønnedatter', 'Datterdatter', 'Sönnedatter'], 'granddaughter'],
     [['Pleiesøn', 'Fostersøn', 'Fostersønn'], 'foster son'],
     [['Pleiedatter', 'Fosterdatter'], 'foster daughter'],
     [['Pleiebarn', 'Fosterbarn', 'Plejebarn'], 'foster child'],
@@ -474,7 +474,8 @@ function extractRecord(document, pageUrl) {
         birthYear: f['age/born'] || '',
         birthPlace: f['place of birth'] || '',
         residence: '',
-        householdNo: f['h.no.'] || '',
+        // "000" is DA's empty household number (1891: the head has "1", the rest "000")
+        householdNo: /^0+$/.test(f['h.no.'] || '') ? '' : f['h.no.'] || '',
         current: item.classList.contains('current') || personId === permanentId,
         primary: false
       });

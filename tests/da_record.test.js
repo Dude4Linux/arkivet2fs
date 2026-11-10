@@ -84,6 +84,18 @@ test('a census of 1900: coded positions, and the other household at the residenc
   assert.match(r.notes, /Skogvogter, Dagarbeider \[day labourer\] ved Gaardsbr\./);
 });
 
+test('a census of 1891: one household, though only its head has a household number ("000" is none)', () => {
+  const r = record('census-1891-grandchildren');
+  assert.equal(r.others.length, 0);
+  assert.equal(r.people.length, 10);
+  assert.equal(r.people[0].roleEnglish, 'Familiens overhode [head of household]');
+  assert.deepEqual(r.people.slice(1).map((p) => p.householdNo), Array(9).fill(''));
+  // the clerk's ö kept, the English added
+  assert.equal(r.people[3].roleEnglish, 'Sönnekone [daughter-in-law]');
+  assert.equal(r.people[4].roleEnglish, 'Sönnesön [grandson]');
+  assert.equal(r.people[5].roleEnglish, 'Sönnedatter [granddaughter]');
+});
+
 test("an emigrant protocol: the open person only, the protocol's page and line", () => {
   const r = record('emigration-1902');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pe', type: 'emigration' });

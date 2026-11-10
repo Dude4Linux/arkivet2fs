@@ -272,6 +272,65 @@ function displayDate(date) {
 // A labelled line in the Events column, as FS's "Christening 15 February 1778"
 const eventLine = (label, text) => el('div', {}, [el('strong', { text: label }), el('span', { text })]);
 
+// --- Done in the linker -----------------------------------------------------------
+// The linker keeps each finished run in chrome.storage.local `done` (linker.js
+// rememberDone()): a hit of a record there, by any of the record's people's permanent
+// IDs, says what was done and links to who has the source on FS; the rows shown are
+// redrawn when a run ends, in any search.
+let doneById = new Map();
+const rowHits = new WeakMap();  // a shown row's hit, to redraw it
+function doneIndex(list) {
+  const map = new Map();
+  for (const entry of Array.isArray(list) ? list : []) {
+    for (const id of (entry && entry.ids) || []) if (!map.has(id)) map.set(id, entry);  // the latest first
+  }
+  return map;
+}
+const doneFor = (hit) => doneById.get(hit.id) || (hit.parallel && doneById.get(hit.parallel.id)) || null;
+
+// "✓ Attached 10 November 2026 to Lars Halvorsen, Halvor Larsen · 2 facts added or
+// changed", or "⚠ Not all done …" when a step failed; `mine` when the FS person
+// searched for (treeref) has the source
+function doneLine(entry, treeref) {
+  const when = new Date(entry.time);
+  const date = formatDate(when.getFullYear(), when.getMonth() + 1, when.getDate());
+  const persons = new Map();
+  for (const s of entry.sources || []) for (const p of s.persons || []) persons.set(String(p.pid).toUpperCase(), p.name || p.pid);
+  const names = [...persons.values()].join(', ');
+  let text = names ? t(entry.ok ? 'Attached {date} to {names}' : 'Not all done {date}; attached to {names}', { date, names })
+    : t(entry.ok ? 'Added to your SourceBox {date}' : 'Not all done {date}', { date });
+  const n = (entry.changes || []).length;
+  if (n) text += ' · ' + t(n === 1 ? '1 fact added or changed' : '{n} facts added or changed', { n });
+  const source = (entry.sources || []).find((s) => s.id);
+  const mark = (entry.ok ? '✓ ' : '⚠ ');
+  const line = source && /^[A-Z0-9-]+$/i.test(source.id)
+    ? el('a', { href: fsPageUrl('https://www.familysearch.org/en/tree/sources/attachedTo/' + encodeURIComponent(source.id)),
+      target: '_blank', rel: 'noopener', title: t('Who has the source on FamilySearch'), text: mark + text })
+    : el('span', { text: mark + text });
+  const mine = Boolean(treeref) && persons.has(treeref.toUpperCase());
+  return { node: el('span', { class: 'hit-done' + (entry.ok ? '' : ' partly') }, [line]), mine };
+}
+
+// The runs kept so far, and those to come: the rows they change are redrawn
+function setDone(list) {
+  const before = doneById;
+  doneById = doneIndex(list);
+  for (const row of document.querySelectorAll('li.hit')) {
+    const hit = rowHits.get(row);
+    if (!hit) continue;
+    const was = before.get(hit.id) || (hit.parallel && before.get(hit.parallel.id)) || null;
+    const now = doneFor(hit);
+    if ((was && was.time) !== (now && now.time)) row.replaceWith(hitRow(hit));
+  }
+}
+function watchDone() {
+  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+  chrome.storage.local.get('done').then(({ done }) => setDone(done), () => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.done) setDone(changes.done.newValue);
+  });
+}
+
 // One hit in FS's columns: who (name, role, source), events, how it matches, score
 function hitRow(hit) {
   const events = [];
@@ -299,8 +358,11 @@ function hitRow(hit) {
   const linkParams = { rec: hit.url };
   if (hit.parallel && hit.parallel.url) linkParams.also = hit.parallel.url;
   if (treeref) linkParams.pid = treeref;
+  // Done in the linker before: what, and the link to review it again
+  const entry = doneFor(hit);
+  const done = entry ? doneLine(entry, treeref) : null;
   const link = hit.url ? el('a', { href: 'linker.html?' + new URLSearchParams(linkParams),
-    target: '_blank', class: 'hit-attach', text: t('Review & Attach') }) : '';
+    target: '_blank', class: 'hit-attach', text: t(done ? 'Review again' : 'Review & Attach') }) : '';
   // The event in the parish's other church book (pairParallel(), da_match.js)
   const also = hit.parallel ? el('span', { class: 'hit-also muted' }, [
     t('Also in the other church book:') + ' ',
@@ -311,18 +373,21 @@ function hitRow(hit) {
   const source = hit.sourceUrl
     ? el('a', { href: daPageUrl(hit.sourceUrl), target: '_blank', rel: 'noopener', class: 'hit-source', text: hit.source })
     : el('span', { class: 'hit-source', text: hit.source || '' });
-  return el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') }, [
+  const row = el('li', { class: 'hit' + (hit.score < 0 ? ' unlikely' : '') + (done ? ' done' + (done.mine ? ' mine' : '') : '') }, [
     el('div', { class: 'hit-person' }, [
       el('a', { href: daPageUrl(hit.url), target: '_blank', rel: 'noopener', class: 'hit-name', text: hit.name || hit.id }),
       hit.role ? el('span', { class: 'hit-role', text: t(hit.role) }) : '',
       source,
       also,
+      done ? done.node : '',
       link
     ]),
     el('div', { class: 'hit-details' }, events),
     reasons,
     el('span', { class: 'hit-score', title: t('Score'), text: String(hit.score) })
   ]);
+  rowHits.set(row, hit);
+  return row;
 }
 
 // Column headings above the rows, as FS's table head
@@ -576,4 +641,5 @@ window.addEventListener('popstate', render);
 localizePage();
 document.querySelector('.topbar').append(languageMenu());
 addVersionLink(document.querySelector('.topbar'));
+watchDone();
 render();

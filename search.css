@@ -289,6 +289,15 @@ button.primary:hover { filter: brightness(0.92); }
 }
 .hit { padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
 .hit.unlikely { opacity: 0.6; }
+/* Done in the linker (doneLine()): the edge, and the tint when the person searched for has it */
+:root { --done: #e4f2e8; }
+@media (prefers-color-scheme: dark) { :root { --done: #1d3325; } }
+.hit.done { box-shadow: inset 4px 0 0 var(--ok); padding-left: 10px; }
+.hit.done.mine { background: var(--done); }
+.hit.done.unlikely { opacity: 1; }
+.hit-done { display: block; font-size: 13px; margin-top: 4px; color: var(--ok); }
+.hit-done a { color: inherit; }
+.hit-done.partly { color: var(--bad); }
 .hit-name { font-weight: 700; }
 .hit-role, .hit-source { display: block; }
 .hit-source { font-size: 14px; margin-top: 2px; }

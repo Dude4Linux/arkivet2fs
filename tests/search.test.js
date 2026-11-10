@@ -106,6 +106,40 @@ test('"Review & Attach" opens the linker on the record, for the FS person', asyn
   assert.equal(params.get('pid'), 'TEST-001');
 });
 
+test('a record done in the linker: its hit says so, in any search, and a run ending redraws only its row', async () => {
+  const listeners = [];
+  const kept = { done: [{ key: 'pd99000000000018', ids: ['pd99000000000018', 'pd99000000000019'], time: new Date(2026, 10, 10, 12).getTime(), ok: true, attach: true,
+    sources: [{ id: 'TEST-S05', title: 'A title', book: '', persons: [{ pid: 'TEST-001', name: 'Lars Halvorsen' }, { pid: 'TEST-HAL', name: 'Halvor Larsen' }] }],
+    changes: [{ pid: 'TEST-001', name: 'Lars Halvorsen', what: 'add the christening: 1846' }] }] };
+  const chrome = { storage: {
+    local: { async get(key) { return { [key]: kept[key] }; } },
+    onChanged: { addListener: (fn) => listeners.push(fn) }
+  } };
+  const da = fakeDA();
+  const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html?' + QUERY, fetch: da.fetch, chrome, fast: true });
+  await until(() => /^Checked/.test((w.document.querySelector('.check-status') || {}).textContent || ''));
+  const rowOf = (id) => [...w.document.querySelectorAll('li.hit')].find((li) => li.querySelector('a.hit-name').href.endsWith(id));
+  const row = rowOf('pd99000000000018');
+  assert.ok(row.classList.contains('done'));
+  assert.ok(row.classList.contains('mine'));  // the FS person searched for has the source
+  const line = row.querySelector('.hit-done a');
+  assert.equal(line.textContent, '✓ Attached 10 November 2026 to Lars Halvorsen, Halvor Larsen · 1 fact added or changed');
+  assert.equal(line.href, 'https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S05');
+  assert.equal(row.querySelector('a.hit-attach').textContent, 'Review again');
+  // another hit, done in a linker now: only its row is redrawn, partly done, not the person's
+  const other = [...w.document.querySelectorAll('li.hit')].find((li) => !li.classList.contains('done'));
+  const otherId = other.querySelector('a.hit-name').href.match(/[a-z]{2}\d{14,}$/)[0];
+  assert.equal(other.querySelector('a.hit-attach').textContent, 'Review & Attach');
+  const done = [{ key: otherId, ids: [otherId], time: new Date(2026, 10, 11).getTime(), ok: false, attach: true,
+    sources: [{ id: 'TEST-S06', title: 'B', persons: [{ pid: 'TEST-HAL', name: 'Halvor Larsen' }] }], changes: [] }, ...kept.done];
+  listeners.forEach((fn) => fn({ done: { newValue: done } }, 'local'));
+  const redrawn = rowOf(otherId);
+  assert.notEqual(redrawn, other);
+  assert.ok(redrawn.classList.contains('done') && !redrawn.classList.contains('mine'));
+  assert.equal(redrawn.querySelector('.hit-done').textContent, '⚠ Not all done 11 November 2026; attached to Halvor Larsen');
+  assert.equal(rowOf('pd99000000000018'), row);  // unchanged, not redrawn
+});
+
 test('an entry in both of the parish\'s church books is one row, and "Review & Attach" opens both', async () => {
   const { w } = await searched({ parallel: true });
   const groups = [...w.document.querySelectorAll('section')].filter((s) => /^Baptism \(\d+\)/.test(s.textContent.trim()));

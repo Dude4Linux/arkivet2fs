@@ -14,13 +14,19 @@ const CHECK_MIN_SCORE = 0;
 // Groups whose records name the person's relatives (or, emigration, the destination)
 const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial'];
 
-// Kinds of role, from DA's role or census family position, in Norwegian or English
+// Kinds of role, from DA's role or census family position, in Norwegian or English.
+// A word ends where no letter follows (`(?!\p{L})`, not \b, which takes ø for a
+// boundary: "Sønnesøn" would be the code "s", a son). A grandchild's parents are a
+// child of the head and that child's spouse, a child-in-law (1891's "Sønnekone").
+const WORD_END = '(?![\\p{L}\\p{N}])';
 const ROLE_KINDS = {
-  child: /^(child|confirmand|son|daughter|barn|konfirmant|s|d|((hans|hendes|deres) )?(søn|sønn|datter|dotter|barn|børn|born))\b/i,
+  child: new RegExp('^(child|confirmand|son|daughter|barn|konfirmant|s|d|((hans|hendes|deres) )?(søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
+  grandchild: new RegExp('^(?:(?:hans|hendes|deres|husbondens|husfaderens|husmoderens) )?(grandchild|grandson|granddaughter|barnebarn|barnebørn|(?:sønne|sønnens|søns|sønns|datter|datterens|datters|dotter) ?(?:søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
+  childInLaw: new RegExp('^(?:(?:hans|hendes|deres) )?(son-in-law|daughter-in-law|svigersøn|svigersønn|svigerdatter|svigerdotter|svigerbarn|sønnekone|(?:sønnens|søns|sønns) (?:kone|hustru)|(?:datterens|datters) (?:mand|mann))' + WORD_END, 'iu'),
   father: /^(father|far|fader)$/i,
   mother: /^(mother|mor|moder)$/i,
-  head: /^(head of household|man of the house|woman of the house|hp|hf|hm|(hus|huus|hos)(bonde|bond|fader|far|moder|mor|mand)|bonde|gaardmand|gårdmann)\b/i,
-  spouse: /^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|hustrue|hustroe|hustro|ægtefælle|ektefelle|mand|mann|ektemann))\b/i,
+  head: new RegExp('^(head of household|man of the house|woman of the house|hp|hf|hm|(hus|huus|hos)(bonde|bond|fader|far|moder|mor|mand)|bonde|gaardmand|gårdmann|familiens overhode|familieoverhode)' + WORD_END, 'iu'),
+  spouse: new RegExp('^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|hustrue|hustroe|hustro|ægtefælle|ektefelle|mand|mann|ektemann))' + WORD_END, 'iu'),
   groom: /^(groom|brudgom)$/i,
   bride: /^(bride|brud|brur)$/i,
   deceased: /^(deceased|avdød|avdøde)$/i,
@@ -28,11 +34,17 @@ const ROLE_KINDS = {
   brideFather: /^(bride's father|bruras far|brudens far)$/i
 };
 
+// A role as the role tables spell it: ö and ä as ø and æ, since transcriptions
+// keep the Swedish-looking letters some clerks wrote (1891's "Sönnesön", "Sönnekone")
+function foldRole(text) {
+  return (text || '').replace(/ö/g, 'ø').replace(/Ö/g, 'Ø').replace(/ä/g, 'æ').replace(/Ä/g, 'Æ');
+}
+
 // The kind of a record person's role ('' for godparents, servants, lodgers, ...).
 // Census positions can be several ("d, fl": daughter, lodger); the first counts.
 function roleKind(person) {
   for (const role of [person.roleEnglish, person.role]) {
-    const first = (role || '').split(',')[0].trim();
+    const first = foldRole(role).split(',')[0].trim();
     for (const [kind, pattern] of Object.entries(ROLE_KINDS)) if (pattern.test(first)) return kind;
   }
   return '';
@@ -46,15 +58,30 @@ function relativesInRecord(record) {
   const found = { father: [], mother: [], spouse: [], child: [] };
   if (!me) return found;
   const census = record.recordTypeInfo && record.recordTypeInfo.type === 'census';
-  const mine = roleKind(me);
+  // Each role read once: a census of 80 residents asks the grandchildren's parents often
+  const kinds = new Map(people.map((p) => [p, roleKind(p)]));
+  const kind = (p) => kinds.get(p);
+  const parentsMemo = new Map();
+  const parentsOf = (g) => parentsMemo.get(g) || parentsMemo.set(g, grandchildParents(people, g, kind)).get(g);
+  const mine = kind(me);
   for (const other of people) {
     if (other === me || !other.name) continue;
-    const theirs = roleKind(other);
+    const theirs = kind(other);
     if (census) {
       // In a household: the head and the head's spouse are a child's parents (which is
       // which isn't known), the head's spouse is the head's, and the children theirs.
       // A couple can both be heads: 1900's hf and hm, 1865's Husfader and Husmoder.
       if (mine === 'child' && (theirs === 'head' || theirs === 'spouse')) { found.father.push(other); found.mother.push(other); }
+      else if (mine === 'grandchild' && (theirs === 'child' || theirs === 'childInLaw')) {
+        const parents = parentsOf(me);
+        if (parents.father === other) found.father.push(other);
+        else if (parents.mother === other) found.mother.push(other);
+        else if (parents.either.includes(other)) { found.father.push(other); found.mother.push(other); }
+      } else if ((mine === 'child' || mine === 'childInLaw') && theirs === 'grandchild') {
+        const parents = parentsOf(other);
+        if (parents.father === me || parents.mother === me || parents.either.includes(me)) found.child.push(other);
+      } else if ((mine === 'child' && theirs === 'childInLaw' && partnerOf(people, me, kind) === other)
+        || (mine === 'childInLaw' && theirs === 'child' && partnerOf(people, me, kind) === other)) found.spouse.push(other);
       else if ((mine === 'head' && (theirs === 'spouse' || theirs === 'head')) || (mine === 'spouse' && theirs === 'head')) found.spouse.push(other);
       else if ((mine === 'head' || mine === 'spouse') && theirs === 'child') found.child.push(other);
     } else if (mine === 'child') {
@@ -75,6 +102,37 @@ function relativesInRecord(record) {
     }
   }
   return found;
+}
+
+// A census child's or child-in-law's spouse: the child-in-law listed next to the
+// child (1891: the son, then "Sønnekone"), or the child next to the child-in-law
+function partnerOf(people, p, kind = roleKind) {
+  const want = kind(p) === 'childInLaw' ? 'child' : 'childInLaw';
+  const i = people.indexOf(p);
+  return [people[i + 1], people[i - 1]].find((q) => q && q.name && kind(q) === want) || null;
+}
+
+// A census grandchild's parents among the residents: the father is the head's child or
+// child-in-law named by the grandchild's patronymic (Larsen: the son Lars), the
+// mother his spouse next to him; with no patronymic to tell, the one child-in-law and
+// their spouse are `either` (which is which isn't known). {father, mother, either}
+function grandchildParents(people, grandchild, kind = roleKind) {
+  const out = { father: null, mother: null, either: [] };
+  const words = (grandchild.name || '').replace(/[%*,]/g, ' ').split(/\s+/).filter(Boolean);
+  const patronymic = words.slice(1).find((w) => isPatronymic(w));
+  const adults = people.filter((p) => p.name && (kind(p) === 'child' || kind(p) === 'childInLaw'));
+  if (patronymic) {
+    const base = patronymicBase(patronymic);
+    const fathers = adults.filter((p) => sameFather(p.name.split(/\s+/)[0], base));
+    if (fathers.length === 1) {
+      out.father = fathers[0];
+      out.mother = partnerOf(people, fathers[0], kind);
+      return out;
+    }
+  }
+  const inLaws = adults.filter((p) => kind(p) === 'childInLaw');
+  if (inLaws.length === 1) out.either = [inLaws[0], partnerOf(people, inLaws[0], kind)].filter(Boolean);
+  return out;
 }
 
 // A record person's birth year: "1866", an age in the record's year ("57", "57

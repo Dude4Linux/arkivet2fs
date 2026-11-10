@@ -17,8 +17,8 @@ Examples of what to report this way:
 - Anything saved, attached or tagged on FamilySearch without your click on the
   linker page: **Create source and attach** or **Create source only** (**Update
   source…** or **Create or update sources…** when your SourceBox has the source), or
-  **Create person** in the new-person panel. **Find on FamilySearch** only fills in
-  FamilySearch's Add Person form; it saves nothing.
+  **Create person** or **Use this person** in the new-person panel. **Find on
+  FamilySearch** only fills in FamilySearch's Add Person form; it saves nothing.
 - A source in your SourceBox written over, or attached, when it is of another record
   than the one on the linker page (two records can share a title).
 - Personal data in this repository: a living person, or a real family's names in the
@@ -49,7 +49,10 @@ issue for those.
 - Search results, the records read, and the relatives' families the linker read are
   kept for the browser session only. The last 30 FamilySearch persons you searched for
   (name, events and family) stay in the browser's extension storage, so the linker can
-  pair a record with them. Removing the extension removes them.
+  pair a record with them. So do the last 300 records you attached in the linker
+  (the record's permanent IDs, the FamilySearch source's ID and title, the IDs and
+  names of the people who have it, and the facts added to them), so the search page
+  can mark them. Removing the extension removes them.
 
 ## Supported versions
 

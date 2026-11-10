@@ -791,12 +791,17 @@ test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', ()
   assert.equal(w.fsPlace('Nowhere', c), 'Nowhere, Oppland, Norway');
   assert.equal(w.fsPlace('', c), '');
   // Oslo's neighbour Aker, added for searching, doesn't make Christiania two places
-  assert.equal(w.fsPlace('Christiania', c), 'Oslo, Oslo, Norway');
+  assert.equal(w.fsPlace('Christiania', c), 'Kristiania, Oslo, Norway');  // as the record names it
+  assert.equal(w.fsPlace('Kristiania', c), 'Kristiania, Oslo, Norway');
+  for (const short of ['Chra.', 'Chria', 'Chrania', 'Kria.']) {  // a clerk's abbreviations
+    assert.equal(w.fsPlace(short, c), 'Kristiania, Oslo, Norway', short);
+  }
+  assert.equal(w.fsPlace('Oslo', c), 'Oslo, Oslo, Norway');
   // a place the record only names (a census's birthplace): found anywhere in Norway,
   // the county first, and never given the census's county when it isn't found there
-  assert.equal(w.fsPlace('Christiania', c, true), 'Oslo, Oslo, Norway');
+  assert.equal(w.fsPlace('Christiania', c, true), 'Kristiania, Oslo, Norway');
   assert.equal(w.fsPlace('Vaage', c, true), 'Vågå, Oppland, Norway');
-  assert.equal(w.fsPlace('Bergen', c, true), 'Bergen, Bergen, Norway');
+  assert.equal(w.fsPlace('Bergen', c, true), 'Bergen, Hordaland, Norway');  // DA's county of its own, FS's Hordaland
   assert.equal(w.fsPlace('Nowhere', c, true), 'Nowhere, Norway');
 });
 
@@ -1001,6 +1006,47 @@ test('run(): a change FS finds it has already (its Save stays off) is logged as 
   assert.deepEqual(tabs.closed, [2]);
 });
 
+// chrome.storage.local in memory, with its onChanged
+function memoryStorage(kept = {}) {
+  return { local: { async get(key) { return key in kept ? { [key]: kept[key] } : {}; }, async set(items) { Object.assign(kept, items); } }, kept };
+}
+
+test('run(): what was done is kept for the search page, by the record\'s permanent IDs; a run again replaces it', async () => {
+  const answers = {
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => ({ ok: true, fields: [], shown: 'Christening 23 August 1846 Vågå' }),
+    tagFact: () => ({ ok: true })
+  };
+  const { chrome } = fakeFs(answers);
+  const storage = memoryStorage({ done: [{ key: 'pd99000000000777', ids: ['pd99000000000777'], time: 1, ok: true, sources: [], changes: [] }] });
+  chrome.storage = storage;
+  const { win, state } = withChristening(chrome);
+  await win.run(true);
+  let done = plain(storage.kept.done);
+  assert.equal(done.length, 2);
+  const [entry] = done;  // the latest first
+  for (const p of state.record.people) assert.ok(entry.ids.includes(p.id), p.name);
+  assert.equal(entry.key, state.record.primaryPersonId);
+  assert.equal(entry.ok, true);
+  assert.equal(entry.attach, true);
+  assert.deepEqual(entry.sources.map((s) => [s.id, s.persons.map((p) => p.pid)]), [['TEST-S05', ['TEST-LAR', 'TEST-HAL']]]);
+  assert.deepEqual(entry.changes.map((c) => c.pid), ['TEST-LAR']);
+  assert.match(entry.changes[0].what, /christening/);
+  // the same record again, a step failing: one entry for it, the latest
+  const again = fakeFs({ ...answers, findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S05', title }] }),
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-LAR', name: 'Lars' }] }),
+    editSource: () => ({ ok: true, sourceId: 'TEST-S05', changed: [], missing: [] }),
+    attach: () => ({ ok: false, error: 'refused' }) });
+  again.chrome.storage = storage;
+  await withChristening(again.chrome).win.run(true);
+  done = plain(storage.kept.done);
+  assert.deepEqual(done.map((e) => e.key), [entry.key, 'pd99000000000777']);
+  assert.equal(done[0].ok, false);
+  assert.deepEqual(done[0].sources[0].persons.map((p) => p.pid), ['TEST-LAR']);
+});
+
 test('onTreeAlready(): the same vital in FS\'s standard form; a residence of the year; an alternate name', () => {
   const tree = { name: 'Kjersti Halvorsdatter', altNames: ['Kjersti Larsen'], birth: { date: '4 July 1864', place: 'Oslo, Norway' }, residences: [{ date: '1900', place: 'Vågå, Oppland, Norway' }] };
   const edit = (date, place) => ({ action: 'edit', type: 'BIRTH', value: { date, place } });
@@ -1100,7 +1146,7 @@ test('factAdditions(): a census birthplace in another county isn\'t given the ce
   state.record = c;
   state.fs = { pid: 'TEST-LAR', name: lars.name, birth: { date: '4 July 1848' }, residences: [], occupations: [] };
   const birth = plain(win.factAdditions(lars, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
-  assert.equal(birth.value.place, 'Oslo, Oslo, Norway');
+  assert.equal(birth.value.place, 'Kristiania, Oslo, Norway');
   const nowhere = plain(win.factAdditions({ ...lars, birthPlace: 'Nowhere' }, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
   assert.equal(nowhere.value.place, 'Nowhere, Norway');
 });
@@ -1116,6 +1162,22 @@ test('factAdditions(): an emigration as a custom event with its destination, unl
   ]);
   state.fs = { ...state.fs, emigration: [{ date: '1902' }] };
   assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), []);
+  // A protocol DA titles in Norwegian, with no destination in the entry: the place from
+  // "Politidistrikt", the destination from the protocol's own title
+  const bergen = { ...e, sourceTitle: 'Bergen Politidistrikt, Emigrant protocols, no. 1: Emigrants to America, 1874-1885', county: 'Bergen',
+    fields: { ...e.fields, destination: '' } };
+  state.record = bergen;
+  state.fs = { ...state.fs, emigration: [] };
+  const [emigration] = plain(win.factAdditions(lars, bergen, { pid: 'TEST-LAR' }));
+  assert.equal(emigration.value.place, 'Bergen, Hordaland, Norway');
+  assert.equal(emigration.value.description, 'Destination: America');
+  // The protocol's residence: the emigrant's home anywhere in Norway, not in the police
+  // district; one abroad (an American going back) isn't added
+  const home = (residence) => plain(win.factAdditions({ ...lars, residence }, bergen, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Residence');
+  state.fs = { ...state.fs, residences: [] };
+  assert.deepEqual(home('Vaage').value, { date: '1902', place: 'Vågå, Oppland, Norway', description: 'Vaage' });
+  assert.equal(home('Amerika'), undefined);
+  assert.equal(home('Chicago, Illinois'), undefined);
   assert.equal(win.additionReason(e), 'From "' + e.title + '", Digitalarkivet, Permanent ID ' + e.permanentId + '.');
 });
 
@@ -1133,6 +1195,92 @@ test('newPersonRelations(): the mother of a paired child is the paired father\'s
   assert.deepEqual(found.map((o) => o.label), ['Spouse of Halvor Larsen', 'Parent of Lars']);
 });
 
+// An 1891-like census household: the head's married son, his wife and their children
+function householdPage(pairs) {
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', fast: true });
+  win.Element.prototype.scrollIntoView = () => {};
+  const state = value(win, 'state');
+  const person = (name, role, roleEnglish, birthYear, more = {}) => ({ id: '', name, role, roleEnglish, birthYear, position: '', birthPlace: '', residence: '', current: false, primary: false, ...more });
+  const r = { recordTypeInfo: { type: 'census', prefix: 'pf' }, recordDate: '1891', fields: {}, census: { district: 'Nordlien', residence: 'Bakken nedre' },
+    sourceTitle: '1891 census for 0515 Vågå', county: 'Oppland', title: '1891, Halvor Larsen household', citation: '', notes: '', others: [], people: [
+      person('Halvor Larsen', 'husfader', 'Husfader [head of household]', '1820', { current: true, primary: true }),
+      person('Kjersti Olsdatter', 'hustru', 'Hustru [wife]', '1824'),
+      person('Lars Halvorsen', 'søn', 'Søn [son]', '1850'),
+      person('Astri Olsdatter', 'sønnekone', 'Sønnekone', '1855'),
+      person('Ole Larsen', 'sønnesøn', 'Sønnesøn [grandson]', '1880'),
+      person('Marte Larsdatter', 'sønnedatter', 'Sønnedatter [granddaughter]', '1884')] };
+  Object.assign(state, { record: r, people: win.recordPeople(r) });
+  state.rows = state.people.map((p) => win.personRow(p, [], pairs[p.name]));
+  win.document.getElementById('people').replaceChildren(...state.rows.map((row) => row.node));
+  const rowOf = (name) => state.rows.find((row) => row.name === name);
+  return { win, state, rowOf, $: (id) => win.document.getElementById(id) };
+}
+const HOUSEHOLD = { 'Halvor Larsen': 'TEST-HAL', 'Kjersti Olsdatter': 'TEST-KJE', 'Lars Halvorsen': 'TEST-LAR', 'Astri Olsdatter': 'TEST-AST' };
+
+test('newPersonRelations(): a census grandchild is the child of the head\'s son and his wife, not of the head', () => {
+  const { win, rowOf } = householdPage(HOUSEHOLD);
+  const found = plain(win.newPersonRelations(rowOf('Ole Larsen'))).filter((o) => o.record);
+  assert.deepEqual(found[0], { relation: 'child', anchor: 'TEST-LAR', other: 'TEST-AST', label: 'Child of Lars Halvorsen and Astri Olsdatter', record: true });
+  assert.ok(!found.some((o) => o.anchor === 'TEST-HAL' || o.other === 'TEST-KJE'));
+});
+
+test('a new person: the father and the mother are chosen from the paired people, the record\'s suggestion first', () => {
+  const { win, state, rowOf, $ } = householdPage(HOUSEHOLD);
+  win.openNewPerson(rowOf('Ole Larsen'));
+  assert.equal($('np-kind').value, 'child');
+  assert.equal($('np-father').value, 'TEST-LAR');
+  assert.equal($('np-mother').value, 'TEST-AST');
+  assert.deepEqual(plain(win.readRelation()), { relation: 'child', anchor: 'TEST-LAR', other: 'TEST-AST', label: 'Child of Lars Halvorsen and Astri Olsdatter' });
+  // any paired person as either parent, or one of them
+  $('np-father').value = 'TEST-HAL';
+  $('np-mother').value = '';
+  assert.deepEqual(plain(win.readRelation()), { relation: 'child', anchor: 'TEST-HAL', other: '', label: 'Child of Halvor Larsen' });
+  $('np-father').value = '';
+  $('np-mother').value = 'TEST-KJE';
+  assert.equal(win.readRelation().anchor, 'TEST-KJE');
+  $('np-father').value = 'TEST-KJE';
+  assert.match(win.readRelation().error, /same person/);
+  $('np-father').value = $('np-mother').value = '';
+  assert.match(win.readRelation().error, /Choose the father/);
+  // a spouse or parent of one paired person
+  $('np-kind').value = 'spouse';
+  $('np-of').value = 'TEST-LAR';
+  assert.deepEqual(plain(win.readRelation()), { relation: 'spouse', anchor: 'TEST-LAR', other: '', label: 'Spouse of Lars Halvorsen' });
+  // two who aren't a couple on FS (FS adds a child of two in the couple's family card)
+  state.details = { 'TEST-LAR': { pid: 'TEST-LAR', name: 'Lars Halvorsen', gender: 'Male', families: [{ spouse: { pid: 'TEST-OTH' }, children: [] }] } };
+  $('np-kind').value = 'child';
+  $('np-father').value = 'TEST-LAR';
+  $('np-mother').value = 'TEST-AST';
+  $('np-mother').dispatchEvent(new win.Event('change'));
+  assert.equal($('np-couple').hidden, false);
+  assert.match($('np-couple').textContent, /Lars Halvorsen and Astri Olsdatter aren't a couple on FamilySearch/);
+  // the record's suggestions set the fields again
+  const chip = [...$('new-person').querySelectorAll('.chip')].find((b) => b.textContent === 'Child of Lars Halvorsen and Astri Olsdatter');
+  $('np-father').value = '';
+  chip.click();
+  assert.equal($('np-father').value, 'TEST-LAR');
+});
+
+test('a new person on an 1891 page: a grandchild\'s father and mother are the son and his wife', () => {
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', fast: true });
+  win.Element.prototype.scrollIntoView = () => {};
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/census-1891-grandchildren.html'), fixtureUrl('da/census-1891-grandchildren.html'));
+  // the head, his wife, the son and his wife on FS (the grandson of the son's name unpaired)
+  const pids = ['TEST-HAL', 'TEST-AST', 'TEST-SON', 'TEST-ELD'];
+  Object.assign(state, { record: r, people: win.recordPeople(r) });
+  state.rows = state.people.map((p, i) => win.personRow(p, [], pids[i] || ''));
+  win.document.getElementById('people').replaceChildren(...state.rows.map((row) => row.node));
+  const $ = (id) => win.document.getElementById(id);
+  const veslemoy = state.rows.find((row) => row.name === 'Veslemøy Halvardsdatter');
+  const found = plain(win.newPersonRelations(veslemoy)).filter((o) => o.record);
+  assert.deepEqual(found[0], { relation: 'child', anchor: 'TEST-SON', other: 'TEST-ELD', label: 'Child of Halvard Halvardsen and Eldbjørg Halbrandsdatter', record: true });
+  assert.ok(!found.some((o) => o.anchor === 'TEST-HAL'));
+  win.openNewPerson(veslemoy);
+  assert.equal($('np-father').value, 'TEST-SON');
+  assert.equal($('np-mother').value, 'TEST-ELD');
+});
+
 test('a new person: FS\'s form filled in a tab, the matches shown, Create person pairs the row; the tab closed', async () => {
   const { chrome, asked, tabs } = fakeFs({
     findPerson: () => ({ ok: true, heading: 'Add Child', fields: [{ name: 'birthPlace', value: 'Vågå, Oppland, Norway Municipality, 1781 - 2019', picked: 'Vågå, Oppland, Norway Municipality, 1781 - 2019' }],
@@ -1144,6 +1292,8 @@ test('a new person: FS\'s form filled in a tab, the matches shown, Create person
   const lars = rowOf('Lars');
   win.openNewPerson(lars);
   assert.equal($('new-person').hidden, false);
+  assert.equal($('np-father').value, 'TEST-HAL');  // by sex: the church book's father and mother
+  assert.equal($('np-mother').value, 'TEST-AST');
   assert.equal($('np-given').value, 'Lars');
   assert.equal($('np-surname').value, 'Halvorsen');
   $('np-surname').value = 'Halvorsen';
@@ -1161,23 +1311,37 @@ test('a new person: FS\'s form filled in a tab, the matches shown, Create person
   assert.ok(tabs.closed.includes(2));
 });
 
-test('a new person: a match FS found is paired instead; FS\'s dialog cancelled, nothing created', async () => {
-  const { chrome, asked, tabs } = fakeFs({
-    findPerson: () => ({ ok: true, fields: [], matches: [{ pid: 'TEST-LA2', name: 'Lars Halvorsen', lifespan: '1846–1920', events: [], spouses: ['Marte Johanne'] }] }),
-    createPerson: () => { throw new Error('not to be created'); },
-    cancelAdd: () => ({ ok: true })
+for (const [what, answer, why] of [
+  ['linked as the chosen parents\' child, then paired', { ok: true, linked: true }, /linked as child of Halvor Larsen and Astri Larsdatter/],
+  ['paired when FS has them as that child already', { ok: true, already: true }, /child of Halvor Larsen and Astri Larsdatter there already/]]) {
+  test('a new person: a match FS found is ' + what + '; nothing created', async () => {
+    const read = [];
+    const { chrome, asked, tabs } = fakeFs({
+      findPerson: () => ({ ok: true, fields: [], matches: [{ pid: 'TEST-LA2', name: 'Lars Halvorsen', lifespan: '1846–1920', events: [], spouses: ['Marte Johanne'] }] }),
+      addMatch: () => answer,
+      createPerson: () => { throw new Error('not to be created'); },
+      cancelAdd: () => ({ ok: true }),
+      readPerson: (url) => { read.push(url); return { error: 'not read' }; }
+    });
+    const { win, rowOf, $ } = pairedPage(chrome, 'baptism-1846', PARENTS);
+    const lars = rowOf('Lars');
+    win.openNewPerson(lars);
+    await win.findNewPerson();
+    assert.match($('np-results').textContent, /Using one adds them on FamilySearch as child of Halvor Larsen and Astri Larsdatter, unless they are already/);
+    [...$('np-results').querySelectorAll('button')].find((b) => b.textContent === 'Use this person').click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(lars.pid(), 'TEST-LA2');
+    const steps = asked.map(([name]) => name).filter(Boolean);
+    assert.deepEqual(plain(steps.slice(0, 2)), ['findPerson', 'addMatch']);
+    assert.ok(!steps.includes('createPerson'));
+    assert.deepEqual(plain(asked[1][1]), { pid: 'TEST-LA2', relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST' });
+    assert.match(lars.node.textContent, why);
+    // a link made: the family read again from FS in the work tab (the kept pages lack it)
+    if (answer.linked) assert.ok(read.some((url) => /details\/TEST-HAL/.test(url)));
+    assert.ok(tabs.closed.includes(2));
+    assert.equal($('new-person').hidden, true);
   });
-  const { win, rowOf, $ } = pairedPage(chrome, 'baptism-1846', PARENTS);
-  const lars = rowOf('Lars');
-  win.openNewPerson(lars);
-  await win.findNewPerson();
-  [...$('np-results').querySelectorAll('button')].find((b) => b.textContent === 'Pair with this person').click();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(lars.pid(), 'TEST-LA2');
-  assert.deepEqual(plain(asked.map(([name]) => name).filter(Boolean)), ['findPerson', 'cancelAdd']);  // then the details are read
-  assert.ok(tabs.closed.includes(2));
-  assert.equal($('new-person').hidden, true);
-});
+}
 
 test('a new person: an error on FS leaves its tab open and the row as it was', async () => {
   const { chrome, tabs } = fakeFs({
