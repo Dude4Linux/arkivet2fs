@@ -554,6 +554,7 @@ function i18nTable() {
     'FamilySearch shows no way to open the {fact}.': ['FamilySearch viser ingen måte å åpne {fact} på.', 'FamilySearch viser ingen måte å opne {fact} på.'],
     'FamilySearch did not save the {fact}.': ['FamilySearch lagret ikke {fact}.', 'FamilySearch lagra ikkje {fact}.'],
     'FamilySearch did not save the {fact}: {detail}': ['FamilySearch lagret ikke {fact}: {detail}', 'FamilySearch lagra ikkje {fact}: {detail}'],
+    'FamilySearch has more than one {fact} and none is clearly this one; tag the source to it by hand.': ['FamilySearch har mer enn én {fact}, og ingen er tydelig denne; merk kilden til den for hånd.', 'FamilySearch har meir enn éin {fact}, og ingen er tydeleg denne; merk kjelda til han for hand.'],
     'FamilySearch did not take the {fact}.': ['FamilySearch tok ikke imot {fact}.', 'FamilySearch tok ikkje imot {fact}.'],
     'FamilySearch did not take the {fact}: {detail}': ['FamilySearch tok ikke imot {fact}: {detail}', 'FamilySearch tok ikkje imot {fact}: {detail}'],
     '{name} has this on FamilySearch already ({what}); not changed.': ['{name} har dette på FamilySearch allerede ({what}); ikke endret.', '{name} har dette på FamilySearch alt ({what}); ikkje endra.'],

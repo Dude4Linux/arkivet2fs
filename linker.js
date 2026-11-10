@@ -1923,6 +1923,9 @@ function fsMessage(text) {
   if ((m = text.match(/^FamilySearch shows no button to (add|change) the (.+)\.$/))) {
     return t(m[1] === 'add' ? 'FamilySearch shows no button to add the {fact}.' : 'FamilySearch shows no button to change the {fact}.', { fact: fact(m[2]) });
   }
+  if ((m = text.match(/^FamilySearch has more than one (.+) and none is clearly this one; tag the source to it by hand\.$/))) {
+    return t('FamilySearch has more than one {fact} and none is clearly this one; tag the source to it by hand.', { fact: fact(m[1]) });
+  }
   if ((m = text.match(/^FamilySearch shows no way to open the (.+)\.$/))) return t('FamilySearch shows no way to open the {fact}.', { fact: fact(m[1]) });
   if ((m = text.match(/^FamilySearch did not save the ([a-z ]+)(?:\.|: (.*))$/s))) {
     return m[2] === undefined ? t('FamilySearch did not save the {fact}.', { fact: fact(m[1]) })

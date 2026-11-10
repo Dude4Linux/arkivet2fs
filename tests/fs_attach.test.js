@@ -23,7 +23,9 @@ function attachPage(url, body, { clock = false } = {}) {
   w.document.body.innerHTML = body;
   w.runFile('fs_attach.js');
   const step = (name, args) => new Promise((resolve) => listener({ linker: name, args }, {}, resolve));
-  return { w, step };
+  // The listener's own answer: true when it will answer (a step), false when not
+  const takes = (request) => listener(request, {}, () => {});
+  return { w, step, takes };
 }
 
 const row = (id, title) => `<div><span data-testid="row-${id}-title">${title}</span><button data-testid="row-${id}-attach-button">Attach</button>` +
@@ -641,6 +643,35 @@ test('tagFact(): the source tagged to the fact from its view, by the source\'s I
   const missing = await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', sourceId: 'TEST-S09' });
   assert.equal(missing.ok, false);
   assert.match(missing.error, /not among the person's sources/);
+});
+
+test('tagFact(): of several residences, the one of the year; none told apart: not tagged, an error, nothing left open', async () => {
+  const { step, tagged, w } = factPage();
+  // FS's display without the description (the farm): only the year tells them apart
+  const residence = (date, place) => ({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date, place } });
+  await step('addFact', { pid: 'TEST-LAR', addition: residence('1846', 'Vågå, Oppland, Norway'), reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: residence('1865', 'Lom, Oppland, Norway'), reason: REASON, save: true });
+  const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'RESIDENCE', match: ['Bakken nedre', '1846'], sourceId: 'TEST-S01' });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(tagged.map((t) => t.fact)), ['1846 Vågå, Oppland, NorwayEdit']);  // not the last, 1865's
+  await step('addFact', { pid: 'TEST-LAR', addition: residence('1846', 'Lom, Oppland, Norway'), reason: REASON, save: true });
+  const unclear = await step('tagFact', { pid: 'TEST-LAR', type: 'RESIDENCE', match: ['Bakken nedre', '1846'], sourceId: 'TEST-S01' });
+  assert.equal(unclear.ok, false);
+  assert.equal(unclear.error, 'FamilySearch has more than one residence and none is clearly this one; tag the source to it by hand.');
+  assert.equal(tagged.length, 1);
+  assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
+  // The only one of its type is the one, whatever its text
+  await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal((await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', match: ['Bakken nedre', '1846'], sourceId: 'TEST-S01' })).ok, true);
+  assert.equal(tagged[1].type, 'CHRISTENING');
+});
+
+test('The listener answers only its own steps, not what every object has', () => {
+  const { takes } = factPage();
+  assert.equal(takes({ linker: 'addFact', args: {} }), true);
+  for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert.equal(takes({ linker: name, args: {} }), false, name);
+  assert.equal(takes({ linker: ['addFact'] }), false);
+  assert.equal(takes(null), false);
 });
 
 test('tagFact(): an alternate name is found by the name itself, not by words another name has too', async () => {

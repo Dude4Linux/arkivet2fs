@@ -766,8 +766,16 @@ if (!window.__arkivet2fsAttach) {
     const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
     // An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann Olsen too
     const nameOf = (e) => clean((byTestId('conclusion-name-template', e) || {}).textContent).toLowerCase();
+    // Else the one with every word, else the one of the year; a guess only when FS has
+    // one of the type: a person can have several residences (sorted by date), and a
+    // source tagged to another year's would be wrong without a word said
+    const has = (e, w) => clean(e.textContent).toLowerCase().includes(w);
+    const year = words.find((w) => /^\d{4}$/.test(w));
+    const only = (list) => (list.length === 1 ? list[0] : null);
     const fact = (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === words.join(' '))) ||
-      all.find((e) => words.every((w) => clean(e.textContent).toLowerCase().includes(w))) || all[all.length - 1];
+      all.find((e) => words.length && words.every((w) => has(e, w))) ||
+      (year && only(all.filter((e) => has(e, year)))) || only(all);
+    if (!fact) throw new Error('FamilySearch has more than one ' + factName(type) + ' and none is clearly this one; tag the source to it by hand.');
     const pencil = byTestId('pencil-edit-button', fact);
     if (!pencil) throw new Error('FamilySearch shows no way to open the ' + factName(type) + '.');
     pencil.click();
@@ -804,7 +812,8 @@ if (!window.__arkivet2fsAttach) {
   const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, cancelAdd, addFact, tagFact };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const step = request && request.linker && STEPS[request.linker];
+    // Only the steps themselves, not what every object has (constructor, toString)
+    const step = request && typeof request.linker === 'string' && Object.hasOwn(STEPS, request.linker) && STEPS[request.linker];
     if (!step) return false;
     step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error) }));
     return true;  // answers later
