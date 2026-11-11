@@ -38,10 +38,14 @@
         <p id="download-status" aria-live="polite"></p>
         <div id="install" hidden>
           <h3 data-i18n>Installing it</h3>
-          <ol>
+          <ol id="install-chromium">
             <li data-i18n>Unzip the download. It holds a folder named arkivet2fs.</li>
             <li data-i18n>Put its files over the folder this copy was loaded from (the extension's details page on chrome://extensions shows where that is). If you loaded a git clone, run git pull there instead.</li>
             <li data-i18n>Reload the extension: the button below, or the reload button on its card. Your drafts and remembered persons are kept.</li>
+          </ol>
+          <ol id="install-firefox" hidden>
+            <li data-i18n>Unzip the download over the folder this copy was loaded from. If you loaded a git clone, run git pull there instead.</li>
+            <li data-i18n>Reload the extension: the button below, or Reload on about:debugging (This Firefox). Your drafts and remembered persons are kept.</li>
           </ol>
           <p class="buttons">
             <button id="reload" type="button" data-i18n>Reload the extension</button>
@@ -54,6 +58,10 @@
     <section id="settings" class="box" hidden>
       <h2 data-i18n>Settings</h2>
       <label class="check"><input id="update-check" type="checkbox"> <span data-i18n>Check for updates once a day</span></label>
+      <p id="grant" hidden>
+        <span data-i18n>The check needs access to GitHub (api.github.com, and release-assets.githubusercontent.com for the download). Your browser asks you once.</span>
+        <button id="grant-hosts" type="button" class="primary" data-i18n>Allow the check</button>
+      </p>
       <p class="muted small" data-i18n>The check asks GitHub for the latest release. Nothing about you or your records is sent; GitHub sees only your IP address.</p>
       <p class="muted small" id="key-note"></p>
     </section>

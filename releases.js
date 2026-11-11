@@ -9,11 +9,28 @@
 //                (only background.js writes it)
 //   updateChoice {skipped, later}: "Skip this version" and "Remind me later"
 //                (update.html writes it)
-//   updateCheck  false turns the daily check off (update.html's checkbox)
+//   updateCheck  false turns the daily check off (update.html's checkbox); the
+//                check runs only once updateOrigins() are granted, too
 //   updateDev    a developer setting, set in the service worker's console:
 //                {repo: 'owner/name'} reads another repository's releases, and
 //                {version: '1.0.0'} acts as that version, so a real release shows as
 //                new. The pinned key is still required.
+
+// The hosts the update check reads (optional host permissions, decision 11: asked
+// for on the Updates page with a click, so no install asks for them; without them
+// nothing is checked)
+function updateOrigins() {
+  return ['https://api.github.com/*', 'https://release-assets.githubusercontent.com/*'];
+}
+
+// Whether the update hosts are granted (`permissions`: chrome.permissions)
+async function updateHostsGranted(permissions) {
+  try {
+    return await permissions.contains({ origins: updateOrigins() });
+  } catch (e) {
+    return false;
+  }
+}
 
 // The repository whose releases are read
 function defaultRepo() {

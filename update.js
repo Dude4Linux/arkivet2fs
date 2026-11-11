@@ -22,7 +22,28 @@ async function readUpdateState() {
   try {
     development = (await chrome.management.getSelf()).installType === 'development';
   } catch (e) { /* not known: as a store install */ }
-  return { ...s, development };
+  hostsGranted = await updateHostsGranted(chrome.permissions);
+  return { ...s, development, granted: hostsGranted };
+}
+
+// Whether GitHub's hosts are granted (the optional host permissions the check needs),
+// as last read: a click's handler asks for them before anything else it awaits, since
+// Firefox takes a request only straight from the click
+let hostsGranted = false;
+
+// Asks for GitHub's hosts; called first thing in a click's handler. → granted
+function askForUpdateHosts() {
+  if (hostsGranted) return Promise.resolve(true);
+  return chrome.permissions.request({ origins: updateOrigins() }).then((yes) => {
+    hostsGranted = !!yes;
+    return hostsGranted;
+  }, () => false);
+}
+
+// Firefox (its extension pages are moz-extension:), whose install steps differ and
+// which can't open its add-ons pages from an extension
+function inFirefox() {
+  return location.protocol === 'moz-extension:';
 }
 
 function say(id, text, kind) {
@@ -46,7 +67,8 @@ function renderUpdate(s) {
   }
   byId('checker').hidden = false;
   byId('settings').hidden = false;
-  byId('update-check').checked = s.updateCheck !== false;
+  byId('update-check').checked = s.granted && s.updateCheck !== false;
+  byId('grant').hidden = s.granted;
   byId('key-note').textContent = t('A download is saved only when it is signed with the release key, fingerprint {fingerprint}.', { fingerprint: releaseKeyFingerprint() }) +
     (repo !== defaultRepo() ? ' ' + t('Releases are read from {repo} (the developer setting).', { repo }) : '');
 
@@ -61,7 +83,8 @@ function renderUpdate(s) {
     else if (u.release) status = t('You have the latest version (v. {version} is the latest release).', { version: u.release.version }) + ' ' + checked;
     else status = t('There is no release yet.') + ' ' + checked;
   }
-  if (s.updateCheck === false) status += ' ' + t('The daily check is off.');
+  if (!s.granted) status += ' ' + t('The check is off until you allow it access to GitHub (Settings, below).');
+  else if (s.updateCheck === false) status += ' ' + t('The daily check is off.');
   say('check-status', status, u && u.error ? 'bad' : 'muted');
 
   byId('release').hidden = !release;
@@ -87,6 +110,10 @@ async function downloadRelease() {
   const release = shownRelease;
   if (!release) return;
   const button = byId('download');
+  if (!await askForUpdateHosts()) {
+    say('download-status', t('Not downloaded: the browser didn\'t allow access to GitHub.'), 'bad');
+    return;
+  }
   button.disabled = true;
   say('download-status', t('Downloading…'), 'muted');
   try {
@@ -126,6 +153,10 @@ async function startUpdatePage() {
   document.querySelector('.topbar').append(languageMenu());
   const refresh = async () => renderUpdate(await readUpdateState());
   byId('check-now').addEventListener('click', async () => {
+    if (!await askForUpdateHosts()) {
+      say('check-status', t('Not checked: the browser didn\'t allow access to GitHub.'), 'bad');
+      return;
+    }
     byId('check-now').disabled = true;
     say('check-status', t('Checking…'), 'muted');
     try {
@@ -141,9 +172,29 @@ async function startUpdatePage() {
   byId('download').addEventListener('click', downloadRelease);
   byId('later').addEventListener('click', () => setChoice({ later: Date.now() + remindLaterMs() }));
   byId('skip').addEventListener('click', () => shownRelease && setChoice({ skipped: shownRelease.version }));
-  byId('update-check').addEventListener('change', () => chrome.storage.local.set({ updateCheck: byId('update-check').checked }));
+  byId('update-check').addEventListener('change', async () => {
+    const on = byId('update-check').checked;
+    if (on && !await askForUpdateHosts()) {
+      byId('update-check').checked = false;
+      return;
+    }
+    await chrome.storage.local.set({ updateCheck: on });
+  });
+  byId('grant-hosts').addEventListener('click', async () => {
+    if (await askForUpdateHosts()) await chrome.storage.local.set({ updateCheck: true });
+    await refresh();
+  });
   byId('reload').addEventListener('click', () => chrome.runtime.reload());
+  if (inFirefox()) {
+    byId('install-chromium').hidden = true;
+    byId('install-firefox').hidden = false;
+    byId('extensions').hidden = true;
+  }
   byId('extensions').addEventListener('click', () => chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }));
+  if (chrome.permissions && chrome.permissions.onAdded) {
+    chrome.permissions.onAdded.addListener(refresh);
+    chrome.permissions.onRemoved.addListener(refresh);
+  }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes.update || changes.updateChoice || changes.updateCheck || changes.updateDev)) refresh();
   });

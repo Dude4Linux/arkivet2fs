@@ -642,4 +642,4 @@ localizePage();
 document.querySelector('.topbar').append(languageMenu());
 addVersionLink(document.querySelector('.topbar'));
 watchDone();
-render();
+whenSiteAccess(document, render);  // access.js: the sites granted first

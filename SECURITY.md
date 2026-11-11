@@ -31,10 +31,12 @@ issue for those.
 
 - It talks only to `www.digitalarkivet.no` and `www.familysearch.org`, and, to check farm
   names, to `dokpro.uio.no` (Rygh's *Norske Gaardnavne*) and `ws.geonorge.no`
-  (Kartverket). These are the manifest's host permissions, with GitHub's
-  `api.github.com` and `release-assets.githubusercontent.com` for the update check.
-- The update check (only in a copy loaded unpacked) asks GitHub once a day for the
-  latest release, unauthenticated: GitHub sees your IP address, nothing else. A
+  (Kartverket). These are the manifest's host permissions. GitHub's `api.github.com`
+  and `release-assets.githubusercontent.com` are optional ones, for the update check:
+  no install asks for them, and the Updates page asks only when you click.
+- The update check (only in a copy loaded unpacked, once you've allowed it GitHub)
+  asks GitHub once a day for the latest release, unauthenticated: GitHub sees your IP
+  address, nothing else. A
   download from the Updates page is saved only when its signature verifies against the
   key built into the extension (`releases.js`, the same as `keys/release.pub`) and its
   manifest has the release's version.

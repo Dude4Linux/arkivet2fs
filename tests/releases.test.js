@@ -84,11 +84,12 @@ function fakeGitHub(json = releaseJson(), { sig = zipSig, data = zip } = {}) {
 }
 
 // chrome.* with a working storage.local, as the service worker and update.html use it
-function chromeWith({ installType = 'development', local = {}, version = '1.1.3' } = {}) {
+// `granted`: the update hosts (optional) granted; `answer`: what a request gets
+function chromeWith({ installType = 'development', local = {}, version = '1.1.3', granted = true, answer = true } = {}) {
   const chrome = chromeStub(version);
   const store = { ...local };
-  const listeners = { message: [], changed: [], clicked: [], alarm: [], notification: [] };
-  const calls = { badge: [], notifications: [], tabs: [], alarms: [], reload: 0 };
+  const listeners = { message: [], changed: [], clicked: [], alarm: [], notification: [], added: [], removed: [] };
+  const calls = { badge: [], notifications: [], tabs: [], alarms: [], reload: 0, requests: [] };
   chrome.storage.local = {
     async get(keys) {
       const out = {};
@@ -123,7 +124,18 @@ function chromeWith({ installType = 'development', local = {}, version = '1.1.3'
   chrome.notifications.onClicked = { addListener: (fn) => listeners.notification.push(fn) };
   chrome.management = { async getSelf() { return { installType }; } };
   chrome.tabs.create = async (options) => { calls.tabs.push(options); return {}; };
-  return { chrome, store, listeners, calls };
+  let hosts = granted;
+  chrome.permissions = {
+    async contains() { return hosts; },
+    request(p) {
+      calls.requests.push(p);
+      if (answer && !hosts) { hosts = true; for (const fn of listeners.added) fn(p); }
+      return Promise.resolve(answer);
+    },
+    onAdded: { addListener: (fn) => listeners.added.push(fn) },
+    onRemoved: { addListener: (fn) => listeners.removed.push(fn) }
+  };
+  return { chrome, store, listeners, calls, grant: () => { hosts = true; listeners.added.forEach((fn) => fn({ origins: ['https://api.github.com/*'] })); } };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
@@ -338,9 +350,9 @@ test('the service worker: the daily check off, the version already in use', asyn
 
 // update.html with its scripts, a chrome stub and the fake GitHub; saving a file is
 // caught (jsdom has no blob URLs and doesn't download)
-async function updatePage({ installType = 'development', local, gh = fakeGitHub(), lang } = {}) {
-  const { chrome, store, calls } = chromeWith({ installType, local });
-  const w = load(['i18n.js', 'i18n_strings.js', 'releases.js'], { html: 'update.html', url: 'chrome-extension://test/update.html', chrome, fetch: gh.fetch, lang, fast: true });
+async function updatePage({ installType = 'development', local, gh = fakeGitHub(), lang, granted, answer, url = 'chrome-extension://test/update.html' } = {}) {
+  const { chrome, store, calls } = chromeWith({ installType, local, granted, answer });
+  const w = load(['i18n.js', 'i18n_strings.js', 'releases.js'], { html: 'update.html', url, chrome, fetch: gh.fetch, lang, fast: true });
   withCrypto(w);
   w.releaseKey = () => testPub;
   const saved = [];
@@ -418,6 +430,69 @@ test('update.html: a broken signature or a changed file is not saved', async () 
   assert.match(badZip.$('download-status').textContent, /SHA-256 differs/);
 });
 
+test('the service worker: nothing is asked before the update hosts are granted', async () => {
+  const release = load(['i18n.js', 'i18n_strings.js', 'releases.js']).readRelease(releaseJson(), REPO);
+  const { chrome, store, calls, grant } = chromeWith({ granted: false, local: { update: { repo: REPO, checked: 1, release } } });
+  const gh = fakeGitHub();
+  loadBackground({ chrome, fetch: gh.fetch });
+  await settle();
+  assert.equal(gh.requests.length, 0);
+  assert.equal(calls.badge.at(-1), '');  // a release known from before isn't shown
+  assert.equal(calls.notifications.length, 0);
+  // "Check now" without them asks nothing either
+  await chrome.runtime.sendMessage({ action: 'checkUpdate' });
+  assert.equal(gh.requests.length, 0);
+
+  // granted on the Updates page: checked at once (the last check was long ago)
+  grant();
+  await settle();
+  assert.equal(gh.requests.length, 1);
+  assert.equal(store.update.release.version, '1.2.0');
+  assert.equal(calls.badge.at(-1), '↑');
+});
+
+test('update.html: the check is off until GitHub is allowed, asked for with a click', async () => {
+  const denied = await updatePage({ granted: false, answer: false });
+  assert.ok(!denied.$('grant').hidden);
+  assert.ok(!denied.$('update-check').checked);
+  assert.match(denied.$('check-status').textContent, /The check is off until you allow it access to GitHub/);
+  denied.$('check-now').click();
+  await settle();
+  assert.deepEqual(plain(denied.calls.requests), [{ origins: ['https://api.github.com/*', 'https://release-assets.githubusercontent.com/*'] }]);
+  assert.match(denied.$('check-status').textContent, /Not checked: the browser didn't allow access to GitHub/);
+  assert.equal(denied.gh.requests.length, 0);
+  // ticking the daily check asks too, and stays unticked when refused
+  denied.$('update-check').click();
+  await settle();
+  assert.equal(denied.calls.requests.length, 2);
+  assert.ok(!denied.$('update-check').checked);
+  assert.equal(denied.store.updateCheck, undefined);
+
+  const allowed = await updatePage({ granted: false, local: { updateCheck: false } });
+  allowed.$('grant-hosts').click();
+  await settle();
+  assert.equal(allowed.calls.requests.length, 1);
+  assert.equal(allowed.store.updateCheck, true);
+  assert.ok(allowed.$('grant').hidden);
+  assert.ok(allowed.$('update-check').checked);
+  // granted now: "Check now" asks GitHub without asking the browser again
+  allowed.$('check-now').click();
+  await settle();
+  assert.equal(allowed.calls.requests.length, 1);
+  assert.equal(allowed.gh.requests.length, 1);
+});
+
+test('update.html: Firefox gets its own install steps, without the extensions page', async () => {
+  const p = await updatePage({ url: 'moz-extension://test/update.html' });
+  assert.ok(p.$('install-chromium').hidden);
+  assert.ok(!p.$('install-firefox').hidden);
+  assert.ok(p.$('extensions').hidden);
+  const chromium = await updatePage();
+  assert.ok(!chromium.$('install-chromium').hidden);
+  assert.ok(chromium.$('install-firefox').hidden);
+  assert.ok(!chromium.$('extensions').hidden);
+});
+
 test('update.html: a store install only shows the version', async () => {
   const p = await updatePage({ installType: 'normal' });
   assert.ok(!p.$('store-note').hidden);
@@ -442,9 +517,9 @@ test('the header link: the version, or the newer release', async () => {
   assert.equal(await show({ update: { release } }, '1.2.0'), 'v. 1.2.0');
 });
 
-test('every text of the update checker is in Bokmål and Nynorsk', async () => {
+test('every text of the update checker and the site access is in Bokmål and Nynorsk', async () => {
   const texts = new Set();
-  for (const file of ['releases.js', 'update.js']) {
+  for (const file of ['releases.js', 'update.js', 'access.js']) {
     const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
     for (const m of src.matchAll(/\bt\((['"])((?:\\.|(?!\1).)*)\1/g)) texts.add(m[2].replace(/\\(.)/g, '$1'));
     // the English problems and errors, translated with t() where shown

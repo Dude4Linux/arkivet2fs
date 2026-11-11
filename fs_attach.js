@@ -679,6 +679,13 @@ if (!window.__arkivet2fsAttach) {
   const factName = (type) => (type === 'OTHER_EVENT' ? 'custom event' : String(type).toLowerCase().replace(/_/g, ' '));
   const yearIn = (text) => { const m = String(text || '').match(/\b(\d{4})\b/); return m ? Number(m[1]) : null; };
 
+  // The only display of a fact type, when it has neither a date nor a place
+  function bareFact(type) {
+    const shown = displays(type);
+    const part = (el, id) => clean((el.querySelector('[data-testid="' + id + '"]') || {}).textContent || '');
+    return shown.length === 1 && !part(shown[0], 'conclusion-date') && !part(shown[0], 'conclusion-place') ? shown[0] : null;
+  }
+
   function onPersonPage(pid) {
     pid = String(pid || '').toUpperCase();
     if (!/^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(pid)) throw new Error('Not a FamilySearch PID: ' + pid);
@@ -774,6 +781,9 @@ if (!window.__arkivet2fsAttach) {
   async function addFact({ pid, addition, reason, save }) {
     onPersonPage(pid);
     const type = addition.type;
+    // A vital FS has with neither date nor place (FS's "Deceased" of an old import) is
+    // the one to fill in: FS keeps one of each and offers no Add for it
+    if (addition.action === 'add' && VITALS.includes(type) && bareFact(type)) addition = { ...addition, action: 'edit' };
     const before = new Set(displays(type).map((e) => clean(e.textContent)));
     const form = await openFactForm(addition);
     let fields;

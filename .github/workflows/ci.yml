@@ -54,6 +54,14 @@ jobs:
       - name: Build the packages
         run: node tools/build.mjs --out dist
 
+      # Mozilla's checks (addons-linter, as AMO runs them) on the package as built: one
+      # package for Chromium and Firefox. Warnings are shown, errors fail the run.
+      - name: Lint the package for Firefox
+        run: |
+          mkdir dist/lint
+          unzip -q dist/*.zip -d dist/lint
+          npx web-ext lint --source-dir dist/lint/arkivet2fs
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages

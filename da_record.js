@@ -1054,6 +1054,7 @@ function extractRecord(document, pageUrl) {
       sourceTitle: sourceInfo.sourceTitle,
       sourceUrl: sourceInfo.sourceUrl,
       county: sourceInfo.county,
+      church: recordDetails['parish/church'] || '',
       error: idValidation.valid ? null : idValidation.error
     };
   } catch (err) {
@@ -1109,8 +1110,10 @@ async function loadMoreResidents(doc, fetchText) {
       console.warn('arkivet2fs: could not load more residents from ' + url, err);
       return;
     }
-    const template = doc.createElement('template');
-    template.innerHTML = data.view || '';
+    // DA's HTML, parsed in an inert document (DOMParser: no scripts run, nothing loads)
+    // inside a template, which keeps table rows as rows
+    const parsed = new DOMParser().parseFromString('<template>' + (data.view || '') + '</template>', 'text/html');
+    const template = { content: doc.importNode(parsed.querySelector('template').content, true) };
     const rows = template.content.querySelector('tr');
     const table = rows && Array.from(section.querySelectorAll('tbody')).filter(function(body) {
       return body.querySelector('tr.data-item');

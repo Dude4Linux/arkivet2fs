@@ -1,6 +1,10 @@
 // The languages (the notifications), place tables, the farm check (personToQuery) and
-// the update check (releases.js)
-importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js', 'releases.js');
+// the update check (releases.js). Chromium runs this file as the service worker, which
+// loads them; Firefox runs the manifest's background "scripts", these files first,
+// and has no importScripts there.
+if (typeof importScripts === 'function') {
+  importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js', 'releases.js');
+}
 
 // Whether an address is a page on DigitalArkivet (https, www.digitalarkivet.no: the
 // manifest's host; digitalarkivet.no without www. redirects there)
@@ -297,10 +301,7 @@ async function showErrorMessage(errorMessage) {
     type: "basic",
     iconUrl: chrome.runtime.getURL("icons/icon128.png"),
     title: t("Error"),
-    message: tMessage(errorMessage),
-    buttons: [
-      { title: t("OK") }
-    ]
+    message: tMessage(errorMessage)
   }, (notificationId) => {
     if (chrome.runtime.lastError) {
       console.error('Failed to create notification:', chrome.runtime.lastError);
@@ -336,10 +337,12 @@ async function updateSettings() {
   return chrome.storage.local.get(['update', 'updateChoice', 'updateCheck', 'updateDev']);
 }
 
-// The newer release to show on the icon: checks on, not skipped or put off
+// The newer release to show on the icon: checks on (and the update hosts granted), not
+// skipped or put off
 async function pendingUpdate() {
   try {
     if (!await developmentInstall()) return null;
+    if (!await updateHostsGranted(chrome.permissions)) return null;
     const { update, updateChoice, updateCheck, updateDev } = await updateSettings();
     if (updateCheck === false) return null;
     return newerRelease(update, currentVersionOf(updateDev, chrome.runtime.getManifest().version), Date.now(), updateChoice || {});
@@ -376,12 +379,14 @@ async function showUpdate() {
 }
 
 // Checks GitHub when a day has passed (`force`: now, update.html's "Check now"), keeps
-// the answer and shows it. → the state kept, or null on a store install
+// the answer and shows it. Nothing is asked before the update hosts are granted (the
+// Updates page asks for them). → the state kept, or null on a store install
 async function checkForUpdate(force) {
   if (!await developmentInstall()) return null;
   const { update, updateCheck, updateDev } = await updateSettings();
   let state = update || null;
-  if (force || (updateCheck !== false && updateDue(update, Date.now()))) {
+  const granted = await updateHostsGranted(chrome.permissions);
+  if (granted && (force || (updateCheck !== false && updateDue(update, Date.now())))) {
     state = await fetchLatestRelease(updateRepoOf(updateDev), update, fetch, Date.now());
     const now = await chrome.storage.local.get('update');
     // the notification kept since (two checks at once)
@@ -413,10 +418,17 @@ chrome.notifications.onClicked.addListener((id) => {
   chrome.notifications.clear(id, () => {});
   openUpdatePage();
 });
+// The update hosts granted (the Updates page) or taken back (the browser's settings)
+if (chrome.permissions && chrome.permissions.onAdded) {
+  const updateHosts = (p) => (p.origins || []).some(o => updateOrigins().includes(o));
+  chrome.permissions.onAdded.addListener((p) => { if (updateHosts(p)) checkForUpdate(false); });
+  chrome.permissions.onRemoved.addListener((p) => { if (updateHosts(p)) showUpdate(); });
+}
 // update.html's choices and settings change what the icon shows
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  if (changes.updateCheck || changes.updateChoice) showUpdate();
+  if (changes.updateCheck) checkForUpdate(false); // turned on: a check if one is due
+  else if (changes.updateChoice) showUpdate();
   if (changes.updateDev) checkForUpdate(true);
 });
 // update.html's "Check now"

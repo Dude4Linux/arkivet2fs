@@ -2,7 +2,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBackground, plain } = require('./harness.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { load, loadBackground, chromeStub, plain, ROOT } = require('./harness.js');
 
 test('isDigitalArkivet(): https, www.digitalarkivet.no only (the manifest\'s host)', () => {
   const w = loadBackground();
@@ -62,4 +64,31 @@ test('personToQuery(): not a farm here, so the rest is a surname too', async () 
   assert.equal(q.get('q.surname'), 'Lindeman');
   assert.equal(q.get('q.surname.1'), 'Hansdatter');
   assert.equal(q.get('q.birthLikeDate.from'), '1848');
+});
+
+test('Firefox: the manifest\'s background scripts, in order, without importScripts', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.background.service_worker, 'background.js');
+  const scripts = manifest.background.scripts;
+  assert.equal(scripts.at(-1), 'background.js');
+  // the same files the service worker imports
+  const src = fs.readFileSync(path.join(ROOT, 'background.js'), 'utf8');
+  const imported = src.match(/importScripts\(([^)]*)\)/)[1].match(/'[^']+'/g).map((f) => f.slice(1, -1));
+  assert.deepEqual([...scripts.slice(0, -1)].sort(), [...imported].sort());
+  // an event page has no importScripts: the files run first, then background.js
+  const w = load(scripts, { chrome: chromeStub() });
+  assert.equal(typeof w.importScripts, 'undefined');
+  assert.equal(w.isDigitalArkivet('https://www.digitalarkivet.no/'), true);
+  assert.equal(typeof w.farmNear, 'function');
+});
+
+test('showErrorMessage(): a notification without buttons (Firefox has none)', async () => {
+  const chrome = chromeStub();
+  const made = [];
+  chrome.notifications.create = (options, done) => { made.push(options); };
+  const w = loadBackground({ chrome });
+  await w.showErrorMessage('Not a DigitalArkivet URL');
+  assert.equal(made.length, 1);
+  assert.equal(made[0].message, 'Not a DigitalArkivet URL');
+  assert.equal(made[0].buttons, undefined);
 });

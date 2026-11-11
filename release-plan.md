@@ -424,7 +424,7 @@ new browser.
 - **The update-check hosts:** `api.github.com` and `release-assets.githubusercontent.com`
   serve only unpacked copies, but every install asks for them, and the store reviews
   ask why. Move them to `optional_host_permissions`, asked for on the Updates page with
-  one click in an unpacked copy ("Check for updates" off until then). A decision
+  one click in an unpacked copy ("Check for updates" off until then). Decided
   (decision 11).
 - **The hidden window in Firefox:** the linker reads FS in a `popup` window behind its
   own (`hiddenTab()`). Check that Firefox draws it (FS's SourceBox list loads), keeps it
@@ -512,6 +512,6 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
 9. ~~Dev-only `package.json`~~ **Decided:** keep it (jsdom, for the tests); add web-ext to
    it in Phase 6.
 10. ~~Packages~~ **Decided:** one zip for all browsers and stores, one manifest.
-11. **The update-check hosts:** optional permissions asked for on the Updates page
-    (recommended: store installs then ask only for the four sites they use), or kept in
-    `host_permissions` and justified to the reviewers as used by unpacked copies only.
+11. ~~The update-check hosts~~ **Decided:** optional permissions
+    (`optional_host_permissions`), asked for on the Updates page with a click; store
+    installs ask only for the four sites they use.

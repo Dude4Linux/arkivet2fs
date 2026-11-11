@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_name__",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "__MSG_description__",
   "default_locale": "en",
   "permissions": [
@@ -15,12 +15,22 @@
     "https://www.familysearch.org/*",
     "https://www.digitalarkivet.no/*",
     "https://www.dokpro.uio.no/*",
-    "https://ws.geonorge.no/*",
+    "https://ws.geonorge.no/*"
+  ],
+  "optional_host_permissions": [
     "https://api.github.com/*",
     "https://release-assets.githubusercontent.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": [
+      "i18n.js",
+      "i18n_strings.js",
+      "da_places.js",
+      "farms.js",
+      "releases.js",
+      "background.js"
+    ]
   },
   "action": {
     "default_title": "__MSG_name__",
@@ -60,5 +70,16 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "arkivet2fs@dude4linux",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
   }
 }

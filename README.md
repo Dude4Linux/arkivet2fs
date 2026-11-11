@@ -2,7 +2,7 @@
 
 <img src="icons/banner.png" alt="arkivet2fs: find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch" width="100%">
 
-A Chrome/Brave extension that connects FamilySearch (FS) with Norway's Digitalarkivet
+A Chrome/Brave/Firefox extension that connects FamilySearch (FS) with Norway's Digitalarkivet
 (DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
 citation, and attaches it to the tree persons the record names.
@@ -31,6 +31,15 @@ There's no build step: the extension is its source files.
 
 You need to be signed in to FamilySearch. Digitalarkivet needs no account.
 
+**In Firefox** (140 or later) and LibreWolf, until the extension is on Mozilla's add-ons
+site: unzip the package as above, open `about:debugging`, choose **This Firefox**, then
+**Load Temporary Add-on…** and pick `manifest.json` in the `arkivet2fs` folder. Firefox
+keeps it until it closes; load it again after a restart (your stored persons and drafts
+are kept). If Firefox hasn't given the extension Digitalarkivet and FamilySearch, its
+pages show **Allow access**: click it once. In LibreWolf, keep FamilySearch's cookies
+when it closes (Settings → Privacy & Security → Cookies and Site Data → Manage
+Exceptions → `https://www.familysearch.org`, Allow), or you'll be signed out each time.
+
 **To update**, unzip the new release over the same folder, replacing its files, and
 click the reload button on the extension's card in `chrome://extensions`. Chrome keeps
 an unpacked extension's stored persons and drafts by its folder, so keep the folder
@@ -43,9 +52,10 @@ there (or the icon with the arrow, on a page other than Digitalarkivet) for the
 after checking it (its size and SHA-256 as the release gives them, and the signature
 against the maintainer's key below; a file that fails is not saved). Unzip it over the
 folder, then click **Reload the extension** there. **Remind me later** waits three days;
-**Skip this version** waits for the next one. The check runs once a day and sends one
-request to GitHub (`api.github.com`), which sees your IP address and nothing else; turn
-it off on the Updates page. A copy installed from a store isn't checked: the store
+**Skip this version** waits for the next one. From 1.6.0 the check is off until you
+click **Allow the check** on the Updates page, which asks the browser for GitHub's two
+hosts. It then runs once a day and sends one request to GitHub (`api.github.com`),
+which sees your IP address and nothing else; turn it off on the Updates page. A copy installed from a store isn't checked: the store
 updates it.
 
 **To check a download** (optional): each package is signed with the maintainer's key,
@@ -277,7 +287,10 @@ what it's doing, and the source and the people appear when it knows. It reads
 FamilySearch in a window of its own placed right behind the linker's, out of the way of
 your tabs (Chrome doesn't draw a minimized window, and FamilySearch's SourceBox doesn't
 load in one), searches every folder for the source's title, reads who
-the source is attached to, and closes the window again (it only reads). A source already in your SourceBox is shown in green, with
+the source is attached to, and closes the window again (it only reads). In Firefox, and
+in Chrome on some desktops, that window comes up in front of the linker while it reads,
+and you see FamilySearch's pages go by: leave it, it closes by itself. The linker reads
+the relatives' families and the paired persons' details in it the same way. A source already in your SourceBox is shown in green, with
 an **Attached To** link to its page on FamilySearch (point at it to see how many of the
 people paired here have it); with two church books, each source is marked on its own.
 A person who has the source is highlighted in green too, as in FS's Source Linker (with
@@ -356,9 +369,9 @@ use that language.
 - **Data stays between the sites.** The extension sends requests only to
   digitalarkivet.no and familysearch.org. To check farm names, it also queries Rygh's
   *Norske Gaardnavne* (dokpro.uio.no) and Kartverket's place names (ws.geonorge.no).
-  The update check asks GitHub (api.github.com) for the latest release once a day,
-  and a download comes from GitHub's file host; neither gets anything about you or
-  your records.
+  The update check, once you've allowed it on the Updates page, asks GitHub
+  (api.github.com) for the latest release once a day, and a download comes from
+  GitHub's file host; neither gets anything about you or your records.
   Search results are kept only for the browser session. The extension also keeps the
   last 30 FS persons you searched for (name, events and family), so the linker can
   pair a record with them. They stay in the browser's extension storage.
@@ -372,6 +385,7 @@ use that language.
 | `i18n.js`, `i18n_strings.js` | The languages: choosing one, and the Bokmål and Nynorsk texts |
 | `fs_person.js` | The "Digital Arkivet" entry on FS person pages |
 | `background.js` | Toolbar icon, opening the search page and the linker, keeping the FS persons, the daily update check |
+| `access.js` | Asks for the sites the extension needs when the browser hasn't given them |
 | `releases.js` | The update check: GitHub's latest release, checking a download against the release key |
 | `update.html`, `update.js`, `update.css` | The Updates page: the new release's notes, a checked download, how to install it |
 | `farms.js` | Farm or family name? (Rygh, Kartverket) |

@@ -927,13 +927,55 @@ function placeIn(name, fsText) {
 // else the record's in FS's form. A place the record only implies (`weak`: a death in
 // the parish of the burial) fills an empty one only. `elsewhere`: a place the record
 // names but isn't in (a census's birthplace), so not given the record's county.
-function mergePlace(daPlace, fsText, record, weak, elsewhere) {
+// A farm (a place no municipality is named by) goes before FS's municipality ("Holten"
+// and FS's "Vågå, Oppland, Norway"), never over a place of FS's that says more or
+// names another country; `within`, when given, is the place FS's must name for that
+// (a death: the parish, not the town of a hospital). `suggested` is the place to give
+// when FS has none.
+function mergePlace(daPlace, fsText, record, weak, elsewhere, within, suggested) {
   const has = String(fsText || '').trim();
   const name = cleanPlace(daPlace);
   if (!name) return has;
-  if (!has) return fsPlace(name, record, elsewhere);
+  if (!has) return suggested || fsPlace(name, record, elsewhere);
   if (weak || placeIn(name, has)) return has;
+  if (!fsMunicipality(name, record, elsewhere)) {
+    const parts = has.split(',').map((x) => x.trim());
+    const municipal = parts.length <= 3 && parts[parts.length - 1] === 'Norway';
+    return municipal && (!within || placeIn(within, has)) ? joined(name, has) : has;
+  }
   return fsPlace(name, record, elsewhere);
+}
+
+// Whether two farm names are one farm in two spellings: the same consonants, with d
+// and t as one (Holden and Holten; clerks wrote a name as it was said)
+function sameFarm(a, b) {
+  const key = (s) => skeleton(s).replace(/d/g, 't');
+  const k = key(a);
+  return k.length >= 3 && k === key(b);
+}
+
+// Where the deceased died, as the record has it: its place of death, else their
+// residence, else the farm in their name (the words after the patronymic are an
+// address: "Lars Larsen Holten"), in the birthplace's spelling when that is the same
+// farm (DA's "Holten" for the name's "Holden"); '' when none
+function deathFarm(person, record) {
+  const own = (record.people || []).find((p) => p.current);
+  const fields = own && own.id === person.id ? record.fields || {} : {};
+  const given = cleanPlace(fields['place of death'] || fields['death place'] || person.residence || '');
+  if (given) return given;
+  const farm = nameParts(stripVariants(person.name)).rest;
+  if (!farm) return '';
+  const born = cleanPlace(person.birthPlace || fields['birth place'] || '');
+  return born && sameFarm(farm, born) ? born : farm;
+}
+
+// Where a church-book event took place, as FS names it: the record's church when it
+// gives one (a municipality of its own, else in the parish), else the parish
+function churchPlace(record) {
+  const parish = fsPlace(cleanPlace(recordPlace(record)), record);
+  const church = cleanPlace(record.church);
+  if (!church || placeIn(church, parish)) return { name: recordPlace(record), place: parish };
+  return { name: church, place: fsMunicipality(church, record) || joined(church, parish) };
 }
 
 // A name split as FS's form takes it: the given names up to the patronymic, which is
@@ -984,16 +1026,33 @@ function factAdditions(person, record, tree, name) {
     }
   }
 
-  // Birth, christening, death, burial: added, or FS's combined with the record's
-  // A birthplace is the record's own place only on a baptism; a census's is anywhere
-  const vitalPlace = { Birth: [da.Birth && da.Birth.place, false, true], Christening: [place, false], Death: [place, true], Burial: [place, false] };
+  // Birth, christening, death, burial: added, or FS's combined with the record's.
+  // A birthplace can lie anywhere (a census's, a burial's). A death took place at the
+  // record's place of death, the residence or the farm in the name, in the parish; a
+  // record with none of them only implies the parish (`weak`). Christening and burial
+  // were at the church.
+  const church = churchPlace(record);
+  const parish = fsPlace(cleanPlace(place), record);
+  const died = deathFarm(person, record);
+  const diedAt = died && !placeIn(died, parish) ? joined(died, parish) : parish;
+  const bornAt = da.Birth && cleanPlace(da.Birth.place);
+  // a birth farm FS has no place for: in the parish when he died on the same farm
+  const bornSuggested = bornAt && !fsMunicipality(bornAt, record, true) && died && sameFarm(bornAt, died) ? diedAt : '';
+  const vitalPlace = {
+    Birth: [bornAt, false, true, '', bornSuggested],
+    Christening: [church.name, false, false, '', church.place],
+    Death: [died || place, !died, false, place, died ? diedAt : ''],
+    Burial: [church.name, false, false, '', church.place]
+  };
   for (const [fact, type] of Object.entries(VITAL_TYPES)) {
     const f = da[fact];
     if (!f || !f.year) continue;
     const fs = full[fact.toLowerCase()] || null;
     const date = f.date && f.date.year ? f.date : { year: f.year };
-    const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(vitalPlace[fact][0], fs && fs.place, record, vitalPlace[fact][1], vitalPlace[fact][2]) };
-    if (!fs || !(fs.date || fs.place)) out.push({ fact, action: 'add', type, value });
+    const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(...[vitalPlace[fact][0], fs && fs.place, record].concat(vitalPlace[fact].slice(1))) };
+    // FS's fact with neither date nor place ("Deceased", of an old import) is changed:
+    // FS keeps one of each and has no Add for it
+    if (!fs) out.push({ fact, action: 'add', type, value });
     else if (value.date !== String(fs.date || '').trim() || value.place !== String(fs.place || '').trim()) {
       out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), value });
     }
@@ -1089,7 +1148,7 @@ function additionsBox(row, person, pid, list) {
       body.hidden = !box.checked;
       changed();
     });
-    const current = a.action === 'edit' ? el('span', { class: 'muted', text: ' ' + t('FamilySearch has: {current}', { current: a.current }) }) : null;
+    const current = a.action === 'edit' ? el('span', { class: 'muted', text: ' ' + t('FamilySearch has: {current}', { current: a.current || t(a.fact === 'Death' ? 'Deceased' : 'no date or place') }) }) : null;
     return { a, kept, node: el('li', {}, [el('label', {}, [box, document.createTextNode(additionLabel(a))]), current, body]) };
   });
   const reasonKey = additionKey(person, pid, null);
@@ -1494,7 +1553,7 @@ async function readResidence(need, generation) {
     const names = pids.map((p) => (treePool(state.fs, state.trees).find((tree) => tree.pid === p) || { name: p }).name);
     status.hidden = false;
     status.textContent = t(isCensus() ? 'Reading the FamilySearch families of {names} to pair the others at the residence…'
-      : 'Reading the FamilySearch families of {names} to pair the others in the record…', { names: names.join(', ') });
+      : 'Reading the FamilySearch families of {names} to pair the others in the record…', { names: names.join(', ') }) + ' ' + windowNote();
     const read = await readTreePersons(pids);
     for (const p of pids) if (!read[p]) failed.push(p);
     if (generation !== state.generation) return;  // another FS person was chosen meanwhile
@@ -1781,10 +1840,26 @@ function waitForLoad(tabId) {
   return loaded;
 }
 
+// Until the tab has stopped loading. Firefox reports a new tab's or window's first page,
+// about:blank, as complete, at times only after the page asked for has started loading:
+// a load is done only when the tab isn't loading still
+async function settled(tabId) {
+  for (let i = 0; i < 5; i++) {
+    const next = waitForLoad(tabId);
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab || tab.status !== 'loading') {
+      next.cancel();
+      return;
+    }
+    await next;
+  }
+}
+
 async function openTab(url) {
   const here = await chrome.tabs.getCurrent();
   const tab = await chrome.tabs.create({ url, active: true, index: here ? here.index + 1 : undefined });
   await waitForLoad(tab.id);
+  await settled(tab.id);
   return tab.id;
 }
 
@@ -1819,6 +1894,7 @@ async function navigate(tabId, url, active = true) {
       continue;
     }
     await loaded;
+    await settled(tabId);
     return;
   }
 }
@@ -1831,6 +1907,7 @@ async function step(tabId, name, args) {
   const tab = await chrome.tabs.get(tabId);
   if (!onFamilySearch(tab.url)) {
     // (no url: a site the extension has no access to, as FS's sign-in page)
+    console.info('arkivet2fs: the FamilySearch tab is not on FamilySearch for ' + name + ' (' + (tab.url || 'no address') + ', ' + tab.status + ')');
     return { ok: false, error: tab.url ? t('The FamilySearch tab is no longer on FamilySearch.')
       : t('The FamilySearch tab is on a page the extension cannot read, perhaps the sign-in page. Please sign in to FamilySearch and try again.') };
   }
@@ -2033,7 +2110,7 @@ function showFsCheck() {
       link.title = t('Already in your SourceBox ({id}).', { id: source.id }) + ' ' + attachedText(source, paired);
     }
     let text = null, kind = 'muted';
-    if (check && check.checking && !$('linker').hidden) text = t('Checking your SourceBox on FamilySearch…');
+    if (check && check.checking && !$('linker').hidden) text = t('Checking your SourceBox on FamilySearch…') + ' ' + windowNote();
     else if (check && check.error && i === 0) { text = t('Not checked on FamilySearch: {error}', { error: check.error }); kind = 'bad'; }
     else if (changed) { text = t('The title has changed since the SourceBox was checked.'); kind = 'near'; }
     note.hidden = !text;
@@ -2158,6 +2235,12 @@ function actionLabels(known) {
 // covered window is still drawn on Linux; where Chrome stops drawing it (Windows and
 // macOS track covered windows), show() raises it for the step tried again, back()
 // raises the linker again; close() removes it.
+// Said while FS is read in that window: it comes up in front of the linker's in Firefox,
+// and in Chrome on desktops that don't stack it below
+function windowNote() {
+  return t('A FamilySearch window may come up meanwhile; leave it, it closes by itself.');
+}
+
 async function hiddenTab() {
   const here = await chrome.tabs.getCurrent();
   const options = { url: 'about:blank', type: 'popup', focused: false };
@@ -2169,7 +2252,10 @@ async function hiddenTab() {
   } catch (e) {
     win = await chrome.windows.create(options);  // bounds refused: where Chrome puts it
   }
+  // Firefox ignores `focused: false` and focuses the new window: the linker's back on top
+  if (here && win.focused) await chrome.windows.update(here.windowId, { focused: true }).catch(() => {});
   const tab = (win.tabs && win.tabs[0]) || (await chrome.tabs.query({ windowId: win.id }))[0];
+  await settled(tab.id);  // its about:blank loaded, so its 'complete' isn't taken for FS's
   return {
     id: tab.id,
     show: () => { console.info('arkivet2fs: FamilySearch is read in a window on top for a moment'); return chrome.windows.update(win.id, { focused: true }).catch(() => {}); },
@@ -2520,6 +2606,14 @@ function fsPlace(place, record, elsewhere) {
   if (!name) return '';
   if (/,/.test(name)) return name;
   const county = record.county && !/,/.test(record.county) ? record.county : '';
+  return fsMunicipality(name, record, elsewhere) || joined(name, elsewhere ? '' : county, 'Norway');
+}
+// The municipality a place names, as FS writes it ("Vågå, Oppland, Norway"), or ''
+// (a farm, a place DA's tables don't have)
+function fsMunicipality(place, record, elsewhere) {
+  const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
+  if (!name || /,/.test(name)) return '';
+  const county = record.county && !/,/.test(record.county) ? record.county : '';
   const names = [...new Set([name, name.replace(/s$/, ''), name.replace(/\.$/, '')])];
   // with the record's county first; one anywhere also alone (the county Bergen is also
   // the town, which makes "Vaage, Bergen" two places)
@@ -2530,7 +2624,7 @@ function fsPlace(place, record, elsewhere) {
     const municipality = code === '0301' && namesKristiania(name) ? 'Kristiania' : municipalityName(code);
     return joined(municipality, fsCounty(countyName(code.slice(0, 2))), 'Norway');
   }
-  return joined(name, elsewhere ? '' : county, 'Norway');
+  return '';
 }
 // Whether a place is Oslo under its old name: a word of it is one of Oslo's
 // PLACE_ALIASES but "oslo" (Christiania, Kristiania, Chra., Chria., Chrania, Kria.)
@@ -2958,7 +3052,7 @@ async function main() {
     status.textContent = t('Pairing the people with the FamilySearch family…');
     await setPerson(pid);
     // Shown when the SourceBox has told what FS has already
-    status.textContent = t('Checking your SourceBox on FamilySearch…');
+    status.textContent = t('Checking your SourceBox on FamilySearch…') + ' ' + windowNote();
     await checkOnFamilySearch();
     status.hidden = true;
     $('linker').hidden = false;
@@ -2990,5 +3084,5 @@ if (typeof chrome !== 'undefined' && chrome.storage) {
   localizePage();
   document.querySelector('.topbar').append(languageMenu());
   addVersionLink(document.querySelector('.topbar'));
-  main();
+  whenSiteAccess(document, main);  // access.js: the sites granted first
 }

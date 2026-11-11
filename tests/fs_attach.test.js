@@ -625,6 +625,22 @@ test('addFact(): a birth changed through its view\'s Edit, the view closed after
   assert.equal(w.document.querySelector('[data-testid="conclusion-dialog"]'), null);
 });
 
+test('addFact(): an add of a vital FS has with neither date nor place (an old import\'s "Deceased") fills that one in', async () => {
+  const { step, saved, w } = factPage({ birthSources: false });
+  const shown = w.document.querySelector('[data-testid="conclusionDisplay:BIRTH"]');
+  shown.querySelector('[data-testid="conclusion-date"]').textContent = '';
+  shown.querySelector('[data-testid="conclusion-place"]').textContent = '';
+  const birth = { fact: 'Birth', action: 'add', type: 'BIRTH', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual([saved[0].type, saved[0].date], ['BIRTH', '23 August 1846']);
+  // one with a date is not written over by an add
+  const page = factPage();
+  const refused = await page.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /already has a birth/);
+});
+
 test('addFact(): an edit FS has already (Save stays off: an earlier run saved it) is cancelled and answered as unchanged', async () => {
   const { step, saved, log, w } = factPage({ saveOff: true });
   const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '1846', place: 'Norway' } };

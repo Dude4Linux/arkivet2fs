@@ -4,6 +4,35 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.6.0 - not released yet
+
+- Runs in Firefox (140 or later) and LibreWolf as well as Chrome, Brave, Edge and
+  Opera: one package for all. Until it's on Mozilla's add-ons site, load it in
+  Firefox from `about:debugging` (see the README).
+- When the browser hasn't given the extension Digitalarkivet or FamilySearch (Firefox
+  can hold them back, and so can Chrome when the extension's site access is "On
+  click"), the search page and the linker say so, with an **Allow access** button,
+  instead of failing on the first search.
+- The update check no longer asks for GitHub when the extension is installed. It is
+  off until you click **Allow the check** on the Updates page, which asks the browser
+  for GitHub's two hosts once. A copy updated from 1.5.0 may need that click too.
+- Error notifications no longer have an OK button (Firefox has none); they close by
+  themselves as before.
+- In Firefox, the window the linker reads FamilySearch in comes up in front while it
+  reads; the linker now says so ("leave it, it closes by itself"). It also waits until
+  each FamilySearch page has really loaded, where Firefox could report the window's
+  empty first page as loaded and the check then failed ("…perhaps the sign-in page").
+- A burial's suggested death place is where the person died: the record's place of
+  death, else the residence, else the farm in the name (in the birthplace's spelling
+  when it's the same farm), in the parish, no longer the parish alone. A farm the
+  record gives as a birthplace goes before the tree's municipality ("Bakken, Vågå,
+  Oppland, Norway") instead of replacing it; a tree place that says more, or names
+  another town or country, is kept. The burial (and a christening) is in the church
+  the record names, else the parish.
+- A death (or other vital) the tree has with neither date nor place, such as
+  "Deceased" from an old import, is now changed with the record's date and place.
+  Before, the linker offered to add a second one, which FamilySearch refused.
+
 ## 1.5.0 - 2026-11-10
 
 - The linker can add the record's facts to the tree persons. Under each person's

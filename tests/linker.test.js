@@ -467,7 +467,7 @@ test('showFsCheck(): a source in the SourceBox tints its box, and the rows of pe
 
   state.fsCheck = { checking: true };  // checking again: a note
   win.showFsCheck();
-  assert.equal($('fs-check').textContent, 'Checking your SourceBox on FamilySearch…');
+  assert.equal($('fs-check').textContent, 'Checking your SourceBox on FamilySearch… A FamilySearch window may come up meanwhile; leave it, it closes by itself.');
 
   state.fsCheck = { sources: [{ title, book: '', id: 'TEST-S01', ids: ['TEST-S01'], persons: [] }] };
   $('f-title').value = title + ' (edited)';
@@ -568,6 +568,35 @@ test('checkOnFamilySearch(): reads FS in an unfocused popup window behind the li
   assert.equal(windows[0].open, false);  // closed
   assert.equal(state.fsCheck.sources[0].id, 'TEST-S01');
   assert.equal($('source').classList.contains('in-sourcebox'), true);
+});
+
+test('a load reported complete while the tab still loads (Firefox\'s about:blank) is waited out before a step', async () => {
+  const fs = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [] })
+  });
+  const { chrome } = fs;
+  // the first get after each navigation: still loading, with no address (Firefox gives
+  // none for about:blank); the real page's load comes a moment later
+  const get = chrome.tabs.get;
+  const update = chrome.tabs.update;
+  const early = new Set();
+  const listeners = [];
+  const addListener = chrome.tabs.onUpdated.addListener;
+  chrome.tabs.onUpdated.addListener = (fn) => { listeners.push(fn); addListener(fn); };
+  chrome.tabs.update = async (id, options) => { if (options.url) early.add(id); return update(id, options); };
+  chrome.tabs.get = async (id) => {
+    if (early.has(id)) {
+      early.delete(id);
+      setTimeout(() => [...listeners].forEach((fn) => fn(id, { status: 'complete' })), 5);
+      return { id, status: 'loading' };
+    }
+    return { ...(await get(id)), status: 'complete' };
+  };
+  const { win, state } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  assert.equal(state.fsCheck.error, undefined);
+  assert.equal(state.fsCheck.sources[0].id, null);  // searched on FS: not there
+  assert.deepEqual(plain(fs.asked.map(([name]) => name)), ['findSource']);
 });
 
 test('the SourceBox copy with other fields: each shown with a choice, the record\'s by default, FS\'s notes kept with the new lines; the plan follows', async () => {
@@ -1127,6 +1156,60 @@ test('factAdditions(): a burial\'s death date into FS\'s year, the burial, resid
   // FS has the residence of that year and the occupation: not offered again
   state.fs = { ...state.fs, residences: [{ date: '1854', place: 'Vinger' }], occupations: [{ description: 'lægdslem' }] };
   assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).map((a) => a.fact)), ['Death', 'Burial']);
+});
+
+test('factAdditions(): a death FS has with neither date nor place ("Deceased") is changed, not added', () => {
+  const { win, state } = checkedPage();
+  const b = record('burial-1854');
+  const lars = w.recordPeople(b)[0];
+  state.record = b;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '', place: '' }, residences: [], occupations: [] };
+  const death = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' })).find((a) => a.fact === 'Death');
+  assert.equal(death.action, 'edit');
+  assert.equal(death.value.date, '12 April 1854');
+  assert.equal(win.onTreeAlready(state.fs, death), false);
+});
+
+test('sameFarm(): one farm in two spellings, d and t as one', () => {
+  assert.equal(w.sameFarm('Holden', 'Holten'), true);
+  assert.equal(w.sameFarm('Bakken', 'Bakkin'), true);
+  assert.equal(w.sameFarm('Holden', 'Hagen'), false);
+  assert.equal(w.sameFarm('', ''), false);
+});
+
+test('factAdditions(): a deceased died at the farm in the name, in the birthplace\'s spelling; buried at the church', () => {
+  const { win, state } = checkedPage();
+  const b = record('burial-1854');
+  // no residence; the farm after the patronymic, the birthplace the same farm spelled with a t
+  const holden = { ...b, fields: { ...b.fields, residence: '', 'last name': 'Larsen Holden' },
+    people: b.people.map((p) => ({ ...p, name: 'Lars Larsen Holden', residence: '', birthPlace: 'Holten' })) };
+  const lars = w.recordPeople(holden)[0];
+  state.record = holden;
+  const places = (fs) => {
+    state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', residences: [], occupations: [{ description: 'Lægdslem' }], ...fs };
+    return Object.fromEntries(plain(win.factAdditions(lars, holden, { pid: 'TEST-LLA' }))
+      .filter((a) => a.value.place !== undefined).map((a) => [a.fact, a.value.place]));
+  };
+  // FS has none: born and died on the farm, in the parish; buried in the parish
+  assert.deepEqual(places({}), { Birth: 'Holten, Vinger, Hedmark, Norway', Death: 'Holten, Vinger, Hedmark, Norway', Burial: 'Vinger, Hedmark, Norway' });
+  // FS's municipality gets the farm; FS's farm or another town is kept
+  const muni = places({ birth: { date: 'about 1797', place: 'Vinger, Hedmark, Norway' }, death: { date: '1854', place: 'Vinger, Hedmark, Norway' } });
+  assert.equal(muni.Birth, 'Holten, Vinger, Hedmark, Norway');
+  assert.equal(muni.Death, 'Holten, Vinger, Hedmark, Norway');
+  const kept = places({ birth: { date: 'about 1797', place: 'Holten, Vinger, Hedmark, Norway' }, death: { date: '1854', place: 'Kongsvinger, Hedmark, Norway' } });
+  assert.equal(kept.Birth, undefined);
+  assert.equal(kept.Death, 'Kongsvinger, Hedmark, Norway');
+  // FS's birth abroad isn't touched
+  assert.equal(places({ birth: { date: 'about 1797', place: 'Decorah, Iowa, United States' } }).Birth, undefined);
+  // the record's own place of death comes first; a church the record names is the burial's place
+  const named = { ...holden, church: 'Austmarka', fields: { ...holden.fields, 'place of death': 'Sletten' } };
+  state.record = named;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', residences: [], occupations: [{ description: 'Lægdslem' }] };
+  const got = Object.fromEntries(plain(win.factAdditions(lars, named, { pid: 'TEST-LLA' })).map((a) => [a.fact, a.value.place]));
+  assert.equal(got.Death, 'Sletten, Vinger, Hedmark, Norway');
+  assert.equal(got.Burial, 'Austmarka, Vinger, Hedmark, Norway');
+  // a birth farm that isn't the death farm, FS with no place: as before, the farm in Norway
+  assert.equal(got.Birth, 'Holten, Norway');
 });
 
 test('factAdditions(): a census residence has the farm in its place and the farm and district as its description', () => {

@@ -421,6 +421,7 @@ function i18nTable() {
     'Name type': ['Navnetype', 'Namnetype'],
     'Description': ['Beskrivelse', 'Skildring'],
     'FamilySearch has: {current}': ['FamilySearch har: {current}', 'FamilySearch har: {current}'],
+    'no date or place': ['uten dato eller sted', 'utan dato eller stad'],
     'Reason for the changes': ['Grunn til endringene', 'Grunn til endringane'],
     'Add to FamilySearch': ['Legg til på FamilySearch', 'Legg til på FamilySearch'],
     'Changes to the tree persons': ['Endringer på personene i treet', 'Endringar på personane i treet'],
@@ -434,6 +435,9 @@ function i18nTable() {
     // --- What FS already has (linker.js) --------------------------------------------------
     'Check the SourceBox again': ['Sjekk kildeboksen igjen', 'Sjekk kjeldeboksen igjen'],
     'Checking your SourceBox on FamilySearch…': ['Sjekker kildeboksen din i FamilySearch…', 'Sjekkar kjeldeboksen din i FamilySearch…'],
+    'A FamilySearch window may come up meanwhile; leave it, it closes by itself.': [
+      'Et FamilySearch-vindu kan komme opp imens; la det være, det lukkes av seg selv.',
+      'Eit FamilySearch-vindauge kan kome opp i mellomtida; la det vere, det blir lukka av seg sjølv.'],
     'Not checked on FamilySearch: {error}': ['Ikke sjekket i FamilySearch: {error}', 'Ikkje sjekka i FamilySearch: {error}'],
     'The title has changed since the SourceBox was checked.': ['Tittelen er endret siden kildeboksen ble sjekket.', 'Tittelen er endra sidan kjeldeboksen vart sjekka.'],
     'Attached To': ['Knyttet til', 'Knytt til'],
@@ -694,10 +698,21 @@ function i18nTable() {
     'The check asks GitHub for the latest release. Nothing about you or your records is sent; GitHub sees only your IP address.': ['Sjekken spør GitHub om den nyeste utgaven. Ingenting om deg eller oppføringene dine sendes; GitHub ser bare IP-adressen din.', 'Sjekken spør GitHub om den nyaste utgåva. Ingenting om deg eller oppføringane dine blir sendt; GitHub ser berre IP-adressa di.'],
     'A download is saved only when it is signed with the release key, fingerprint {fingerprint}.': ['En nedlasting lagres bare når den er signert med utgivelsesnøkkelen, fingeravtrykk {fingerprint}.', 'Ei nedlasting blir lagra berre når ho er signert med utgjevingsnøkkelen, fingeravtrykk {fingerprint}.'],
     'Releases are read from {repo} (the developer setting).': ['Utgavene leses fra {repo} (utviklerinnstillingen).', 'Utgåvene blir lesne frå {repo} (utviklarinnstillinga).'],
+    'Unzip the download over the folder this copy was loaded from. If you loaded a git clone, run git pull there instead.': ['Pakk ut nedlastingen over mappen denne kopien ble lastet fra. Har du lastet en git-klone, kjør git pull der i stedet.', 'Pakk ut nedlastinga over mappa denne kopien vart lasta frå. Har du lasta ein git-klone, køyr git pull der i staden.'],
+    'Reload the extension: the button below, or Reload on about:debugging (This Firefox). Your drafts and remembered persons are kept.': ['Last inn utvidelsen på nytt: knappen nedenfor, eller Reload på about:debugging (This Firefox). Utkast og lagrede personer beholdes.', 'Last inn utvidinga på nytt: knappen nedanfor, eller Reload på about:debugging (This Firefox). Utkast og lagra personar blir haldne på.'],
+    'The check needs access to GitHub (api.github.com, and release-assets.githubusercontent.com for the download). Your browser asks you once.': ['Sjekken trenger tilgang til GitHub (api.github.com, og release-assets.githubusercontent.com for nedlastingen). Nettleseren spør deg én gang.', 'Sjekken treng tilgang til GitHub (api.github.com, og release-assets.githubusercontent.com for nedlastinga). Nettlesaren spør deg éin gong.'],
+    'Allow the check': ['Tillat sjekken', 'Tillat sjekken'],
+    'The check is off until you allow it access to GitHub (Settings, below).': ['Sjekken er slått av til du gir den tilgang til GitHub (Innstillinger, nedenfor).', 'Sjekken er slått av til du gir han tilgang til GitHub (Innstillingar, nedanfor).'],
+    "Not downloaded: the browser didn't allow access to GitHub.": ['Ikke lastet ned: nettleseren tillot ikke tilgang til GitHub.', 'Ikkje lasta ned: nettlesaren tillét ikkje tilgang til GitHub.'],
+    "Not checked: the browser didn't allow access to GitHub.": ['Ikke sjekket: nettleseren tillot ikke tilgang til GitHub.', 'Ikkje sjekka: nettlesaren tillét ikkje tilgang til GitHub.'],
+
+    // --- Site access (access.js) ----------------------------------------------------------
+    'The extension may not read {sites} yet. It needs them to search DigitalArkivet and to read and update FamilySearch; your browser asks you once.': ['Utvidelsen har ikke lov til å lese {sites} ennå. Den trenger dem for å søke i Digitalarkivet og for å lese og oppdatere FamilySearch; nettleseren spør deg én gang.', 'Utvidinga har ikkje lov til å lese {sites} enno. Ho treng dei for å søkje i Digitalarkivet og for å lese og oppdatere FamilySearch; nettlesaren spør deg éin gong.'],
+    'Allow access': ['Gi tilgang', 'Gje tilgang'],
+    "The browser didn't allow it. Allow the extension these sites in the browser's extension settings, then reload this page.": ['Nettleseren tillot det ikke. Gi utvidelsen tilgang til disse nettstedene i nettleserens innstillinger for utvidelser, og last deretter inn denne siden på nytt.', 'Nettlesaren tillét det ikkje. Gje utvidinga tilgang til desse nettstadene i innstillingane for utvidingar i nettlesaren, og last så inn denne sida på nytt.'],
 
     // --- The toolbar icon (background.js, da_record.js) ---------------------------------
     'Error': ['Feil', 'Feil'],
-    'OK': ['OK', 'OK'],
     'Cannot execute script on a chrome:// URL': ['Kan ikke kjøre skript på en chrome://-adresse', 'Kan ikkje køyre skript på ei chrome://-adresse'],
     'Not a DigitalArkivet URL': ['Ikke en adresse i Digitalarkivet', 'Ikkje ei adresse i Digitalarkivet'],
     'Failed to gather data from DigitalArkivet': ['Klarte ikke å hente data fra Digitalarkivet', 'Klarte ikkje å hente data frå Digitalarkivet'],
