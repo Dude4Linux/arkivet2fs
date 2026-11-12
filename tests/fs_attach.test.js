@@ -30,7 +30,7 @@ function attachPage(url, body, { clock = false } = {}) {
 
 const row = (id, title) => `<div><span data-testid="row-${id}-title">${title}</span><button data-testid="row-${id}-attach-button">Attach</button>` +
   `<button data-testid="row-${id}-edit-button">Edit</button></div>`;
-const TITLE = '1846, Lars, son of Halvor Larsen - Vågå parish 1842-1856 (0515P), Ministerialbok A-13 - Birth';
+const TITLE = 'Lars, son of Halvor Larsen - Vågå parish 1842-1856 (0515P), Ministerialbok A-13 - Birth';
 
 // The SourceBox: Home shows a few rows; Search shows every source whose title has the
 // text, after the list has been empty a moment (loading), or "No sources found."
@@ -52,15 +52,27 @@ function sourceBox(home, all) {
 }
 
 test('findSource(): the sources of exactly that title, in any folder', async () => {
-  const all = [['TEST-S01', TITLE], ['TEST-S02', TITLE + ' (copy)'], ['TEST-S03', TITLE], ['TEST-S04', '1850, Ola Nordmann - Census']];
+  const all = [['TEST-S01', TITLE], ['TEST-S02', TITLE + ' (copy)'], ['TEST-S03', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']];
   const { step } = sourceBox([['TEST-S04', all[3][1]]], all);
   const answer = await step('findSource', { title: '  ' + TITLE + ' ' });
   assert.equal(answer.ok, true);
   assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01', 'TEST-S03']);
 });
 
+test('findSource(): with none of the title, a source under an older title holding it (one made before 1.6.0); the title first', async () => {
+  const older = '1846, ' + TITLE;
+  const { step } = sourceBox([], [['TEST-S01', older], ['TEST-S02', older + ' (copy)']]);
+  const answer = await step('findSource', { title: TITLE, older: [older] });
+  assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01']);
+  assert.equal(answer.title, older);
+  const both = sourceBox([], [['TEST-S01', older], ['TEST-S03', TITLE]]);
+  const first = await both.step('findSource', { title: TITLE, older: [older] });
+  assert.deepEqual(plain(first.sources.map((s) => s.id)), ['TEST-S03']);
+  assert.equal(first.title, TITLE);
+});
+
 test('findSource(): none when the search finds nothing', async () => {
-  const { step } = sourceBox([['TEST-S04', '1850, Ola Nordmann - Census']], [['TEST-S04', '1850, Ola Nordmann - Census']]);
+  const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']], [['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']]);
   assert.deepEqual(plain((await step('findSource', { title: TITLE })).sources), []);
 });
 
@@ -232,7 +244,7 @@ test('editSource() with read: FS\'s fields, cancelled, nothing written', async (
 });
 
 test('editSource(): a source Home doesn\'t show is found with the search', async () => {
-  const page = sourceBox([['TEST-S04', '1850, Ola Nordmann - Census']], [['TEST-S01', TITLE], ['TEST-S04', '1850, Ola Nordmann - Census']]);
+  const page = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']], [['TEST-S01', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']]);
   // the wait for the row on Home runs out at once; the search then has real time
   const realNow = page.w.Date.now;
   let now = realNow();
@@ -659,7 +671,7 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
 }
 
 const CHRISTENING = { fact: 'Christening', action: 'add', type: 'CHRISTENING', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
-const REASON = 'From "1846, Lars Halvorsen - Vågå - Baptism", Digitalarkivet, Permanent ID pd99000000000001.';
+const REASON = 'From "Lars Halvorsen - Vågå - Birth", Digitalarkivet, Permanent ID pd99000000000001.';
 
 test('addFact(): prepared, a missing christening is filled with FS\'s standard place, then cancelled: nothing saved', async () => {
   const { step, saved, log } = factPage();

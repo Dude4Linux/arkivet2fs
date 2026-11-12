@@ -2280,8 +2280,8 @@ async function hiddenTab() {
 
 // A source already in the SourceBox, written over with the fields as reviewed here;
 // fs_attach.js leaves it as it is when it names another record (a title shared by two)
-async function updateSource(tabId, sourceId, source) {
-  const edited = await step(tabId, 'editSource', { sourceId, source, reason: t('Updated from the record on Digitalarkivet.') });
+async function updateSource(tabId, sourceId, source, title) {
+  const edited = await step(tabId, 'editSource', { sourceId, source, title, reason: t('Updated from the record on Digitalarkivet.') });
   if (edited.otherRecord) {
     throw new Error(t('The source {id} in your SourceBox has this title but is of another record{other}; nothing was changed. Give this source another title (add a name or the date) and try again.',
       { id: sourceId, other: edited.other ? ' (' + edited.other + ')' : '' }));
@@ -2298,7 +2298,7 @@ async function lookUpSources(tabId, titles, active = false, sources = []) {
   for (const [i, title] of titles.entries()) {
     await navigate(tabId, SOURCEBOX_URL, active);
     const found = { ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' };
-    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active));
+    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active, found.formerTitle));
     out.push(found);
   }
   return out;
@@ -2306,9 +2306,9 @@ async function lookUpSources(tabId, titles, active = false, sources = []) {
 
 // FS's fields of a source found by its title (the Edit Source dialog, cancelled):
 // `fields`, or `otherRecord` when it names another record
-async function readSourceFields(tabId, sourceId, source, active = false) {
+async function readSourceFields(tabId, sourceId, source, active = false, title) {
   await navigate(tabId, SOURCEBOX_URL, active);
-  const read = await step(tabId, 'editSource', { sourceId, source, read: true });
+  const read = await step(tabId, 'editSource', { sourceId, source, title, read: true });
   if (read.otherRecord) return { otherRecord: read.other || true };
   if (!read.ok) return { fieldsError: read.error };
   return { fields: read.fields };
@@ -2321,15 +2321,43 @@ function stepError(answer) {
   return error;
 }
 
+// The title this extension gave a source before 1.6.0: the record's year in front (a
+// census's at the end now): "1846, Lars, son of Halvor Larsen - Vågå parish ... - Birth",
+// "1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census". '' for a
+// title with a year in front.
+function formerTitle(title, year) {
+  if (!title || /^\d{4}, /.test(title)) return '';
+  const census = title.match(/^(.+ - Census), (\d{4})$/);
+  if (census) return census[2] + ', ' + census[1];
+  return year ? year + ', ' + title : '';
+}
+
+// The record's year, for formerTitle()
+function recordYear() {
+  const record = state.record || {};
+  return (String(record.recordDate || record.date || '').match(/\d{4}/) || [''])[0];
+}
+
+// The source of this title in the SourceBox, or one made before 1.6.0 under its former
+// title (`formerTitle`: an update gives it this one), and who it is attached to
 async function lookUpSource(tabId, title, active = true) {
-  const found = await step(tabId, 'findSource', { title });
+  const former = formerTitle(title, recordYear());
+  let found = await step(tabId, 'findSource', { title, older: former ? [former] : [] });
   if (!found.ok) throw stepError(found);
+  // A former title the search for this one doesn't show (a census's): searched for itself
+  if (!found.sources.length && former && !former.includes(title)) {
+    await navigate(tabId, SOURCEBOX_URL, active);
+    found = await step(tabId, 'findSource', { title: former });
+    if (!found.ok) throw stepError(found);
+    found.title = former;
+  }
   const ids = found.sources.map((s) => s.id);
   if (!ids.length) return { title, id: null, ids, persons: [] };
+  const old = found.title && found.title !== title ? { formerTitle: found.title } : {};
   await navigate(tabId, attachedToUrl(ids[0]), active);
   const read = await step(tabId, 'attachedTo', { sourceId: ids[0] });
   if (!read.ok) throw stepError(read);
-  return { title, id: ids[0], ids, persons: read.persons };
+  return { title, id: ids[0], ids, persons: read.persons, ...old };
 }
 
 // The check before anything is saved: in a hidden tab (shown for a moment if FS didn't
@@ -2518,10 +2546,12 @@ async function run(attach) {
       await navigate(tabId, SOURCEBOX_URL);
       let sourceId = known.id;
       if (sourceId) {
-        log(t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId }) +
+        log((known.formerTitle
+          ? t('The SourceBox has this source under its former title "{title}"; using it ({id}) and giving it the new title.', { id: sourceId, title: known.formerTitle })
+          : t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId })) +
           (known.ids.length > 1 ? ' ' + t('The SourceBox has {n} sources with this title; the first is used.', { n: known.ids.length }) : ''), 'ok');
         // Written over with the fields as reviewed here
-        await updateSource(tabId, sourceId, source);
+        await updateSource(tabId, sourceId, source, known.formerTitle);
       } else {
         const created = await step(tabId, 'createSource', source);
         if (!created.ok) throw new Error(created.error);

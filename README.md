@@ -176,9 +176,13 @@ attach** when the source is already in your SourceBox).
 
 The source's fields can be edited:
 
-- **Title:** "<year>, <principal> - <source title> - <record type>", for example "1865,
-  Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census" (a census names the
-  residence and census district when DA gives them; the notes have both lines too)
+- **Title:** "<principal> - <source title> - <record type>", as FamilySearch titles its
+  own records' sources, for example "Lars, son of Halvor Larsen - Vågå parish, Vågå
+  local parish 1842-1856 (0515P) - Birth". A census ends with its year: "Halvor Larsen
+  household, Bakken nedre, Nordlien - Vågå - Census, 1865" (it names the residence and
+  census district when DA gives them; the notes have both lines too). A source made
+  by a version before 1.6.0, with the year in front, is found and given the new title
+  when you update it
 - **Date** and **Web page** (the record's permanent link)
 - **Citation:** place (general to specific), source, page or entry, date, permanent ID,
   link and scanned image

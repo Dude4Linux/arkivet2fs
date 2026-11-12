@@ -20,7 +20,7 @@ test('a baptism: the child, the parents, the date of birth with the year', () =>
   assert.equal(r.permanentId, 'pd99000000000018');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pd', type: 'birth_baptism' });
   assert.equal(r.recordDate, '1846-08-23');
-  assert.equal(r.title, '1846, Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth');
+  assert.equal(r.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth');
   assert.equal(before(r.citation, ' : accessed'),
     'Norway, Oppland, Vågå Parish, "Church book from Vågå parish, Vågå local parish 1842-1856 (0515P)," Births and baptisms, ' +
     'p. 24, entry 66, baptism of Lars, 23 August 1846; database, National Archives of Norway, Digitalarkivet, ' +
@@ -54,7 +54,7 @@ test('a page across a spread: "pp. 260–261", not "p. 260, 261" (bug: read as t
 test('a burial: split date of death merged, age in years, the position translated', () => {
   const r = record('burial-1854');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pg', type: 'death_burial' });
-  assert.equal(r.title, '1854, Lars Larsen Holt-Sletten - Vinger parish 1847-1855 (0421Q) - Burial');
+  assert.equal(r.title, 'Lars Larsen Holt-Sletten - Vinger parish 1847-1855 (0421Q) - Burial');
   assert.match(r.citation, /^Norway, Hedmark, Vinger Parish, "Church book from Vinger parish 1847-1855 \(0421Q\)," Burials, p\. 434, entry 37, burial of Lars Larsen Holt-Sletten, 18 April 1854;/);
   assert.deepEqual(people(r), ['Lars Larsen Holt-Sletten (Deceased)']);
   assert.match(r.notes, /^Date of death: 12 April 1854$/m);
@@ -68,7 +68,7 @@ test('a burial: split date of death merged, age in years, the position translate
 test("a census of 1865: the open person's household, its head in the title", () => {
   const r = record('census-1865');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pf', type: 'census' });
-  assert.equal(r.title, '1865, Reidar Finleiksen household, Fjeld nordre, Bryn - Vågå - Census');
+  assert.equal(r.title, 'Reidar Finleiksen household, Fjeld nordre, Bryn - Vågå - Census, 1865');
   assert.deepEqual(r.census, { district: 'Bryn', residence: 'Fjeld nordre' });
   assert.match(r.citation, /^Norway, Oppland, Vågå, "1865 census for Vågå," census district 004 Bryn, rural residence 0053 Fjeld nordre, Reidar Finleiksen household; /);
   assert.match(r.citation, /scanned image ft99000000000141 /);
@@ -85,7 +85,7 @@ test("a census of 1865: the open person's household, its head in the title", () 
 
 test('a census of 1900: coded positions, and the other household at the residence', () => {
   const r = record('census-1900');
-  assert.equal(r.title, '1900, Lars Halvorsen Solbakken household, Pladsen Solbakken - Vågå - Census');
+  assert.equal(r.title, 'Lars Halvorsen Solbakken household, Pladsen Solbakken - Vågå - Census, 1900');
   // the district is only a number ("006"), so it has no name
   assert.deepEqual(r.census, { district: '', residence: 'Pladsen Solbakken' });
   assert.deepEqual(people(r), ['Lars Halvorsen Solbakken (Man of the House)', 'Kjersti Larsdatter (Woman of the House)',
@@ -113,7 +113,7 @@ test('a census of 1891: one household, though only its head has a household numb
 test("an emigrant protocol: the open person only, the protocol's page and line", () => {
   const r = record('emigration-1902');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pe', type: 'emigration' });
-  assert.equal(r.title, '1902, Lars Halvorsen - Oslo police district, Mobility control, Emigrant protocols, no. 20: 1901-1903 - Emigration');
+  assert.equal(r.title, 'Lars Halvorsen - Oslo police district, Mobility control, Emigrant protocols, no. 20: 1901-1903 - Emigration');
   assert.match(r.citation, /"Oslo police district, Mobility control, Emigrant protocols, no\. 20: 1901-1903," Group of travellers, p\. 340, line 30, emigration of Lars Halvorsen, 5 September 1902;/);
   assert.deepEqual(people(r), ['Lars Halvorsen (Emigrant)']);
   assert.equal(r.fields.destination, 'Minnesota');

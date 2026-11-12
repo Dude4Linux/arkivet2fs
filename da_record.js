@@ -987,13 +987,15 @@ function extractRecord(document, pageUrl) {
       permalink: url, accessDate: accessDate, scans: scans
     });
 
-    // FS title: "<year>, <principal> - <source title> - <record type>", following
-    // FamilySearch's usual year-first style, e.g.
-    //   "1816, John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
-    //   "1891, Andreas Olsen household - 0529 Vestre Toten - Census"
+    // FS title: "<principal> - <source title> - <record type>", as FamilySearch titles
+    // its own records' sources (the name first; the year is in the source's date), e.g.
+    //   "John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
+    //   "Andreas Olsen household - 0529 Vestre Toten - Census, 1891"
     // "Church book from" / "1891 census for" are dropped to keep titles short (the
-    // citation keeps the full source title), and the type is left off when the
-    // source title already names it (probate).
+    // citation keeps the full source title); a census's year goes at the end, as FS's
+    // "Norway, Census, 1801", and tells one household's censuses apart. The type is
+    // left off when the source title already names it (probate). Before 1.6.0 the
+    // year came first (linker.js formerTitle()).
     const titleTypes = {
       'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
       'confirmation': 'Confirmation',
@@ -1004,10 +1006,11 @@ function extractRecord(document, pageUrl) {
     };
     // Unmapped types (e.g. migration records): singular of DA's section header
     const titleType = titleTypes[recordTypeInfo.type] || recordType.replace(/s$/, '');
+    const censusYear = (sourceInfo.sourceTitle.match(/^(\d{4}) census for\s/i) || [])[1] ||
+                       (recordTypeInfo.type === 'census' ? (recordDate.match(/\d{4}/) || [''])[0] : '');
     const titleSource = sourceInfo.sourceTitle
       .replace(/^church book from\s+/i, '')
-      .replace(/^\d{4} census for\s+/i, '');  // year is already at the front
-    const titleYear = (recordDate.match(/\d{4}/) || [''])[0];
+      .replace(/^\d{4} census for\s+/i, '');  // the year goes after the type
     // Name the record's principal (the child of a baptism, not the father whose page
     // may be open). A child is often recorded by given name only ("John"); then the
     // parent is added — "John, child of John Aslaksen" — rather than guessing a surname.
@@ -1036,9 +1039,9 @@ function extractRecord(document, pageUrl) {
         titleName += ', ' + relation + ' of ' + stripNameVariants(parent.name);
       }
     }
-    const titleParts = [[titleYear, titleName].filter(Boolean).join(', '), titleSource];
+    const titleParts = [titleName, titleSource];
     if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {
-      titleParts.push(titleType);
+      titleParts.push(titleType + (censusYear ? ', ' + censusYear : ''));
     }
     const title = titleParts.filter(Boolean).join(' - ') ||
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();

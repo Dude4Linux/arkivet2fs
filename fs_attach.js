@@ -128,13 +128,20 @@ if (!window.__arkivet2fsAttach) {
     return sourceRows();
   }
 
-  // The sources with this title, wherever they are in the SourceBox: [{id, title}]
-  async function findSource({ title }) {
+  // The sources with this title, wherever they are in the SourceBox: [{id, title}].
+  // With none, those of an `older` title holding this one, which the search (titles
+  // containing the text) shows too: a source made before 1.6.0, with the year in
+  // front; `title` then says which.
+  async function findSource({ title, older = [] }) {
     checkSourceBox();
     const wanted = clean(title);
     if (!wanted) throw new Error('The source needs a title.');
     const rows = await searchSourceBox(wanted);
-    return { ok: true, sources: rows.filter((r) => r.title === wanted) };
+    for (const name of [wanted, ...older.map(clean).filter((o) => o && o !== wanted && o.includes(wanted))]) {
+      const sources = rows.filter((r) => r.title === name);
+      if (sources.length) return { ok: true, sources, title: name };
+    }
+    return { ok: true, sources: [] };
   }
 
   // Who the source is attached to, from its Attached To page: {title, persons: [{pid,
@@ -235,14 +242,15 @@ if (!window.__arkivet2fsAttach) {
     return access(text(theirs)) === access(text(ours));
   }
 
-  async function editSource({ sourceId, source, reason, read }) {
+  // `title`: the title the SourceBox has it by, when not the source's own (an older one)
+  async function editSource({ sourceId, source, reason, read, title }) {
     checkSourceBox();
     const findButton = () => byTestId('row-' + sourceId + '-edit-button');
     let button;
     try {
       button = await waitFor(findButton, 'the source in the SourceBox', 6000);
     } catch (e) {
-      await searchSourceBox(clean(source.title));
+      await searchSourceBox(clean(title || source.title));
       button = await waitFor(findButton, 'the source in the SourceBox');
     }
     button.click();
