@@ -3063,7 +3063,13 @@ function linkerReport() {
       '- SourceBox: ' + (check.checking ? 'still checking' : check.error ? 'check failed: ' + check.error
         : !found ? 'not checked' : found.otherRecord ? 'a source of this title is of another record'
           : !found.id ? 'not there' : found.id + ', attached to ' + (found.persons.map((p) => p.pid).join(', ') || 'no one') + (found.ids.length > 1 ? ' (' + found.ids.length + ' sources of the title)' : '')),
-      ...diffs.map((d) => '- Differs from the SourceBox: ' + d.key + ' (' + fieldChoice(i, d) + ')')];
+      ...diffs.map((d) => '- Differs from the SourceBox: ' + d.key + ' (' + fieldChoice(i, d) + ')'),
+      // What the SourceBox has where it isn't the same, also empty there (an update writes those too)
+      ...(fs ? SOURCE_FIELDS.filter(([key]) => !sameText(withoutAccess(fs.fields[key]), withoutAccess(v[key]))).flatMap(([key, label]) => {
+        const theirs = String(fs.fields[key] || '').trim();
+        if (!theirs) return ['- SourceBox\'s ' + label + ': (empty)'];
+        return theirs.includes('\n') || theirs.length > 80 ? ['- SourceBox\'s ' + label + ':', ...reportBlock(theirs)] : ['- SourceBox\'s ' + label + ': ' + JSON.stringify(theirs)];
+      }) : [])];
   };
   if (r) sections.push(['Source', sourceLines('f', 0)]);
   if (state.parallel) sections.push(['Source of the other church book', sourceLines('g', 1)]);

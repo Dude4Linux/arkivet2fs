@@ -107,7 +107,9 @@ test('linkerReport(): the record as read, the source, each pairing with its fact
   state.rows = state.people.map((p) => page.personRow(p, page.treePool(LARS_1846, {}), pairs[p.name], p.name === 'Lars' ? 'the FS person' : ''));
   page.document.getElementById('people').replaceChildren(...state.rows.map((row) => row.node));
   const title = page.document.getElementById('f-title').value;
-  state.fsCheck = { sources: [{ title, book: '', id: 'TEST-S01', ids: ['TEST-S01'], persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }] }] };
+  const citation = page.document.getElementById('f-citation').value;
+  const fields = { title, date: '23 Aug 1846', url: page.document.getElementById('f-url').value, citation: citation.replace(/ : accessed [^)]*\)/, ' : accessed 1 November 2026)'), notes: '' };
+  state.fsCheck = { sources: [{ title, book: '', id: 'TEST-S01', ids: ['TEST-S01'], persons: [{ pid: 'TEST-LAR', name: 'Lars Halvorsen' }], fields }] };
   page.showFsCheck();
   // An addition ticked, and a line in the log
   const lars = state.rows.find((row) => row.person.name === 'Lars');
@@ -125,6 +127,9 @@ test('linkerReport(): the record as read, the source, each pairing with its fact
   assert.ok(text.includes('- Title: ' + title + '\n'));
   assert.ok(text.includes('- Citation:\n```\n' + page.document.getElementById('f-citation').value.trim() + '\n```\n'));
   assert.match(text, /- SourceBox: TEST-S01, attached to TEST-LAR\n/);
+  // FS's own value where it isn't the same, also an empty one; not the citation, whose access day only differs
+  assert.match(text, /\n- Differs from the SourceBox: date \(record\)\n- SourceBox's Date: "23 Aug 1846"\n- SourceBox's Notes: \(empty\)\n/);
+  assert.ok(!text.includes("SourceBox's Citation"));
   assert.match(text, /\n- Lars \(Child\) → TEST-LAR \(Lars Halvorsen \(FamilySearch person\) · TEST-LAR\)\n {2}- Why: the FS person\n/);
   assert.match(text, /\n {2}- FamilySearch: Already has this source on FamilySearch\n/);
   assert.match(text, /\n {2}- Name: Lars \| FS: Lars Halvorsen ✓\n/);
