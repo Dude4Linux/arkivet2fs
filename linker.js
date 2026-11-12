@@ -740,6 +740,19 @@ function recordPlace(record) {
 }
 const joined = (...parts) => parts.filter(Boolean).join(', ');
 
+// The record's parish as FS names it: a parish that is a municipality ("Vågå,
+// Oppland, Norway"), else the municipality the parish code in the source title names
+// (a parish of Oslo, 0301M…: "Oslo, Oslo, Norway"), else the parish in the county
+function parishPlace(record) {
+  const name = cleanPlace(recordPlace(record));
+  if (!name) return '';
+  const own = fsMunicipality(name, record);
+  if (own) return own;
+  const code = (parishCode(record.sourceTitle).match(/^\d{4}/) || [])[0];
+  if (code && DA_MUNICIPALITIES[code]) return joined(municipalityName(code), fsCounty(countyName(code.slice(0, 2))), 'Norway');
+  return fsPlace(name, record);
+}
+
 // What the record says of a person: { Fact: { text, date, year, approx, value } }
 function recordFacts(person, record) {
   const facts = {};
@@ -972,9 +985,10 @@ function deathFarm(person, record) {
 // Where a church-book event took place, as FS names it: the record's church when it
 // gives one (a municipality of its own, else in the parish), else the parish
 function churchPlace(record) {
-  const parish = fsPlace(cleanPlace(recordPlace(record)), record);
+  const parish = parishPlace(record);
   const church = cleanPlace(record.church);
-  if (!church || placeIn(church, parish)) return { name: recordPlace(record), place: parish };
+  // the parish by the name FS has for it: a town's parish (one of Oslo's) is the town
+  if (!church || placeIn(church, parish)) return { name: parish.split(',')[0].trim() || recordPlace(record), place: parish };
   return { name: church, place: fsMunicipality(church, record) || joined(church, parish) };
 }
 
@@ -1032,7 +1046,7 @@ function factAdditions(person, record, tree, name) {
   // record with none of them only implies the parish (`weak`). Christening and burial
   // were at the church.
   const church = churchPlace(record);
-  const parish = fsPlace(cleanPlace(place), record);
+  const parish = parishPlace(record);
   const died = deathFarm(person, record);
   const diedAt = died && !placeIn(died, parish) ? joined(died, parish) : parish;
   const bornAt = da.Birth && cleanPlace(da.Birth.place);
@@ -1069,9 +1083,10 @@ function factAdditions(person, record, tree, name) {
   if (da.Residence && year && !placeAbroad(home) && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
     const census = record.census || {};
     const description = isCensus ? joined(census.residence, census.district) : person.residence || '';
-    const parish = fsPlace(cleanPlace(place), record);
+    // a residence that is a town ("Chr": Kristiania) is the town, not a farm in the parish
+    const town = home && !isCensus && fsMunicipality(home, record);
     const where = kind === 'emigration' ? fsPlace(home, record, true)
-      : home && !placeIn(home, parish) ? joined(home, parish) : parish;
+      : town || (home && !placeIn(home, parish) ? joined(home, parish) : parish);
     if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
   }
   // An emigration: a custom event (FS has no Emigration to add), unless FS has one that year
@@ -1082,7 +1097,7 @@ function factAdditions(person, record, tree, name) {
   }
   // An occupation FS doesn't have in the same words
   if (da.Occupation && !(full.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(da.Occupation.text))) {
-    out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date: year ? String(year) : '', place: fsPlace(cleanPlace(place), record), description: da.Occupation.text } });
+    out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date: year ? String(year) : '', place: parishPlace(record), description: da.Occupation.text } });
   }
   return out;
 }
@@ -2734,9 +2749,9 @@ function newPersonDraft(row) {
   else if (facts.Birth && facts.Birth.year) birthDate = fsDateText({ year: facts.Birth.year }, facts.Birth.approx);
   else if (facts.Christening && facts.Christening.year) birthDate = fsDateText({ year: facts.Christening.year }, true);
   const bornAt = facts.Birth && facts.Birth.place;
-  const birthPlace = fsPlace(bornAt || (facts.Christening ? recordPlace(record) : ''), record, Boolean(bornAt));
+  const birthPlace = bornAt ? fsPlace(bornAt, record, true) : facts.Christening ? parishPlace(record) : '';
   const deathDate = facts.Death ? fsDateText(facts.Death.date) : '';
-  const deathPlace = facts.Burial || facts.Death ? fsPlace(recordPlace(record), record) : '';
+  const deathPlace = facts.Burial || facts.Death ? parishPlace(record) : '';
   // What FS's form doesn't take: add it on the person's page later
   for (const fact of ['Christening', 'Burial', 'Residence']) {
     if (facts[fact]) notes.push(t('{fact}: {text}. FamilySearch\'s form doesn\'t take it: add it on the person\'s page.', { fact: t(fact), text: facts[fact].text }));

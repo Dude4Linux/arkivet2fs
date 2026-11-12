@@ -881,6 +881,16 @@ test('fsMunicipality(): in a record of Oslo or Bergen, a farm isn\'t the town th
   assert.equal(w.fsMunicipality('Chr', { county: 'Vest-Agder' }), '');
 });
 
+test('parishPlace(): a town\'s parish is the town its code names, not a place in the county (bug: "<parish>, Oslo, Norway")', () => {
+  const oslo = { county: 'Oslo', sourceTitle: 'Church book from Kirkebakken parish 1858-1874 (0301M99)' };
+  assert.equal(w.parishPlace(oslo), 'Oslo, Oslo, Norway');
+  // a parish that is a municipality stays as it is
+  assert.equal(w.parishPlace({ county: 'Oppland', sourceTitle: 'Church book from Vågå parish 1838-1850 (0515P)' }), 'Vågå, Oppland, Norway');
+  // no code: the parish in the county, as before
+  assert.equal(w.parishPlace({ county: 'Oslo', sourceTitle: 'Church book from Kirkebakken parish 1858-1874' }), 'Kirkebakken, Oslo, Norway');
+  assert.equal(w.parishPlace({ county: 'Oslo', sourceTitle: '' }), '');
+});
+
 // --- Adding the record's facts to FamilySearch ---------------------------------------
 test('mergeDate(): the more specific where the two agree, the record\'s where they disagree', () => {
   assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, '1846'), '16 July 1846');
@@ -1161,6 +1171,18 @@ test('run(): a fact not saved is not tagged, and leaves the FS tab open; nothing
   await page.win.run(true);
   assert.equal(unattached.asked.some(([name]) => name === 'addFact'), false);
   assert.match(page.$('log').textContent, /Nothing added to Lars \(TEST-LAR\): the source is not attached\./);
+});
+
+test('factAdditions(): a residence that is a town is the town, not a farm in the parish (bug: "Chr, Oslo, Oslo, Norway")', () => {
+  const { win, state } = checkedPage();
+  const b = { ...record('burial-1854'), county: 'Oslo', church: '', sourceTitle: 'Church book from Kirkebakken parish 1850-1860 (0301M99)' };
+  const lars = { ...w.recordPeople(b)[0], residence: 'Chr' };
+  state.record = b;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '12 April 1854', place: 'Oslo, Oslo, Norway' }, burial: { date: '18 April 1854', place: 'Oslo, Oslo, Norway' }, residences: [], occupations: [{ description: 'Lægdslem' }] };
+  const adds = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }));
+  assert.deepEqual(adds.filter((a) => a.fact === 'Residence').map((a) => a.value), [{ date: '1854', place: 'Kristiania, Oslo, Norway', description: 'Chr' }]);
+  // the burial at the parish: the town its code names
+  assert.deepEqual(adds.filter((a) => a.fact === 'Burial'), []);
 });
 
 test('additionText(): an alternate name as written, given names before the surname', () => {
