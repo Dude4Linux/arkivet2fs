@@ -1333,6 +1333,25 @@ test('sameFarm(): one farm in two spellings, d and t as one', () => {
   assert.equal(w.sameFarm('', ''), false);
 });
 
+test('factAdditions(): in a town\'s church book the word after the patronymic is a family name, not a death farm', () => {
+  const { win, state } = checkedPage();
+  const b = record('burial-1854');
+  const town = { ...b, county: 'Aust-Agder', church: '', sourceTitle: 'Church book from Grimstad parish 1850-1860 (0904P)',
+    fields: { ...b.fields, residence: '', 'last name': 'Larsen Lindemann' },
+    people: b.people.map((p) => ({ ...p, name: 'Lars Larsen Lindemann', residence: '', birthPlace: '' })) };
+  assert.equal(w.townParish(town), true);
+  assert.equal(w.townParish(b), false);  // Vinger: rural
+  const lars = w.recordPeople(town)[0];
+  state.record = town;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '12 April 1854', place: 'Grimstad, Aust-Agder, Norway' }, residences: [], occupations: [{ description: 'Lægdslem' }] };
+  // the tree's death agrees: nothing to change (bug: "Lindemann, Grimstad, ..." offered)
+  assert.equal(plain(win.factAdditions(lars, town, { pid: 'TEST-LLA' })).find((a) => a.fact === 'Death'), undefined);
+  // a place of death the record gives is still used
+  const named = { ...town, fields: { ...town.fields, 'place of death': 'Biodden' } };
+  state.record = named;
+  assert.equal(plain(win.factAdditions(lars, named, { pid: 'TEST-LLA' })).find((a) => a.fact === 'Death').value.place, 'Biodden, Grimstad, Aust-Agder, Norway');
+});
+
 test('factAdditions(): a deceased died at the farm in the name, in the birthplace\'s spelling; buried at the church', () => {
   const { win, state } = checkedPage();
   const b = record('burial-1854');

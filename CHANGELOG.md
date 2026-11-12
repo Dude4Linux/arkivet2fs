@@ -84,6 +84,9 @@ fixes, new features, changes that break what users have).
 - A birthplace DA writes as the town twice ("Christiansund Christiansund N") is read
   as that town: the tree's "Kristiansund, Møre og Romsdal, Norway" is kept, where
   the linker put the whole text before it as if it were a farm.
+- In a town's church book (Arendal, Risør, Kristiansand, ...), a burial's name after
+  the patronymic is taken for a family name, not for a farm the person died on, so
+  the linker no longer offers to put the death on a "farm" of that name.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

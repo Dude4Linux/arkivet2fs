@@ -992,10 +992,21 @@ function deathFarm(person, record) {
   const fields = own && own.id === person.id ? record.fields || {} : {};
   const given = cleanPlace(fields['place of death'] || fields['death place'] || person.residence || '');
   if (given) return given;
+  // in a town's church book the word after the patronymic is a family name
+  // (Lars Larsen Lindemann), not a farm he died on
+  if (townParish(record)) return '';
   const farm = nameParts(stripVariants(person.name)).rest;
   if (!farm) return '';
   const born = cleanPlace(person.birthPlace || fields['birth place'] || '');
   return born && sameFarm(farm, born) ? born : farm;
+}
+
+// Whether the record's parish is a town's: DA's municipality numbers give a town
+// (a kjøpstad or ladested) a number below 11 in its county (Arendal 0903, Oslo 0301),
+// a rural municipality 11 and up (Gjerstad 0911)
+function townParish(record) {
+  const code = (parishCode(record.sourceTitle).match(/^\d{4}/) || [])[0];
+  return !!code && Number(code.slice(2)) < 11;
 }
 
 // Where a church-book event took place, as FS names it: the record's church when it
