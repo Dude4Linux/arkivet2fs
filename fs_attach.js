@@ -86,12 +86,19 @@ if (!window.__arkivet2fsAttach) {
 
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
-  // The SourceBox's rows: [{id, title}]
+  // The SourceBox's rows: [{id, title}]. FS shows a dated source's title with the
+  // date's year in front ("1864, Hans ... - Marriage"), which isn't the title: that
+  // year is dropped when it is the one in the row's date (`row-<ID>-date`, "Source
+  // Date" and the date, in the page's language).
   function sourceRows() {
-    return [...document.querySelectorAll('[data-testid^="row-"][data-testid$="-title"]')].map((el) => ({
-      id: el.getAttribute('data-testid').replace(/^row-/, '').replace(/-title$/, ''),
-      title: clean(el.textContent)
-    }));
+    return [...document.querySelectorAll('[data-testid^="row-"][data-testid$="-title"]')].map((el) => {
+      const id = el.getAttribute('data-testid').replace(/^row-/, '').replace(/-title$/, '');
+      let title = clean(el.textContent);
+      const years = clean(byTestId(`row-${id}-date`)?.textContent).match(/\d{4}/g);
+      const year = years && years[years.length - 1];
+      if (year && title.startsWith(year + ', ')) title = title.slice(year.length + 2);
+      return { id, title };
+    });
   }
 
   function checkSourceBox() {

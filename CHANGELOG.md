@@ -53,6 +53,9 @@ fixes, new features, changes that break what users have).
   1865""), so one household's censuses stay apart. A source made before
   under the year-first title is still found: updating it gives it the new title
   instead of making another.
+- A source already in the SourceBox with a date is found again. FamilySearch lists
+  a dated source with the date's year in front of its title, which the linker took
+  for part of the title, so it made a second source for the same record.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

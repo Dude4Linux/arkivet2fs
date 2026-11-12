@@ -28,8 +28,11 @@ function attachPage(url, body, { clock = false } = {}) {
   return { w, step, takes };
 }
 
-const row = (id, title) => `<div><span data-testid="row-${id}-title">${title}</span><button data-testid="row-${id}-attach-button">Attach</button>` +
-  `<button data-testid="row-${id}-edit-button">Edit</button></div>`;
+// A row as FS shows it: a dated source's title with the date's year in front, and the
+// date in a box of its own
+const row = (id, title, date) => `<div><span data-testid="row-${id}-title">${date ? date.slice(-4) + ', ' : ''}${title}</span>` +
+  (date ? `<div data-testid="row-${id}-date"><strong>Source Date</strong><br>${date}</div>` : '') +
+  `<button data-testid="row-${id}-attach-button">Attach</button><button data-testid="row-${id}-edit-button">Edit</button></div>`;
 const TITLE = 'Lars, son of Halvor Larsen - Vågå parish 1842-1856 (0515P), Ministerialbok A-13 - Birth';
 
 // The SourceBox: Home shows a few rows; Search shows every source whose title has the
@@ -39,13 +42,13 @@ function sourceBox(home, all) {
     '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button><div id="list"></div>');
   const { w } = page;
   const list = w.document.getElementById('list');
-  list.innerHTML = home.map(([id, title]) => row(id, title)).join('');
+  list.innerHTML = home.map(([id, title, date]) => row(id, title, date)).join('');
   w.document.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
     const text = w.document.querySelector('[data-testid="source-box-filter-field"]').value;
     list.innerHTML = '';
     setTimeout(() => {
       const hits = all.filter(([, title]) => title.includes(text));
-      list.innerHTML = hits.length ? hits.map(([id, title]) => row(id, title)).join('') : '<p>No sources found.</p>';
+      list.innerHTML = hits.length ? hits.map(([id, title, date]) => row(id, title, date)).join('') : '<p>No sources found.</p>';
     }, 400);
   });
   return page;
@@ -69,6 +72,22 @@ test('findSource(): with none of the title, a source under an older title holdin
   const first = await both.step('findSource', { title: TITLE, older: [older] });
   assert.deepEqual(plain(first.sources.map((s) => s.id)), ['TEST-S03']);
   assert.equal(first.title, TITLE);
+});
+
+test('findSource(): a dated source, which FS lists with the date\'s year in front of the title, is found by its title', async () => {
+  const all = [['TEST-S01', TITLE, '27 June 1846'], ['TEST-S02', TITLE, '1846'], ['TEST-S03', TITLE + ' (copy)', '1846']];
+  const { step } = sourceBox([], all);
+  const answer = await step('findSource', { title: TITLE, older: ['1846, ' + TITLE] });
+  assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01', 'TEST-S02']);
+  assert.equal(answer.title, TITLE);
+  // a source made before 1.6.0 with a date: "1846, 1846, <title>" in the list, its title "1846, <title>"
+  const old = sourceBox([], [['TEST-S04', '1846, ' + TITLE, '1846']]);
+  const former = await old.step('findSource', { title: TITLE, older: ['1846, ' + TITLE] });
+  assert.deepEqual(plain(former.sources.map((s) => s.id)), ['TEST-S04']);
+  assert.equal(former.title, '1846, ' + TITLE);
+  // a year in front that isn't the date's is the title's own
+  const other = sourceBox([], [['TEST-S05', '1846, ' + TITLE, '1850']]);
+  assert.equal((await other.step('findSource', { title: TITLE, older: ['1846, ' + TITLE] })).title, '1846, ' + TITLE);
 });
 
 test('findSource(): none when the search finds nothing', async () => {
