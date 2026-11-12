@@ -2278,10 +2278,25 @@ async function hiddenTab() {
   };
 }
 
+// The DA permanent IDs of the people of the record a source is of (`i` 0: the record,
+// 1: the other church book's): a source made from another person's entry of it, such
+// as the bride's of a marriage, is of the same record
+function sameRecordIds(i) {
+  const ids = new Set();
+  const add = (id) => { if (DA_ID.test(id || '')) ids.add(id); };
+  if (i) {
+    for (const p of (state.parallel && state.parallel.record && state.parallel.record.people) || []) add(p.id);
+  } else {
+    add(state.record && state.record.primaryPersonId);
+    for (const p of (state.record && state.record.people) || []) add(p.id);
+  }
+  return [...ids];
+}
+
 // A source already in the SourceBox, written over with the fields as reviewed here;
 // fs_attach.js leaves it as it is when it names another record (a title shared by two)
-async function updateSource(tabId, sourceId, source, title) {
-  const edited = await step(tabId, 'editSource', { sourceId, source, title, reason: t('Updated from the record on Digitalarkivet.') });
+async function updateSource(tabId, sourceId, source, title, sameRecord = []) {
+  const edited = await step(tabId, 'editSource', { sourceId, source, title, sameRecord, reason: t('Updated from the record on Digitalarkivet.') });
   if (edited.otherRecord) {
     throw new Error(t('The source {id} in your SourceBox has this title but is of another record{other}; nothing was changed. Give this source another title (add a name or the date) and try again.',
       { id: sourceId, other: edited.other ? ' (' + edited.other + ')' : '' }));
@@ -2298,7 +2313,7 @@ async function lookUpSources(tabId, titles, active = false, sources = []) {
   for (const [i, title] of titles.entries()) {
     await navigate(tabId, SOURCEBOX_URL, active);
     const found = { ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' };
-    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active, found.formerTitle));
+    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active, found.formerTitle, sameRecordIds(i)));
     out.push(found);
   }
   return out;
@@ -2306,9 +2321,9 @@ async function lookUpSources(tabId, titles, active = false, sources = []) {
 
 // FS's fields of a source found by its title (the Edit Source dialog, cancelled):
 // `fields`, or `otherRecord` when it names another record
-async function readSourceFields(tabId, sourceId, source, active = false, title) {
+async function readSourceFields(tabId, sourceId, source, active = false, title, sameRecord = []) {
   await navigate(tabId, SOURCEBOX_URL, active);
-  const read = await step(tabId, 'editSource', { sourceId, source, title, read: true });
+  const read = await step(tabId, 'editSource', { sourceId, source, title, sameRecord, read: true });
   if (read.otherRecord) return { otherRecord: read.other || true };
   if (!read.ok) return { fieldsError: read.error };
   return { fields: read.fields };
@@ -2552,7 +2567,7 @@ async function run(attach) {
           : t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId })) +
           (known.ids.length > 1 ? ' ' + t('The SourceBox has {n} sources with this title; the first is used.', { n: known.ids.length }) : ''), 'ok');
         // Written over with the fields as reviewed here
-        await updateSource(tabId, sourceId, source, known.formerTitle);
+        await updateSource(tabId, sourceId, source, known.formerTitle, sameRecordIds(i));
       } else {
         const created = await step(tabId, 'createSource', source);
         if (!created.ok) throw new Error(created.error);
@@ -2560,7 +2575,7 @@ async function run(attach) {
         if (created.existing) {
           // Found by its title on Home: written over too, once it's this record's
           log(t('The SourceBox already has a source with this title; using it ({id}).', { id: sourceId }), 'ok');
-          await updateSource(tabId, sourceId, source);
+          await updateSource(tabId, sourceId, source, undefined, sameRecordIds(i));
         } else {
           log(t('Source created ({id}).', { id: sourceId }) +
             (created.missing && created.missing.length ? ' ' + t('Not filled: {fields}.', { fields: created.missing.map((f) => t(f)).join(', ') }) : ''), 'ok');

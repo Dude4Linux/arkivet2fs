@@ -250,7 +250,7 @@ if (!window.__arkivet2fsAttach) {
   }
 
   // `title`: the title the SourceBox has it by, when not the source's own (an older one)
-  async function editSource({ sourceId, source, reason, read, title }) {
+  async function editSource({ sourceId, source, reason, read, title, sameRecord = [] }) {
     checkSourceBox();
     const findButton = () => byTestId('row-' + sourceId + '-edit-button');
     let button;
@@ -266,7 +266,9 @@ if (!window.__arkivet2fsAttach) {
     // Only the source of this record is written over: titles can repeat (a common
     // name, the same year and parish), and the source may be attached to others
     const fieldText = (key) => { const f = document.querySelector(FIELDS[key]); return f ? f.value : ''; };
+    // ours: the record's, and its other people's entries (`sameRecord`, the linker's)
     const ours = recordIds(source.url, source.citation);
+    for (const id of sameRecord) if (/^[a-z]{2}\d{14,}$/i.test(id || '')) ours.add(id.toLowerCase());
     const theirs = recordIds(fieldText('url'), fieldText('citation'), fieldText('notes'));
     if (ours.size && ![...theirs].some((id) => ours.has(id))) {
       const cancel = byTestId('source-cancel-button');

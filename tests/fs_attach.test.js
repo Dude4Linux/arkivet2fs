@@ -517,6 +517,15 @@ test('editSource(): a source of this title for another record is left as it is',
   assert.equal(fs.cancelled, 1);
 });
 
+test('editSource(): a source made from another person\'s entry of the record (the bride\'s of a marriage) is this record\'s (bug: taken for another)', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, ON_FS);  // FS's source is of pd99000000000001
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01', sameRecord: ['pd99000000000002', 'pd99000000000001'],
+    source: { title: TITLE, url: 'https://www.digitalarkivet.no/view/255/pd99000000000002', citation: 'New citation', notes: 'New notes' } });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(fs.saved.citation, 'New citation');
+});
+
 test('editSource(): without a web page on FS, the permanent ID in its citation counts', async () => {
   const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
   const fs = editDialog(page, { ...ON_FS, 'web-page': '',

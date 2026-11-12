@@ -701,6 +701,10 @@ test('run(): a source partly attached before is used, and attached only to those
   assert.equal(asked[2][1].source.title, $('f-title').value);
   assert.equal(asked[2][1].source.citation, $('f-citation').value);
   assert.equal(asked[2][1].reason, 'Updated from the record on Digitalarkivet.');
+  // the record's people's entries: a source made from another of them is this record's
+  const ids = state.record.people.map((p) => p.id).filter(Boolean);
+  assert.ok(ids.length > 1);
+  for (const id of ids) assert.ok(asked[2][1].sameRecord.includes(id), id);
   assert.equal(asked[3][1].sourceId, 'TEST-S01');
   assert.equal(asked[3][1].title, $('f-title').value);  // found by title when Home doesn't show it
   const log = $('log').textContent;
