@@ -73,6 +73,8 @@ fixes, new features, changes that break what users have).
   the father the record names, no longer the first written, and keeps a family name
   the tree has (in the record's spelling) as the surname instead of dropping it as
   a farm.
+- A birthplace the record gives without a year (a marriage's) is offered for the
+  tree's birth when that has a date but no place.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

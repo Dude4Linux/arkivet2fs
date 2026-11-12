@@ -1088,9 +1088,12 @@ function factAdditions(person, record, tree, name) {
   };
   for (const [fact, type] of Object.entries(VITAL_TYPES)) {
     const f = da[fact];
-    if (!f || !f.year) continue;
+    if (!f) continue;
     const fs = full[fact.toLowerCase()] || null;
-    const date = f.date && f.date.year ? f.date : { year: f.year };
+    // no year in the record (a marriage's birthplace): only a place FS's dated fact lacks
+    const placeOnly = fs && String(fs.date || '').trim() && !String(fs.place || '').trim() && cleanPlace(vitalPlace[fact][0]);
+    if (!f.year && !placeOnly) continue;
+    const date = !f.year ? null : f.date && f.date.year ? f.date : { year: f.year };
     const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(...[vitalPlace[fact][0], fs && fs.place, record].concat(vitalPlace[fact].slice(1))) };
     // FS's fact with neither date nor place ("Deceased", of an old import) is changed:
     // FS keeps one of each and has no Add for it

@@ -1218,6 +1218,21 @@ test('factAdditions(): an alternate name with the patronymic of the record\'s fa
   assert.deepEqual(names(groom, { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø' }), []);
 });
 
+test('factAdditions(): a birthplace the record gives without a year, where FS\'s birth has a date and no place (bug: not offered)', () => {
+  const { win, state } = checkedPage();
+  const m = record('marriage-bride');
+  const groom = { ...w.recordPeople(m)[0], birthYear: '' };
+  state.record = m;
+  const births = (birth) => {
+    state.fs = { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø', gender: 'Male', residences: [], occupations: [], altNames: [], birth };
+    return plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' })).filter((a) => a.fact === 'Birth').map((a) => [a.action, a.value]);
+  };
+  assert.deepEqual(births({ date: '19 August 1807' }), [['edit', { date: '19 August 1807', place: 'Vågå, Oppland, Norway' }]]);
+  // FS has a place, or no birth: nothing from a place alone
+  assert.deepEqual(births({ date: '19 August 1807', place: 'Lom, Oppland, Norway' }), []);
+  assert.deepEqual(births(null), []);
+});
+
 test('additionText(): an alternate name as written, given names before the surname', () => {
   const name = { fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Astri', surname: 'Larsdatter', nameType: 'AKA' } };
   assert.equal(w.additionText(name), 'Astri Larsdatter (Also known as)');
