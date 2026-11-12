@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/Dude4Linux/arkivet2fs/security/advisories/new
+    about: Report it privately, as SECURITY.md says.

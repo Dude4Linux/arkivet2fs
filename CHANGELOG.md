@@ -49,7 +49,9 @@ fixes, new features, changes that break what users have).
   language, a place to say what went wrong, and what the page read and did (the
   search's criteria, searches and hits; in the linker, the record as read, the
   source, each person's pairing, facts and changes, and the log of what was done on
-  FamilySearch). Nothing is sent: read it before you paste it.
+  FamilySearch). **Report on GitHub** beside it copies the report too and opens a
+  new issue on GitHub to paste it into (you need a GitHub account). Nothing is sent
+  by the extension: read the report before you paste it.
 
 ## 1.5.0 - 2026-11-10
 

@@ -70,6 +70,24 @@ test('reportButton(): a clipboard that refuses is said on the button', async () 
   assert.equal(button.textContent, 'Could not copy the report');
 });
 
+test('reportButton(): "Report on GitHub" copies the report, then opens the new issue, with nothing of the report in its address', async () => {
+  const opened = [];
+  const page = load(SHARED, { html: 'linker.html', chrome: { tabs: { create: (o) => { opened.push(o.url); } } } });
+  let copied = null;
+  Object.defineProperty(page.navigator, 'clipboard', { value: { writeText: async (text) => { copied = text; } } });
+  const topbar = page.document.querySelector('.topbar');
+  page.reportButton(topbar, () => 'the report, Lars Halvorsen TEST-LAR');
+  const link = topbar.querySelector('a.issue-link');
+  assert.equal(link.textContent, 'Report on GitHub');
+  assert.equal(link.previousElementSibling.className, 'report-button');
+  assert.equal(link.href, 'https://github.com/Dude4Linux/arkivet2fs/issues/new?template=problem-report.md');
+  link.click();
+  await new Promise((done) => setTimeout(done, 5));
+  assert.equal(copied, 'the report, Lars Halvorsen TEST-LAR');
+  assert.deepEqual(opened, [link.href]);
+  assert.equal(link.textContent, 'Copied: paste it into the issue');
+});
+
 // Synthetic FS person (TEST-… PIDs), as in linker.test.js
 const LARS_1846 = {
   pid: 'TEST-LAR', name: 'Lars Halvorsen', gender: 'Male', birth: { date: '16 July 1846' },

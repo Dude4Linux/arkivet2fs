@@ -85,7 +85,32 @@ async function copyText(text, doc) {
   }
 }
 
-// The header's "Copy report" button: build() gives the report's text
+// The report from build(), or one saying why it could not be made, onto the clipboard
+function copyReport(build, doc) {
+  let text;
+  try { text = build(); } catch (e) {
+    text = reportText('report', [['The report could not be made', String((e && e.stack) || e)]], navigator);
+  }
+  return copyText(text, doc);
+}
+
+// The new issue a report goes in: the template asks for the paste (.github/ISSUE_TEMPLATE).
+// Nothing of the report goes in the address.
+function issueUrl() {
+  return 'https://github.com/' + defaultRepo() + '/issues/new?template=problem-report.md';
+}
+
+// A control's text for 3 s, then its own again
+function flash(node, text, bad, label) {
+  node.textContent = text;
+  node.classList.toggle('bad', !!bad);
+  clearTimeout(node.flashTimer);
+  node.flashTimer = setTimeout(() => { node.textContent = label; node.classList.remove('bad'); }, 3000);
+}
+
+// The header's "Copy report" button and "Report on GitHub" link, before the version:
+// build() gives the report's text. The link copies the report too, then opens the new
+// issue in a tab of its own, for the user to paste it in.
 function reportButton(topbar, build) {
   const doc = topbar.ownerDocument;
   const button = doc.createElement('button');
@@ -95,15 +120,30 @@ function reportButton(topbar, build) {
   button.textContent = label;
   button.title = t('Copy a problem report (what this page read, shows and did) to paste into a GitHub issue');
   button.addEventListener('click', async () => {
-    let text;
-    try { text = build(); } catch (e) {
-      text = reportText('report', [['The report could not be made', String((e && e.stack) || e)]], navigator);
-    }
-    const ok = await copyText(text, doc);
-    button.textContent = ok ? t('Copied') : t('Could not copy the report');
-    button.classList.toggle('bad', !ok);
-    setTimeout(() => { button.textContent = label; button.classList.remove('bad'); }, 3000);
+    const ok = await copyReport(build, doc);
+    flash(button, ok ? t('Copied') : t('Could not copy the report'), !ok, label);
   });
-  topbar.insertBefore(button, topbar.querySelector('.version-link, select.language'));
+  const link = doc.createElement('a');
+  link.className = 'issue-link';
+  link.href = issueUrl();
+  link.target = '_blank';
+  link.rel = 'noopener';
+  const linkLabel = t('Report on GitHub');
+  link.textContent = linkLabel;
+  link.title = t('Copy a problem report and open a new issue on GitHub to paste it into');
+  link.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const ok = await copyReport(build, doc);
+    flash(link, ok ? t('Copied: paste it into the issue') : t('Could not copy the report'), !ok, linkLabel);
+    // Opened also when the copy failed: the user can still say what happened
+    try {
+      chrome.tabs.create({ url: link.href });
+    } catch (err) {
+      doc.defaultView.open(link.href, '_blank', 'noopener');
+    }
+  });
+  const before = topbar.querySelector('.version-link, select.language');
+  topbar.insertBefore(button, before);
+  topbar.insertBefore(link, before);
   return button;
 }

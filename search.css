@@ -92,7 +92,7 @@ button, input, select { font: inherit; }
 .topbar .version-link.new { color: var(--link); font-weight: 600; }
 .topbar .fs-link:not([hidden]) ~ .version-link { margin-left: 16px; }
 .topbar .version-link ~ select.language { margin-left: 12px; }
-/* "Copy report" (report.js), before the version */
+/* "Copy report" and "Report on GitHub" (report.js), before the version */
 .topbar .report-button {
   margin-left: auto;
   padding: 2px 8px;
@@ -107,6 +107,15 @@ button, input, select { font: inherit; }
 .topbar .report-button:hover { border-color: var(--link); }
 .topbar .report-button.bad { color: var(--bad); }
 .topbar .fs-link:not([hidden]) ~ .report-button { margin-left: 16px; }
+.topbar .issue-link {
+  margin-left: 12px;
+  font-size: 13px;
+  color: var(--link);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topbar .issue-link:hover { text-decoration: underline; }
+.topbar .issue-link.bad { color: var(--bad); }
 .topbar .report-button ~ .version-link { margin-left: 12px; }
 
 .layout {
