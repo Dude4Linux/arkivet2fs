@@ -990,12 +990,13 @@ function extractRecord(document, pageUrl) {
     // FS title: "<principal> - <source title> - <record type>", as FamilySearch titles
     // its own records' sources (the name first; the year is in the source's date), e.g.
     //   "John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
-    //   "Andreas Olsen household - 0529 Vestre Toten - Census, 1891"
+    //   "Andreas Olsen household - 0529 Vestre Toten - "Norway, Census, 1891""
     // "Church book from" / "1891 census for" are dropped to keep titles short (the
-    // citation keeps the full source title); a census's year goes at the end, as FS's
-    // "Norway, Census, 1801", and tells one household's censuses apart. The type is
-    // left off when the source title already names it (probate). Before 1.6.0 the
-    // year came first (linker.js formerTitle()).
+    // citation keeps the full source title); a census ends as FS's own census sources
+    // do, "Norway, Census, 1801", whose year tells one household's censuses apart. The
+    // type is left off when the source title already names it (probate). The SourceBox
+    // shows the source date's year in front of the title. Before 1.6.0 the year came
+    // first in the title (linker.js formerTitles()).
     const titleTypes = {
       'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
       'confirmation': 'Confirmation',
@@ -1010,7 +1011,7 @@ function extractRecord(document, pageUrl) {
                        (recordTypeInfo.type === 'census' ? (recordDate.match(/\d{4}/) || [''])[0] : '');
     const titleSource = sourceInfo.sourceTitle
       .replace(/^church book from\s+/i, '')
-      .replace(/^\d{4} census for\s+/i, '');  // the year goes after the type
+      .replace(/^\d{4} census for\s+/i, '');  // the year goes at the end
     // Name the record's principal (the child of a baptism, not the father whose page
     // may be open). A child is often recorded by given name only ("John"); then the
     // parent is added — "John, child of John Aslaksen" — rather than guessing a surname.
@@ -1041,7 +1042,7 @@ function extractRecord(document, pageUrl) {
     }
     const titleParts = [titleName, titleSource];
     if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {
-      titleParts.push(titleType + (censusYear ? ', ' + censusYear : ''));
+      titleParts.push(censusYear ? '"Norway, Census, ' + censusYear + '"' : titleType);
     }
     const title = titleParts.filter(Boolean).join(' - ') ||
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();

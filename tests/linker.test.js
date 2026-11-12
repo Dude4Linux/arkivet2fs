@@ -243,7 +243,7 @@ test('renames carry into the title, the citation and the notes', () => {
   assert.equal(w.renamePhrase('Lars, son of Halvor Larsen - Vågå', 'Lars', 'Lars Halvorsen'), 'Lars Halvorsen, son of Halvor Larsen - Vågå');
   assert.equal(w.renamePhrase('baptism of Lars, 23 August 1846', 'Lars', 'Lars Halvorsen'), 'baptism of Lars Halvorsen, 23 August 1846');
   // whole names only
-  assert.equal(w.renamePhrase('Lars Halvorsen Solbakken household - Vågå - Census, 1900', 'Lars Halvorsen', 'X'), 'Lars Halvorsen Solbakken household - Vågå - Census, 1900');
+  assert.equal(w.renamePhrase('Lars Halvorsen Solbakken household - Vågå - "Norway, Census, 1900"', 'Lars Halvorsen', 'X'), 'Lars Halvorsen Solbakken household - Vågå - "Norway, Census, 1900"');
   assert.equal(w.renameNoteLine('Child: Lars *\nFather: Halvor Larsen', 'Child', 'Lars', 'Lars Halvorsen'), 'Child: Lars Halvorsen *\nFather: Halvor Larsen');
   assert.equal(value(w, 'dropChildOf')('Lars Halvorsen, son of Halvor Larsen - Vågå parish - Birth'), 'Lars Halvorsen - Vågå parish - Birth');
 });
@@ -1312,7 +1312,7 @@ function householdPage(pairs) {
   const state = value(win, 'state');
   const person = (name, role, roleEnglish, birthYear, more = {}) => ({ id: '', name, role, roleEnglish, birthYear, position: '', birthPlace: '', residence: '', current: false, primary: false, ...more });
   const r = { recordTypeInfo: { type: 'census', prefix: 'pf' }, recordDate: '1891', fields: {}, census: { district: 'Nordlien', residence: 'Bakken nedre' },
-    sourceTitle: '1891 census for 0515 Vågå', county: 'Oppland', title: 'Halvor Larsen household - 0515 Vågå - Census, 1891', citation: '', notes: '', others: [], people: [
+    sourceTitle: '1891 census for 0515 Vågå', county: 'Oppland', title: 'Halvor Larsen household - 0515 Vågå - "Norway, Census, 1891"', citation: '', notes: '', others: [], people: [
       person('Halvor Larsen', 'husfader', 'Husfader [head of household]', '1820', { current: true, primary: true }),
       person('Kjersti Olsdatter', 'hustru', 'Hustru [wife]', '1824'),
       person('Lars Halvorsen', 'søn', 'Søn [son]', '1850'),
@@ -1497,12 +1497,13 @@ test('run(): a source of this title for another record is not written over or at
   assert.deepEqual(plain(tabs.closed), []);
 });
 
-test('formerTitle(): the title a source got before 1.6.0, the year in front', () => {
-  assert.equal(w.formerTitle('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846'), '1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth');
-  assert.equal(w.formerTitle('Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census, 1865', '1865'),
-    '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census');
-  assert.equal(w.formerTitle('1846, Lars Halvorsen - Vågå - Birth', '1846'), '');  // a year in front already
-  assert.equal(w.formerTitle('Lars Halvorsen - Vågå - Birth', ''), '');
+test('formerTitles(): the titles a source got before 1.6.0, the year in front', () => {
+  assert.deepEqual(plain(w.formerTitles('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846')), ['1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth']);
+  assert.deepEqual(plain(w.formerTitles('Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"', '1865')), [
+    '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"',  // edited by hand on FS
+    '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census']);
+  assert.deepEqual(plain(w.formerTitles('1846, Lars Halvorsen - Vågå - Birth', '1846')), []);  // a year in front already
+  assert.deepEqual(plain(w.formerTitles('Lars Halvorsen - Vågå - Birth', '')), []);
 });
 
 test('run(): a source under its former, year-first title is used, given the new title, not made again', async () => {
@@ -1531,8 +1532,8 @@ test('lookUpSource(): a census source under its former title is searched for by 
   const { win, state } = checkedPage(chrome);
   state.record = { ...state.record, recordDate: '1865-12-31' };
   const tab = await win.openTab(value(win, 'SOURCEBOX_URL'));
-  const found = await win.lookUpSource(tab, 'Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census, 1865');
-  assert.deepEqual(titles, ['Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census, 1865', '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census']);
+  const found = await win.lookUpSource(tab, 'Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"');
+  assert.deepEqual(titles, ['Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"', '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census']);
   assert.equal(found.id, 'TEST-S08');
   assert.equal(found.formerTitle, '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census');
 });

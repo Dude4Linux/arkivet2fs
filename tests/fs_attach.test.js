@@ -52,7 +52,7 @@ function sourceBox(home, all) {
 }
 
 test('findSource(): the sources of exactly that title, in any folder', async () => {
-  const all = [['TEST-S01', TITLE], ['TEST-S02', TITLE + ' (copy)'], ['TEST-S03', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']];
+  const all = [['TEST-S01', TITLE], ['TEST-S02', TITLE + ' (copy)'], ['TEST-S03', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']];
   const { step } = sourceBox([['TEST-S04', all[3][1]]], all);
   const answer = await step('findSource', { title: '  ' + TITLE + ' ' });
   assert.equal(answer.ok, true);
@@ -72,7 +72,7 @@ test('findSource(): with none of the title, a source under an older title holdin
 });
 
 test('findSource(): none when the search finds nothing', async () => {
-  const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']], [['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']]);
+  const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']], [['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']]);
   assert.deepEqual(plain((await step('findSource', { title: TITLE })).sources), []);
 });
 
@@ -244,7 +244,7 @@ test('editSource() with read: FS\'s fields, cancelled, nothing written', async (
 });
 
 test('editSource(): a source Home doesn\'t show is found with the search', async () => {
-  const page = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']], [['TEST-S01', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - Census, 1850']]);
+  const page = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']], [['TEST-S01', TITLE], ['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']]);
   // the wait for the row on Home runs out at once; the search then has real time
   const realNow = page.w.Date.now;
   let now = realNow();

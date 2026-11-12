@@ -68,7 +68,7 @@ test('a burial: split date of death merged, age in years, the position translate
 test("a census of 1865: the open person's household, its head in the title", () => {
   const r = record('census-1865');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pf', type: 'census' });
-  assert.equal(r.title, 'Reidar Finleiksen household, Fjeld nordre, Bryn - Vågå - Census, 1865');
+  assert.equal(r.title, 'Reidar Finleiksen household, Fjeld nordre, Bryn - Vågå - "Norway, Census, 1865"');
   assert.deepEqual(r.census, { district: 'Bryn', residence: 'Fjeld nordre' });
   assert.match(r.citation, /^Norway, Oppland, Vågå, "1865 census for Vågå," census district 004 Bryn, rural residence 0053 Fjeld nordre, Reidar Finleiksen household; /);
   assert.match(r.citation, /scanned image ft99000000000141 /);
@@ -85,7 +85,7 @@ test("a census of 1865: the open person's household, its head in the title", () 
 
 test('a census of 1900: coded positions, and the other household at the residence', () => {
   const r = record('census-1900');
-  assert.equal(r.title, 'Lars Halvorsen Solbakken household, Pladsen Solbakken - Vågå - Census, 1900');
+  assert.equal(r.title, 'Lars Halvorsen Solbakken household, Pladsen Solbakken - Vågå - "Norway, Census, 1900"');
   // the district is only a number ("006"), so it has no name
   assert.deepEqual(r.census, { district: '', residence: 'Pladsen Solbakken' });
   assert.deepEqual(people(r), ['Lars Halvorsen Solbakken (Man of the House)', 'Kjersti Larsdatter (Woman of the House)',

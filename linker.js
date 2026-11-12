@@ -2321,18 +2321,18 @@ function stepError(answer) {
   return error;
 }
 
-// The title this extension gave a source before 1.6.0: the record's year in front (a
-// census's at the end now): "1846, Lars, son of Halvor Larsen - Vågå parish ... - Birth",
-// "1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census". '' for a
-// title with a year in front.
-function formerTitle(title, year) {
-  if (!title || /^\d{4}, /.test(title)) return '';
-  const census = title.match(/^(.+ - Census), (\d{4})$/);
-  if (census) return census[2] + ', ' + census[1];
-  return year ? year + ', ' + title : '';
+// The titles this extension gave a source before 1.6.0, which a source made then may
+// still have: the record's year in front, "1846, Lars, son of Halvor Larsen - Vågå
+// parish ... - Birth", a census also ending "- Census" ("1865, Halvor Larsen household,
+// Bakken nedre, Nordlien - Vågå - Census"). [] for a title with a year in front.
+function formerTitles(title, year) {
+  if (!title || /^\d{4}, /.test(title)) return [];
+  const census = title.match(/^(.+) - "Norway, Census, (\d{4})"$/);
+  if (census) return [census[2] + ', ' + title, census[2] + ', ' + census[1] + ' - Census'];
+  return year ? [year + ', ' + title] : [];
 }
 
-// The record's year, for formerTitle()
+// The record's year, for formerTitles()
 function recordYear() {
   const record = state.record || {};
   return (String(record.recordDate || record.date || '').match(/\d{4}/) || [''])[0];
@@ -2341,15 +2341,16 @@ function recordYear() {
 // The source of this title in the SourceBox, or one made before 1.6.0 under its former
 // title (`formerTitle`: an update gives it this one), and who it is attached to
 async function lookUpSource(tabId, title, active = true) {
-  const former = formerTitle(title, recordYear());
-  let found = await step(tabId, 'findSource', { title, older: former ? [former] : [] });
+  const former = formerTitles(title, recordYear());
+  let found = await step(tabId, 'findSource', { title, older: former });
   if (!found.ok) throw stepError(found);
   // A former title the search for this one doesn't show (a census's): searched for itself
-  if (!found.sources.length && former && !former.includes(title)) {
+  for (const older of former.filter((f) => !f.includes(title))) {
+    if (found.sources.length) break;
     await navigate(tabId, SOURCEBOX_URL, active);
-    found = await step(tabId, 'findSource', { title: former });
+    found = await step(tabId, 'findSource', { title: older });
     if (!found.ok) throw stepError(found);
-    found.title = former;
+    found.title = older;
   }
   const ids = found.sources.map((s) => s.id);
   if (!ids.length) return { title, id: null, ids, persons: [] };
