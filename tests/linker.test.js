@@ -925,6 +925,18 @@ test('mergePlace(): FS\'s when it names the record\'s place, else the record\'s 
   assert.equal(w.cleanPlace('1029P Audnedal'), 'Audnedal');
 });
 
+test('a town DA writes twice ("Christiansund Christiansund N") is the town, not a farm before FS\'s place', () => {
+  const c = record('census-1865');
+  const town = 'Christiansund Christiansund N';
+  assert.equal(w.mergePlace(town, 'Kristiansund, Møre og Romsdal, Norway', c, false, true), 'Kristiansund, Møre og Romsdal, Norway');
+  assert.equal(w.placeIn(town, 'Kristiansund, Møre og Romsdal, Norway'), true);
+  assert.equal(w.placeIn(town, 'Molde, Møre og Romsdal, Norway'), false);
+  assert.match(w.fsMunicipality(town, c, true), /^Kristiansund, Møre og Romsdal, Norway$/);
+  // two names are a farm and a place, not one place written twice
+  assert.equal(w.placeWords('Bakken Vågå'), null);
+  assert.equal(w.placeWords('Vågå'), null);
+});
+
 test('a row offers the additions unticked; ticked and edited they reach the plan and the summary, and outlive a redraw', () => {
   const { win, state, $ } = checkedPage();
   state.fs = LARS_1846;  // no christening on FS

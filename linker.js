@@ -936,11 +936,21 @@ function cleanPlace(place) {
 }
 // Whether FS's place names the record's (by any of its names: Vaage, Vågå, Vaga)
 function placeIn(name, fsText) {
+  const words = placeWords(name);
+  if (words) return words.every((w) => placeIn(w, fsText));
   const names = new Set(placeAliases(name).flatMap((n) => [foldPlace(n), asciiPlace(n)]));
   return String(fsText || '').split(',').some((part) => {
     const p = part.replace(/\b(church|kirke|kirkested|prestegjeld|parish|sogn|herred|municipality|kommune)\b/gi, '').trim();
     return names.has(foldPlace(p)) || names.has(asciiPlace(p));
   });
+}
+// A place DA gives as one name written twice, perhaps with a letter after it
+// ("Christiansund Christiansund N", the town Kristiansund N): its words, else null
+function placeWords(name) {
+  const text = String(name || '').trim();
+  if (/,/.test(text)) return null;
+  const words = text.split(/\s+/).filter((w) => w.replace(/\./g, '').length > 1);
+  return words.length > 1 && new Set(words.map(foldPlace)).size === 1 ? [words[0]] : null;
 }
 // A place combining the record's and FS's: FS's when it names the record's place,
 // else the record's in FS's form. A place the record only implies (`weak`: a death in
@@ -2737,7 +2747,8 @@ function fsMunicipality(place, record, elsewhere) {
   const county = record.county && !/,/.test(record.county) ? record.county : '';
   // "Chr", as clerks wrote Christiania, in a record of Oslo or Akershus
   if (/^chr\.?$/i.test(name) && /^(Oslo|Akershus)$/.test(county)) return 'Kristiania, Oslo, Norway';
-  const names = [...new Set([name, name.replace(/s$/, ''), name.replace(/\.$/, '')])];
+  const one = (placeWords(name) || [name])[0];
+  const names = [...new Set([one, one.replace(/s$/, ''), one.replace(/\.$/, '')])];
   // with the record's county first; one anywhere also alone (the county Bergen is also
   // the town, which makes "Vaage, Bergen" two places). Only the codes the name itself
   // gives: the counties Oslo and Bergen are towns too, and a farm there isn't the town.
