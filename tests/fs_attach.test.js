@@ -90,6 +90,18 @@ test('findSource(): a dated source, which FS lists with the date\'s year in fron
   assert.equal((await other.step('findSource', { title: TITLE, older: ['1846, ' + TITLE] })).title, '1846, ' + TITLE);
 });
 
+test('findSource(): Home\'s rows coming in after the search was clicked aren\'t taken for its hits', async () => {
+  const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox',
+    '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button><div id="list"></div>');
+  const list = page.w.document.getElementById('list');
+  page.w.document.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
+    setTimeout(() => { list.innerHTML = row('TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"'); }, 100);
+    setTimeout(() => { list.innerHTML = row('TEST-S01', TITLE, '1846'); }, 1500);
+  });
+  const answer = await page.step('findSource', { title: TITLE });
+  assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01']);
+});
+
 test('findSource(): none when the search finds nothing', async () => {
   const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']], [['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']]);
   assert.deepEqual(plain((await step('findSource', { title: TITLE })).sources), []);

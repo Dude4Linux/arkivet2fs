@@ -55,7 +55,9 @@ fixes, new features, changes that break what users have).
   instead of making another.
 - A source already in the SourceBox with a date is found again. FamilySearch lists
   a dated source with the date's year in front of its title, which the linker took
-  for part of the title, so it made a second source for the same record.
+  for part of the title, so it made a second source for the same record. The search
+  of the SourceBox also waits for its own results, where it could take the SourceBox's
+  newest sources, still loading, for them.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
