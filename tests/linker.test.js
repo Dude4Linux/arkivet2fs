@@ -1022,12 +1022,15 @@ test('prepareAdditions(): the ticked facts are filled in FS\'s forms in the hidd
   const note = lars.node.querySelector('.checked-note');
   assert.equal(note.hidden, false);
   assert.match(note.textContent, /^Checked with FamilySearch: Date: 23 August 1846; Place: Vågå, Oppland, Norway$/);
+  // the report says so under the addition
+  assert.match(win.linkerReport(), /\[x\] Add the christening: .*\n {4}- Checked with FamilySearch: Date: 23 August 1846; Place: Vågå, Oppland, Norway\n/);
   assert.match($('changes-status').textContent, /^Checked with FamilySearch: look the dates/);
   assert.equal(plain(win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR').additions)[0].value.place, 'Vågå, Oppland, Norway');
   // edited after: the note goes
   place().value = 'Vågå kirke, Vågå, Oppland, Norway';
   place().dispatchEvent(new win.Event('input'));
   assert.equal(lars.node.querySelector('.checked-note').hidden, true);
+  assert.doesNotMatch(win.linkerReport(), /Checked with FamilySearch: Date/);
 });
 
 test('run(): a ticked fact is saved on the tree person once the source is attached, then tagged with it', async () => {

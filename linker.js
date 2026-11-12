@@ -3192,6 +3192,9 @@ function linkerReport() {
       for (const a of row.offered || []) {
         const done = ticked.get(additionKey(row.person, pid, a));
         lines.push('  - [' + (done ? 'x' : ' ') + '] ' + additionLabel(a) + ': ' + additionText(done || a) + (a.current ? ' (FS has: ' + a.current + ')' : ''));
+        // what "Check with FamilySearch" made of it, while the boxes hold its picks
+        const kept = (state.additionEdits || {})[additionKey(row.person, pid, a)];
+        if (kept && kept.fs) lines.push('    - ' + fsCheckedText(kept.fs));
       }
     }
     return lines.join('\n');
