@@ -87,6 +87,9 @@ fixes, new features, changes that break what users have).
 - In a town's church book (Arendal, Risør, Kristiansand, ...), a burial's name after
   the patronymic is taken for a family name, not for a farm the person died on, so
   the linker no longer offers to put the death on a "farm" of that name.
+- A name such as "Lars Halvorsen Lindemann", whose last name isn't a farm near the
+  person's places, is searched by the patronymic first (church books name people by
+  it) and by the family name after it, no longer the other way round.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

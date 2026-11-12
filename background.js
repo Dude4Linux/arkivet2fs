@@ -182,8 +182,8 @@ async function personToQuery(person) {
   // Names: the primary name, then alternates (without repeats). A word after the
   // patronymic is a farm only when a farm of that name lies in the person's
   // municipality or county (any farm, when FS has no places); otherwise it's a family
-  // or place-derived name (Lindeman), searched as the surname, with the patronymic as
-  // another name. A last name without a patronymic stays the surname, and is a farm
+  // or place-derived name (Lindeman), another name: the patronymic is searched first,
+  // since church books name people by it. A last name without a patronymic stays the surname, and is a farm
   // too when one lies in the person's places.
   const names = [];
   const farms = [];
@@ -203,7 +203,7 @@ async function personToQuery(person) {
   names.forEach((n, i) => {
     const farm = checks[i].farm && (n.rest || n.surname);
     if (farm && !farms.includes(farm)) farms.push(farm);
-    if (n.rest && !checks[i].farm) entries.push({ given: n.given, surname: n.rest }, { given: n.given, surname: n.surname });
+    if (n.rest && !checks[i].farm) entries.push({ given: n.given, surname: n.surname }, { given: n.given, surname: n.rest });
     else entries.push({ given: n.given, surname: n.surname });
   });
   const named = new Set();

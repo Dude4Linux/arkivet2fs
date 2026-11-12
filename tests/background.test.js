@@ -55,14 +55,14 @@ test('personToQuery(): names, a full birth date ±1, the first event abroad, a f
   assert.equal(get('q.fatherBirthYear'), '1810');
 });
 
-test('personToQuery(): not a farm here, so the rest is a surname too', async () => {
+test('personToQuery(): not a farm here, so the rest is another name, after the patronymic', async () => {
   const fetch = async (url) => new Response(/dokpro/.test(url) ? '<table></table>' : '{"navn":[]}');
   const w = loadBackground({ fetch });
   const q = await w.personToQuery({ pid: 'TEST-002', name: 'Magnhild Hansdatter Lindeman', gender: 'Female',
     birth: { date: '1850', place: 'Vågå, Oppland, Norway' }, families: [] });
   assert.equal(q.get('q.farm'), null);
-  assert.equal(q.get('q.surname'), 'Lindeman');
-  assert.equal(q.get('q.surname.1'), 'Hansdatter');
+  assert.equal(q.get('q.surname'), 'Hansdatter');
+  assert.equal(q.get('q.surname.1'), 'Lindeman');
   assert.equal(q.get('q.birthLikeDate.from'), '1848');
 });
 

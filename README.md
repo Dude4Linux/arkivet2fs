@@ -102,8 +102,8 @@ record search. You can edit any of them and click **Search**:
   without nicknames such as "Big" or "Little" (two brothers Lars).
   The names follow the patronymic convention. In "Tollef Johansen Rysstad",
   Johansen is the surname. Rysstad is a farm only when a farm of that name lies
-  near the person's places. Otherwise it's a family or place name and is searched as
-  the surname.
+  near the person's places. Otherwise it's a family or place name, searched as
+  another name after the patronymic, which church books name people by.
 - **Events:** birth or christening, marriage, residences, emigration or immigration,
   death or burial; years are ±2. A full birth date (a gravestone's "16 July 1846",
   from Find a Grave, say) is searched ±1 and kept in the **Date** field, for
