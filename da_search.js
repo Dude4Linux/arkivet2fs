@@ -612,7 +612,11 @@ function buildQueries(criteria) {
       const y = hitYear(h);
       return (h.role === 'Father' || h.role === 'Mother') && y >= c.year && y <= c.year + 1;
     })).map((c) => t('a baptism for {child}', { child: [c.given, '(' + t('b.') + ' ' + c.year + ')'].filter(Boolean).join(' ') })) : undefined;
-    const levels = levelsFor([P.marriagePlace, ...P.residences, P.birthPlace]);
+    // where the children were born: the marriage, the residences, the birth, and the
+    // death when it came while they still could be (a father dead at 31 in another
+    // town had his last children baptized there)
+    const diedThen = P.death && P.deathPlace && P.death.from <= to;
+    const levels = levelsFor([P.marriagePlace, ...P.residences, P.birthPlace, diedThen ? P.deathPlace : '']);
     const spouses = P.spouses.length ? P.spouses : [null];
     spouses.forEach((spouse, k) => {
       const s = relative(spouse, relation, other);

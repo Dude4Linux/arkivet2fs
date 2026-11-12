@@ -135,6 +135,26 @@ test("churchSpelling(): a patronymic in the church books' letters, searched firs
   assert.equal(w.searchStem('Olsen'), 'Ols*');
 });
 
+// Lars Jorgensen (FS without ø) Lindemann, b. 1835, married in Oslo to Astri
+// Larsdatter, children b. 1862 and 1866, died in Arendal in 1868
+const jorgensen = (death = { 'deathLikeDate.from': '1868', 'deathLikeDate.to': '1868', deathLikePlace: 'Arendal, Aust-Agder, Norway' }) => criteria({
+  name: [{ givenName: 'Lars', surname: 'Jorgensen' }, { givenName: 'Lars', surname: 'Lindemann' }], sex: [{ sex: 'Male' }],
+  birth: [{ 'birthLikeDate.from': '1834', 'birthLikeDate.to': '1836' }],
+  marriage: [{ 'marriageLikeDate.from': '1861', 'marriageLikeDate.to': '1861', marriageLikePlace: 'Oslo, Oslo, Norway' }],
+  death: [death],
+  spouse: [{ spouseGivenName: 'Astri', spouseSurname: 'Larsdatter' }],
+  child: [{ childGivenName: 'Ole', childBirthYear: '1862' }, { childGivenName: 'Marit', childBirthYear: '1866' }]
+});
+
+test("buildQueries(): children's baptisms also where the person died while they could still be born", () => {
+  const q = children(jorgensen());
+  assert.deepEqual(plain(q.levels[0].fields['m[]']).sort(), ['0218', '0301', '0903']);
+  assert.equal(q.steps[0].text, 'Lars Jørgens* + mother Astr* Lars*');
+  // dead at 85: the death place isn't where the children were born
+  const old = children(jorgensen({ 'deathLikeDate.from': '1920', 'deathLikeDate.to': '1920', deathLikePlace: 'Arendal, Aust-Agder, Norway' }));
+  assert.ok(!old.levels[0].fields['m[]'].includes('0903'), JSON.stringify(plain(old.levels[0].fields)));
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');
