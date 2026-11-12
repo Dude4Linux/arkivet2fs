@@ -62,6 +62,10 @@ fixes, new features, changes that break what users have).
   else's, so the two entries give one source, no longer one each. A source made
   before from another person's entry of the record is taken for this record's and
   updated, no longer refused as "of another record".
+- In a record of Oslo or Bergen, a farm is no longer taken for the town (Oslo and
+  Bergen are counties as well as towns), which put a residence or birthplace on the
+  farm in "Oslo, Oslo, Norway". "Chr", as clerks there wrote Christiania, is
+  Kristiania, and a town of another county named in the record is that town.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

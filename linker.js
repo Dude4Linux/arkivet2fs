@@ -2683,12 +2683,16 @@ function fsMunicipality(place, record, elsewhere) {
   const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name || /,/.test(name)) return '';
   const county = record.county && !/,/.test(record.county) ? record.county : '';
+  // "Chr", as clerks wrote Christiania, in a record of Oslo or Akershus
+  if (/^chr\.?$/i.test(name) && /^(Oslo|Akershus)$/.test(county)) return 'Kristiania, Oslo, Norway';
   const names = [...new Set([name, name.replace(/s$/, ''), name.replace(/\.$/, '')])];
   // with the record's county first; one anywhere also alone (the county Bergen is also
-  // the town, which makes "Vaage, Bergen" two places)
-  const tries = [...names.map((n) => joined(n, county)), ...(elsewhere && county ? names : [])];
-  for (const tryName of tries) {
-    const code = oneMunicipality(municipalityCodes(tryName));
+  // the town, which makes "Vaage, Bergen" two places). Only the codes the name itself
+  // gives: the counties Oslo and Bergen are towns too, and a farm there isn't the town.
+  const tries = [...names.map((n) => [n, joined(n, county)]), ...(elsewhere && county ? names.map((n) => [n, n]) : [])];
+  for (const [own, tryName] of tries) {
+    const mine = municipalityCodes(own);
+    const code = oneMunicipality(municipalityCodes(tryName).filter((c) => mine.includes(c)));
     if (!code) continue;
     const municipality = code === '0301' && namesKristiania(name) ? 'Kristiania' : municipalityName(code);
     return joined(municipality, fsCounty(countyName(code.slice(0, 2))), 'Norway');

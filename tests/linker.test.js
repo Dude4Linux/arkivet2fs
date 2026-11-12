@@ -865,6 +865,22 @@ test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', ()
   assert.equal(w.fsPlace('Nowhere', c, true), 'Nowhere, Norway');
 });
 
+test('fsMunicipality(): in a record of Oslo or Bergen, a farm isn\'t the town the county is named after (bug: "Oslo, Oslo, Norway")', () => {
+  const oslo = { county: 'Oslo' };
+  assert.equal(w.fsMunicipality('Bakken', oslo), '');
+  assert.equal(w.fsPlace('Bakken', oslo), 'Bakken, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Bakken', { county: 'Bergen' }), '');
+  assert.equal(w.fsMunicipality('Bergen', { county: 'Bergen' }), 'Bergen, Hordaland, Norway');
+  assert.equal(w.fsMunicipality('Oslo', oslo), 'Oslo, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Christiania', oslo), 'Kristiania, Oslo, Norway');
+  // a town of another county is that town, not one in the record's county
+  assert.equal(w.fsMunicipality('Fredrikstad', oslo), 'Fredrikstad, Østfold, Norway');
+  // "Chr", Christiania as the clerks of Oslo and Akershus wrote it; elsewhere it isn't known
+  assert.equal(w.fsMunicipality('Chr', oslo), 'Kristiania, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Chr.', { county: 'Akershus' }), 'Kristiania, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Chr', { county: 'Vest-Agder' }), '');
+});
+
 // --- Adding the record's facts to FamilySearch ---------------------------------------
 test('mergeDate(): the more specific where the two agree, the record\'s where they disagree', () => {
   assert.equal(w.mergeDate({ year: 1846, month: 7, day: 16 }, false, '1846'), '16 July 1846');
