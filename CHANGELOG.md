@@ -69,6 +69,10 @@ fixes, new features, changes that break what users have).
   A town's parish (one of Oslo's) is the town in FamilySearch's places ("Oslo,
   Oslo, Norway"), no longer the parish's name in the county, and a residence the
   record gives as a town is the town, not a farm in the parish.
+- An alternate name offered from the record takes, of two patronymics, the one of
+  the father the record names, no longer the first written, and keeps a family name
+  the tree has (in the record's spelling) as the surname instead of dropping it as
+  a farm.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

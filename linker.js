@@ -994,13 +994,41 @@ function churchPlace(record) {
 
 // A name split as FS's form takes it: the given names up to the patronymic, which is
 // the surname; a word after it (a farm, an address) left out. No patronymic: the last
-// word is the surname.
-function nameParts(name) {
+// word is the surname. With `fathers` (the record's father's given names), of two
+// patronymics the one of that father is the surname ("Astri Pedersdatter Larsdatter",
+// father Lars: Larsdatter); with `family` (the tree's surname, not a patronymic), a
+// last word that is the family name in another spelling is the surname, the
+// patronymic a given name ("Lars Halvorsen Lindeman", FS's Lindemann).
+function nameParts(name, { fathers = [], family = '' } = {}) {
   const words = String(name || '').split(/\s+/).filter(Boolean);
-  const k = words.findIndex((w, i) => i > 0 && isPatronymic(w));
-  if (k > 0) return { given: words.slice(0, k).join(' '), surname: words[k], rest: words.slice(k + 1).join(' ') };
-  if (words.length > 1) return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], rest: '' };
+  const last = words[words.length - 1];
+  const sameWord = (a, b) => fold(a) === fold(b) || nameNear(a, b);
+  if (family && words.length > 2 && !isPatronymic(last) && sameWord(last, family)) {
+    return { given: words.slice(0, -1).join(' '), surname: last, rest: '' };
+  }
+  const pats = words.map((w, i) => (i > 0 && isPatronymic(w) ? i : -1)).filter((i) => i > 0);
+  if (pats.length) {
+    const first = pats[0];
+    // the father's name as a patronymic's base reads it, without its genitive s (Johannes)
+    const ofFather = (i) => fathers.some((f) => sameFather(patronymicBase(words[i]), f) || sameFather(patronymicBase(words[i]), f.replace(/s$/i, '')));
+    const k = pats.find(ofFather) || first;
+    const rest = words.slice(first).filter((w, i) => i + first !== k);
+    return { given: words.slice(0, first).join(' '), surname: words[k], rest: rest.join(' ') };
+  }
+  if (words.length > 1) return { given: words.slice(0, -1).join(' '), surname: last, rest: '' };
   return { given: words.join(' '), surname: '', rest: '' };
+}
+// The given names of a person's fathers in the record (a baptism's father, a groom's
+// or bride's father), for nameParts()
+function recordFathers(person, record) {
+  const view = { ...record, people: (record.people || []).map((p) => ({ ...p, current: p.id === person.id })) };
+  return relativesInRecord(view).father.map((p) => stripVariants(p.name).split(/\s+/)[0]).filter(Boolean);
+}
+// The tree's family name: the last word of FS's name when it isn't a patronymic
+function treeFamilyName(name) {
+  const words = String(name || '').split(/\s+/).filter(Boolean);
+  const last = words[words.length - 1];
+  return words.length > 1 && !isPatronymic(last) ? last : '';
 }
 const sameNameKey = (name) => String(name || '').toLowerCase().replace(/[.,'"]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -1032,7 +1060,7 @@ function factAdditions(person, record, tree, name) {
   const year = (daDateParts(record.recordDate) || {}).year;
 
   // A name FS has neither as the name nor as an alternate one
-  const parts = nameParts(name || stripVariants(person.name));
+  const parts = nameParts(name || stripVariants(person.name), { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
   if (parts.surname) {
     const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
     if (!known.includes(sameNameKey(parts.given + ' ' + parts.surname))) {

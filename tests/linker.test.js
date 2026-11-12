@@ -1185,6 +1185,39 @@ test('factAdditions(): a residence that is a town is the town, not a farm in the
   assert.deepEqual(adds.filter((a) => a.fact === 'Burial'), []);
 });
 
+test('nameParts(): of two patronymics the record father\'s; the tree\'s family name in another spelling', () => {
+  const parts = (name, opts) => plain(w.nameParts(name, opts));
+  assert.deepEqual(parts('Lars Halvorsen Bakken'), { given: 'Lars', surname: 'Halvorsen', rest: 'Bakken' });
+  assert.deepEqual(parts('Astri Pedersdatter Larsdatter'), { given: 'Astri', surname: 'Pedersdatter', rest: 'Larsdatter' });
+  assert.deepEqual(parts('Astri Pedersdatter Larsdatter', { fathers: ['Lars'] }), { given: 'Astri', surname: 'Larsdatter', rest: 'Pedersdatter' });
+  // a father's name in another spelling: Johannes for a Jonsdatter
+  assert.deepEqual(parts('Astri Pedersdatter Jonsdatter Bakken', { fathers: ['Johannes'] }), { given: 'Astri', surname: 'Jonsdatter', rest: 'Pedersdatter Bakken' });
+  assert.deepEqual(parts('Lars Halvorsen Lindeman', { family: 'Lindemann' }), { given: 'Lars Halvorsen', surname: 'Lindeman', rest: '' });
+  // a farm that isn't the tree's family name is still an address
+  assert.deepEqual(parts('Lars Halvorsen Bakken', { family: 'Lindemann' }), { given: 'Lars', surname: 'Halvorsen', rest: 'Bakken' });
+  assert.equal(w.treeFamilyName('Lars Halvorsen Lindemann'), 'Lindemann');
+  assert.equal(w.treeFamilyName('Lars Halvorsen'), '');
+});
+
+test('factAdditions(): an alternate name with the patronymic of the record\'s father, and with the tree\'s family name (bug: the first patronymic, the family name dropped)', () => {
+  const { win, state } = checkedPage();
+  const m = record('marriage-bride');
+  const [groom, bride] = w.recordPeople(m);
+  state.record = m;
+  const names = (person, fs, name) => {
+    state.fs = { pid: fs.pid, gender: 'Male', residences: [], occupations: [], altNames: [], ...fs };
+    return plain(win.factAdditions(person, m, { pid: fs.pid }, name)).filter((a) => a.fact === 'Name').map((a) => a.value);
+  };
+  // the bride's father in the record is Kolvald: her patronymic is his, not the first one written
+  assert.deepEqual(names(bride, { pid: 'TEST-ELI', name: 'Eli Kolvaldsdatter', gender: 'Female' }, 'Eli Halvorsdatter Kolvaldsdatter'), []);
+  assert.deepEqual(names(bride, { pid: 'TEST-ELI', name: 'Eli Kolvaldsdtr', gender: 'Female' }, 'Eli Halvorsdatter Kolvaldsdatter'),
+    [{ given: 'Eli', surname: 'Kolvaldsdatter', nameType: 'AKA' }]);
+  // the tree has the farm as the family name: the record's spelling of it is the surname
+  assert.deepEqual(names(groom, { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dahlbø' }),
+    [{ given: 'Kolmund Finsteinsen', surname: 'Dalbø', nameType: 'AKA' }]);
+  assert.deepEqual(names(groom, { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø' }), []);
+});
+
 test('additionText(): an alternate name as written, given names before the surname', () => {
   const name = { fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Astri', surname: 'Larsdatter', nameType: 'AKA' } };
   assert.equal(w.additionText(name), 'Astri Larsdatter (Also known as)');
