@@ -117,6 +117,24 @@ test("buildQueries(): the person's own patronymic spelling as a fallback step", 
   assert.ok(!j.steps.some((s) => s.fallback), JSON.stringify(plain(j.steps.map((s) => s.text))));
 });
 
+test("churchSpelling(): a patronymic in the church books' letters, searched first", () => {
+  // FS without ø: DA doesn't treat o as ø
+  assert.equal(w.churchSpelling('Jorgensen'), 'Jørgensen');
+  assert.equal(w.searchStem('Jorgensen'), 'Jørgens*');
+  assert.deepEqual(plain(w.surnameSpellings('Jorgensen')), ['Jorgens*']);
+  assert.equal(w.searchStem('Bjornsdtr'), 'Bjørns*');
+  // a father's name ending in s (Torresen)
+  assert.equal(w.churchSpelling('Torresen'), 'Tørresen');
+  // å as the church books wrote it, aa: DA has no Håkons*
+  assert.equal(w.churchSpelling('Hakonsen'), 'Haakonsen');
+  assert.equal(w.searchStem('Håkonsdatter'), 'Haakons*');
+  assert.deepEqual(plain(w.surnameSpellings('Håkonsdatter')), []);
+  assert.equal(w.searchStem('Palsen'), 'Paals*');
+  // already so, or a father's name without these letters
+  for (const name of ['Jørgensen', 'Haakonsen', 'Olsen', 'Jonsen', 'Lindeman']) assert.equal(w.churchSpelling(name), '', name);
+  assert.equal(w.searchStem('Olsen'), 'Ols*');
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');

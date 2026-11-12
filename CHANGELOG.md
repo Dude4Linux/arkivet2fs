@@ -90,6 +90,10 @@ fixes, new features, changes that break what users have).
 - A name such as "Lars Halvorsen Lindemann", whose last name isn't a farm near the
   person's places, is searched by the patronymic first (church books name people by
   it) and by the family name after it, no longer the other way round.
+- A patronymic FamilySearch writes without ø or å (Jorgensen, Hakonsen, or today's
+  Håkonsen) is searched as the church books wrote it, Jørgensen and Haakonsen:
+  Digitalarkivet doesn't take o for ø or å for aa, and found almost none of the
+  person's records under FamilySearch's spelling. That spelling is still tried after.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

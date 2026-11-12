@@ -212,17 +212,51 @@ function surnameStem(surname) {
 
 // Surname to search by: surnameStem(), but a patronymic of a father's name with
 // listed spellings by the start they share, where there is one (Johansdr → Johan*,
-// finding Johannesdtr. and Johannsdtr).
+// finding Johannesdtr. and Johannsdtr), and in the church books' letters
+// (churchSpelling(): Jorgensen → Jørgens*, Håkonsen → Haakons*).
 // Scoring keeps surnameStem().
 function searchStem(surname) {
+  const own = churchSpelling(surname);
+  if (own) return searchStem(own);
   const spelled = patronymicGroup(surname);
   const shared = spelled && spelled.group.shared;
   return shared ? surname.trim().slice(0, shared.length) + '*' : surnameStem(surname);
 }
 
+// Fathers' names written with æ, ø or å, which FS often has otherwise (Jorgensen,
+// Hakonsen, Palsen; Håkonsen in today's spelling): DA doesn't treat o as ø, nor å as
+// aa, and its transcriptions keep the church books' letters (Jørgensen, Haakonsen:
+// Jorgens* finds few of them, Håkons* none), so searchStem() searches by those first
+const NORWEGIAN_LETTER_FATHERS = ['søren', 'jørgen', 'jørn', 'bjørn', 'sæbjørn', 'gjøran', 'tørres', 'tørris',
+  'østen', 'øystein', 'bård', 'håkon', 'pål', 'ståle', 'ånund', 'åsmund', 'åsulf', 'tjøstolv', 'tjøstel'];
+
+// A patronymic in the church books' letters (Jorgensen → Jørgensen, Hakonsdatter and
+// Håkonsdatter → Haakonsdatter); '' when it is already so or its father's name isn't
+// listed
+function churchSpelling(surname) {
+  const s = (surname || '').trim();
+  if (!isPatronymic(s)) return '';
+  const lower = s.toLowerCase();
+  const plain = (name, ae, aa) => name.replace(/æ/g, ae).replace(/ø/g, 'o').replace(/å/g, aa);
+  for (const name of NORWEGIAN_LETTER_FATHERS) {
+    const church = name.replace(/å/g, 'aa');
+    for (const form of new Set([name, plain(name, 'ae', 'aa'), plain(name, 'a', 'a'), plain(name, 'ae', 'a')])) {
+      // the genitive s follows, or ends the name (Torresen)
+      if (!lower.startsWith(form) || !(/s$/.test(form) || lower[form.length] === 's')) continue;
+      if (form === church) return '';
+      return (s[0] === s[0].toLowerCase() ? church[0] : church[0].toUpperCase()) + church.slice(1) + s.slice(form.length);
+    }
+  }
+  return '';
+}
+
 // The other spellings of a patronymic to search for one by one (Pedersen → Pers*;
-// Johansdr → none, since Johan* finds them)
+// Johansdr → none, since Johan* finds them; Jorgensen, searched as Jørgens*, →
+// Jorgens*, as a few transcriptions have it)
 function surnameSpellings(surname) {
+  const own = churchSpelling(surname);
+  // (not Håkonsen's own: DA's transcriptions have no å)
+  if (own) return [...(/å/i.test(surname) ? [] : [surnameStem(surname)]), ...surnameSpellings(own)];
   const spelled = patronymicGroup(surname);
   if (!spelled || spelled.group.shared) return [];
   const s = surname.trim();
