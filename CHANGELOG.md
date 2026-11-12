@@ -42,6 +42,10 @@ fixes, new features, changes that break what users have).
   otherwise the place stays as written.
 - A source already in the SourceBox whose citation differs only in the day it was
   accessed is no longer updated for that, on every run.
+- Sources get their date on FamilySearch. FamilySearch kept a source's date only
+  when it was picked from its list of suggestions, so sources the linker made were
+  saved without one. Opening such a record in the linker again and updating the
+  source fills it in.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

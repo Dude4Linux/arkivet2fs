@@ -167,6 +167,17 @@ if (!window.__arkivet2fsAttach) {
     notes: 'textarea[data-testid="source-notes-field"]'
   };
 
+  // A Create/Edit Source field filled in. The date is a combobox (seen 2026-11-12): text
+  // set in it without picking FS's suggestion ("14 January 1828", the one listed) was
+  // not kept, and the source saved with no date; the other fields are plain
+  async function fillSourceField(field, value) {
+    if (field.getAttribute('role') === 'combobox' && value) {
+      // FS's suggestion clicked: kept; none listed: set as before
+      if ((await comboInput(field, 'date', value)).clicked) return;
+    }
+    setValue(field, value);
+  }
+
   // Create the source, or use the one already in the SourceBox with this title (the
   // linker looks first with findSource; this sees only the rows Home shows)
   async function createSource(source) {
@@ -185,7 +196,7 @@ if (!window.__arkivet2fsAttach) {
     const missing = [];
     for (const [key, selector] of Object.entries(FIELDS)) {
       const field = document.querySelector(selector);
-      if (field) setValue(field, source[key]);
+      if (field) await fillSourceField(field, source[key]);
       else missing.push(key);
     }
     if (missing.includes('title')) throw new Error('The Create Source form has no title field.');
@@ -263,7 +274,7 @@ if (!window.__arkivet2fsAttach) {
       const want = (source[key] || '').trim();
       if (!field) { if (want) missing.push(key); continue; }
       if (!want || sameField(key, field.value, want)) continue;
-      setValue(field, source[key]);
+      await fillSourceField(field, source[key]);
       changed.push(key);
     }
     if (!changed.length) {
@@ -498,6 +509,10 @@ if (!window.__arkivet2fsAttach) {
   async function comboField(form, name, value, year) {
     const input = form.querySelector('input[name="' + name + '"]');
     if (!input || !value) return { name, value: input ? input.value : '' };
+    const { clicked, ...field } = await comboInput(input, name, value, year);
+    return field;
+  }
+  async function comboInput(input, name, value, year) {
     input.focus();
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -520,7 +535,7 @@ if (!window.__arkivet2fsAttach) {
     const picked = typed ? '' : clean(option.textContent);
     option.click();
     await sleep(300);
-    return { name, value: input.value, picked };
+    return { name, value: input.value, picked, clicked: true };
   }
 
   // The possible matches FS lists: [{pid, name, lifespan, events, spouses}]

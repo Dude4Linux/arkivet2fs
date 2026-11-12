@@ -114,7 +114,9 @@ test('attachedTo(): a source attached to no one', async () => {
 
 // FS's Edit Source dialog for a row's Edit button: the fields as FS has them, a reason
 // for the change, Cancel and Save; `saved` is what Save sent, `cancelled` counts Cancel
-function editDialog(page, onFs) {
+// With `combo`, the date is FS's combobox (seen 2026-11-12): typing lists the standard
+// form as a suggestion, and only a date picked from it is saved
+function editDialog(page, onFs, combo) {
   const { w } = page;
   const result = { saved: null, cancelled: 0 };
   w.document.addEventListener('click', (e) => {
@@ -127,10 +129,24 @@ function editDialog(page, onFs) {
       '<button type="button" data-testid="source-cancel-button">Cancel</button><button type="button" data-testid="source-save-button">Save</button>';
     const field = (name) => form.querySelector(`[data-testid="source-${name}-field"]`);
     for (const [name, text] of Object.entries(onFs)) field(name).value = text;
+    let picked = onFs.date || '';
+    if (combo) {
+      const date = field('date');
+      date.setAttribute('role', 'combobox');
+      date.setAttribute('aria-controls', 'date-menu');
+      const menu = w.document.createElement('ul');
+      menu.id = 'date-menu';
+      form.append(menu);
+      date.addEventListener('input', () => {
+        menu.innerHTML = `<li role="option" data-testid="suggestion-0">${date.value}</li>`;
+        menu.firstChild.addEventListener('click', () => { picked = date.value; menu.innerHTML = ''; });
+      });
+    }
     form.querySelector('[data-testid="source-cancel-button"]').addEventListener('click', () => { result.cancelled++; form.remove(); });
     form.querySelector('[data-testid="source-save-button"]').addEventListener('click', () => {
       result.saved = { id: id[1] };
       for (const name of ['date', 'title', 'web-page', 'citation', 'notes', 'change-reason']) result.saved[name] = field(name).value;
+      if (combo) result.saved.date = picked;
       form.remove();
     });
     w.document.body.append(form);
@@ -152,6 +168,16 @@ test('editSource(): writes the linker\'s fields over the source on FS, with a re
   assert.equal(fs.saved.notes, 'New notes\nwith two lines');
   assert.equal(fs.saved.date, '6 April 1846');
   assert.equal(fs.saved['change-reason'], 'Updated from the record on Digitalarkivet.');
+});
+
+test('editSource(): the date is picked from FS\'s suggestions, so FS keeps it (bug: a typed date was saved as none)', async () => {
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, { ...ON_FS, date: '' }, true);
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01',
+    source: { date: '23 August 1846', title: TITLE, url: ON_FS['web-page'], citation: 'Old citation', notes: 'Old notes' } });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.changed), ['date']);
+  assert.equal(fs.saved.date, '23 August 1846');
 });
 
 test('editSource(): an empty field here leaves FS\'s as it is', async () => {
