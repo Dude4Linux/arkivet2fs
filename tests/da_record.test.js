@@ -120,6 +120,22 @@ test("an emigrant protocol: the open person only, the protocol's page and line",
   assert.match(r.notes, /^Departure date: 5 September 1902$/m);
 });
 
+test("a marriage from the bride's entry: read from the groom's, so both entries give one source (bug: a second source)", () => {
+  const r = record('marriage-bride');
+  assert.ok(!r.error, r.error);
+  assert.equal(r.recordTypeInfo.type, 'marriage');
+  assert.deepEqual(people(r).slice(0, 2), ['Kolmund Finsteinsen Dalbø (Groom)', 'Eli Kolvaldsdatter Daltveit (Bride)']);
+  assert.equal(r.title, 'Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit - Vågå parish, Vågå local parish 1842-1856 (0515P) - Marriage');
+  assert.equal(r.principalUrl, 'https://www.digitalarkivet.no/en/pv99000000000371');
+  // from the groom's entry, his page is the one
+  const file = 'da/marriage-bride.html';
+  const doc = fixtureDoc(w, file);
+  const items = doc.querySelectorAll('#collapse-section-0 .data-item');
+  items.forEach((item) => item.classList.remove('current'));
+  items[0].classList.add('current');
+  assert.equal(w.extractRecord(doc, fixtureUrl(file)).principalUrl, '');
+});
+
 test("englishPageUrl(): DA's English page of a Bokmål or Nynorsk address", () => {
   assert.equal(w.englishPageUrl('https://www.digitalarkivet.no/view/255/pd99000000000018'),
     'https://www.digitalarkivet.no/en/view/255/pd99000000000018');

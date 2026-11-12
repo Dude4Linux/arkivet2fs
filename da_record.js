@@ -1016,12 +1016,13 @@ function extractRecord(document, pageUrl) {
     // may be open). A child is often recorded by given name only ("John"); then the
     // parent is added — "John, child of John Aslaksen" — rather than guessing a surname.
     const principal = recordPrincipal(recordTypeInfo.type, people);
-    // When the open page isn't one of the principal's, point to the principal's page
-    // so gatherData() can extract the record from that person's perspective
+    // When the open page isn't the principal's, point to the principal's page so
+    // gatherData() can extract the record from that person's perspective: a marriage
+    // from the groom's, also when the bride's is open, so both give one source
     // (Not when the open person isn't among the people at all, as when a census
     // page's "Load more" couldn't be read: the principal would be another household's.)
     const principalUrl = principal && people.some(function(p) { return p.current; }) &&
-                         !principal.persons.some(function(p) { return p.current; }) &&
+                         !principal.persons[0].current &&
                          principal.persons[0].id ? new URL(pageUrl).origin + '/en/' + principal.persons[0].id : '';
     let titleName = principal ? principalNames(principal) : stripNameVariants(pageName);
     // A census household with where it lived: "Halvor Larsen household, Bakken nedre, Nordlien"
