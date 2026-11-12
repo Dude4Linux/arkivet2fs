@@ -37,6 +37,20 @@ test('a baptism: the child, the parents, the date of birth with the year', () =>
   assert.equal(r.sourceUrl, 'https://www.digitalarkivet.no/en/source/9002');
 });
 
+test('a page across a spread: "pp. 260–261", not "p. 260, 261" (bug: read as two parts of the citation)', () => {
+  const file = 'da/baptism-1846.html';
+  const withPage = (page) => {
+    const doc = fixtureDoc(w, file);
+    const label = [...doc.querySelectorAll('div')].find((d) => d.textContent.trim() === 'Page:');
+    label.nextElementSibling.textContent = page;
+    return before(w.extractRecord(doc, fixtureUrl(file)).citation, ', entry 66');
+  };
+  assert.match(withPage('260, 261'), / Births and baptisms, pp\. 260–261$/);
+  assert.match(withPage('260-261'), /, pp\. 260–261$/);
+  assert.match(withPage('12, 15'), /, pp\. 12 and 15$/);
+  assert.match(withPage('24b'), /, p\. 24b$/);
+});
+
 test('a burial: split date of death merged, age in years, the position translated', () => {
   const r = record('burial-1854');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pg', type: 'death_burial' });

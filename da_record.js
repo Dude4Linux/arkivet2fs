@@ -665,6 +665,18 @@ function extractRecord(document, pageUrl) {
   //   Census: Norway, Oppland, Vestre Toten, "1891 census for 0529 Vestre Toten," census district
   //           01 Fjellsmarkas skolekrets, rural residence 009 Hager af Drager,
   //           Andreas Olsen household; database, ...
+  // A page as Evidence Explained writes it: "p. 24", and two pages "pp. 260–261"
+  // (DA gives an entry across a spread as "260, 261"; a comma would read as another
+  // part of the citation), or "pp. 12 and 15"; anything else as DA writes it.
+  function citePage(page) {
+    const text = String(page).trim();
+    const two = text.match(/^(\d+)([a-z]?)\s*(?:,|-|–|\/|&|and|og)\s*(\d+)([a-z]?)$/i);
+    if (!two) return 'p. ' + text;
+    const [, a, aa, b, bb] = two;
+    const range = !aa && !bb && Number(b) === Number(a) + 1;
+    return 'pp. ' + a + aa + (range || /[-–]/.test(text) ? '–' : ' and ') + b + bb;
+  }
+
   function buildCitation(c) {
     const parts = [];
     const details = c.recordDetails || {};
@@ -685,7 +697,7 @@ function extractRecord(document, pageUrl) {
     }
     parts.push.apply(parts, c.censusLocation);
     if (details['protocol reference']) parts.push('protocol ' + details['protocol reference']);
-    if (details['page'] || details['page number']) parts.push('p. ' + (details['page'] || details['page number']));
+    if (details['page'] || details['page number']) parts.push(citePage(details['page'] || details['page number']));
     if (details['line number']) parts.push('line ' + details['line number']);
     if (details['serial no.']) parts.push('entry ' + details['serial no.']);
     parts.push(describeEntry(c.recordTypeInfo.type, c.people, c.pageName));

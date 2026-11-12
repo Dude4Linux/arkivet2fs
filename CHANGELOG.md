@@ -42,6 +42,9 @@ fixes, new features, changes that break what users have).
   otherwise the place stays as written.
 - A source already in the SourceBox whose citation differs only in the day it was
   accessed is no longer updated for that, on every run.
+- A record on two pages of the church book is cited "pp. 260–261", no longer
+  "p. 260, 261" (which read as if 261 were another part of the citation). A source
+  made before has the old text; the linker offers to update it.
 - The release notes on the Updates page show bold text as bold, no longer with the
   `**` around it.
 - **Copy report** in the header of the search page and the linker puts a problem
