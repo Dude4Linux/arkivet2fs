@@ -71,6 +71,24 @@ test('findSource(): only on the SourceBox (else sign in)', async () => {
   assert.match(answer.error, /sign in/);
 });
 
+test('findSource(): FS\'s security service blocking the page is said at once, with its error code and incident ID', async () => {
+  // Imperva's block page: at the address asked for, only an iframe of its resource
+  const frame = '<iframe id="main-iframe" src="/_Incapsula_Resource?CWUDNSAI=9&amp;incident_id=TEST-0000-0001&amp;edet=15&amp;cinfo=0">Request unsuccessful.</iframe>';
+  const { step } = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox', frame, { clock: true });
+  const answer = await step('findSource', { title: TITLE });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.blocked, true);
+  assert.equal(answer.error, "FamilySearch's security service blocked the page (error 15, incident ID TEST-0000-0001). " +
+    'Open FamilySearch in this browser to see why; its page says what to do.');
+  // without the codes, said all the same; a page without FS's search otherwise only times out
+  const bare = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox', '<iframe src="/_Incapsula_Resource?x=1"></iframe>', { clock: true });
+  assert.match((await bare.step('findSource', { title: TITLE })).error, /^FamilySearch's security service blocked the page\. Open/);
+  const empty = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox', '<p></p>', { clock: true });
+  const late = await empty.step('findSource', { title: TITLE });
+  assert.equal(late.blocked, undefined);
+  assert.match(late.error, /did not show .* in time/);
+});
+
 const person = (pid, name) => `<div data-testid="attach-to-${pid}-persons"><div data-testid="attach-to-${pid}-entity-type">Person</div>` +
   `<div data-testid="attach-to-${pid}-person"><a data-testid="nameLink"><span data-testid="fullName">${name}</span></a>` +
   `<span data-testid="lifespan">1810–1880</span><span data-testid="pid">${pid}</span></div>` +

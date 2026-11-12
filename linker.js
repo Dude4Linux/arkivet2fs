@@ -1192,7 +1192,7 @@ async function prepareAdditions() {
   let tab = null, done = 0, failed = 0;
   const fill = async (pid, a) => {
     const answer = await step(tab.id, 'addFact', { pid, addition: a, reason: a.reason, save: false });
-    if (!answer.ok) throw new Error(answer.error);
+    if (!answer.ok) throw stepError(answer);
     return answer.fields || [];
   };
   try {
@@ -1205,6 +1205,7 @@ async function prepareAdditions() {
         let fields;
         try {
           try { fields = await fill(pid, a); } catch (e) {
+            if (e.blocked) throw e;  // FS's block page: shown, it comes again
             // a covered window may not be drawn (Windows, macOS): once more on top
             await tab.show();
             try { await navigate(tab.id, personDetailsUrl(pid)); fields = await fill(pid, a); } finally { await tab.back(); }
@@ -2026,6 +2027,11 @@ function fsMessage(text) {
     return m[2] === undefined ? t('FamilySearch did not take the {fact}.', { fact: fact(m[1]) })
       : t('FamilySearch did not take the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
   }
+  if ((m = text.match(/^FamilySearch's security service blocked the page(?: \((.*)\))?\. Open FamilySearch in this browser to see why; its page says what to do\.$/))) {
+    if (m[1] === undefined) return t("FamilySearch's security service blocked the page. Open FamilySearch in this browser to see why; its page says what to do.");
+    const detail = m[1].replace(/^error /, t('error') + ' ').replace(/incident ID /, t('incident ID') + ' ');
+    return t("FamilySearch's security service blocked the page ({detail}). Open FamilySearch in this browser to see why; its page says what to do.", { detail });
+  }
   if ((m = text.match(/^FamilySearch did not show (.*) in time\.$/))) return t('FamilySearch did not show {what} in time.', { what: t(m[1]) });
   return tMessage(text);
 }
@@ -2300,14 +2306,21 @@ async function readSourceFields(tabId, sourceId, source, active = false) {
   return { fields: read.fields };
 }
 
+// A step's failure as an error, `blocked` when FS's security service blocked the page
+function stepError(answer) {
+  const error = new Error(answer.error);
+  if (answer.blocked) error.blocked = true;
+  return error;
+}
+
 async function lookUpSource(tabId, title, active = true) {
   const found = await step(tabId, 'findSource', { title });
-  if (!found.ok) throw new Error(found.error);
+  if (!found.ok) throw stepError(found);
   const ids = found.sources.map((s) => s.id);
   if (!ids.length) return { title, id: null, ids, persons: [] };
   await navigate(tabId, attachedToUrl(ids[0]), active);
   const read = await step(tabId, 'attachedTo', { sourceId: ids[0] });
-  if (!read.ok) throw new Error(read.error);
+  if (!read.ok) throw stepError(read);
   return { title, id: ids[0], ids, persons: read.persons };
 }
 
@@ -2328,6 +2341,8 @@ async function checkOnFamilySearch() {
     try {
       result = { sources: await lookUpSources(tab.id, titles, false, sources) };
     } catch (e) {
+      // FS's block page comes again when shown: only a window not drawn is tried again
+      if (e.blocked) throw e;
       await tab.show();
       try { result = { sources: await lookUpSources(tab.id, titles, false, sources) }; } finally { await tab.back(); }
     }

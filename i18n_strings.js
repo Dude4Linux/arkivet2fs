@@ -620,6 +620,14 @@ function i18nTable() {
     'FamilySearch did not answer.': ['FamilySearch svarte ikke.', 'FamilySearch svarte ikkje.'],
     'FamilySearch did not answer in time.': ['FamilySearch svarte ikke i tide.', 'FamilySearch svarte ikkje i tide.'],
     'FamilySearch did not show {what} in time.': ['FamilySearch viste ikke {what} i tide.', 'FamilySearch viste ikkje {what} i tide.'],
+    "FamilySearch's security service blocked the page ({detail}). Open FamilySearch in this browser to see why; its page says what to do.": [
+      'Sikkerhetstjenesten til FamilySearch blokkerte siden ({detail}). Åpne FamilySearch i denne nettleseren for å se hvorfor; siden der sier hva du skal gjøre.',
+      'Tryggleikstenesta til FamilySearch blokkerte sida ({detail}). Opne FamilySearch i denne nettlesaren for å sjå kvifor; sida der seier kva du skal gjere.'],
+    "FamilySearch's security service blocked the page. Open FamilySearch in this browser to see why; its page says what to do.": [
+      'Sikkerhetstjenesten til FamilySearch blokkerte siden. Åpne FamilySearch i denne nettleseren for å se hvorfor; siden der sier hva du skal gjøre.',
+      'Tryggleikstenesta til FamilySearch blokkerte sida. Opne FamilySearch i denne nettlesaren for å sjå kvifor; sida der seier kva du skal gjere.'],
+    'error': ['feil', 'feil'],
+    'incident ID': ['hendelses-ID', 'hendings-ID'],
     'FamilySearch did not show the person {pid} (is the ID right, and is the source not already attached?) in time.': [
       'FamilySearch viste ikke personen {pid} i tide (er ID-en riktig, og er kilden ikke allerede knyttet til?).',
       'FamilySearch viste ikkje personen {pid} i tide (er ID-en rett, og er kjelda ikkje alt knytt til?).'],

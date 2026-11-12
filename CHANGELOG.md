@@ -32,6 +32,10 @@ fixes, new features, changes that break what users have).
 - A death (or other vital) the tree has with neither date nor place, such as
   "Deceased" from an old import, is now changed with the record's date and place.
   Before, the linker offered to add a second one, which FamilySearch refused.
+- When FamilySearch's security service blocks a page the linker reads or works in,
+  the linker says so, with the error code and incident ID from FamilySearch's page,
+  instead of "FamilySearch did not show the SourceBox search in time". Opening
+  FamilySearch in the same browser shows that page and what to do.
 - The release notes on the Updates page show bold text as bold, no longer with the
   `**` around it.
 

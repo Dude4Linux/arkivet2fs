@@ -34,12 +34,36 @@ if (!window.__arkivet2fsAttach) {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const byTestId = (id, root = document) => root.querySelector('[data-testid="' + id + '"]');
 
-  // Wait until `find()` returns something (polling; FS is a React app that renders late)
+  // FS's security service (Imperva) answering with its block page instead of FS: the
+  // page at the address asked for, holding only an iframe of `/_Incapsula_Resource`,
+  // whose address gives the error code (`edet`) and incident ID; null otherwise
+  function blockedPage() {
+    const frame = document.querySelector('iframe[src*="_Incapsula_Resource"]');
+    if (!frame) return null;
+    let params;
+    try { params = new URL(frame.getAttribute('src'), location.href).searchParams; } catch (e) { params = new URLSearchParams(); }
+    const word = (s) => (/^[\w-]{1,80}$/.test(s || '') ? s : '');
+    return { code: word(params.get('edet')), incident: word(params.get('incident_id')) };
+  }
+
+  // The block page as an error (`blocked`), in English: linker.js translates it
+  function blockedError(block) {
+    const detail = [block.code && 'error ' + block.code, block.incident && 'incident ID ' + block.incident].filter(Boolean).join(', ');
+    const error = new Error("FamilySearch's security service blocked the page" + (detail ? ' (' + detail + ')' : '') +
+      '. Open FamilySearch in this browser to see why; its page says what to do.');
+    error.blocked = true;
+    return error;
+  }
+
+  // Wait until `find()` returns something (polling; FS is a React app that renders late);
+  // FS's block page ends the wait at once, since nothing of FS's comes on it
   async function waitFor(find, what, timeoutMs = 20000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const found = find();
       if (found) return found;
+      const block = blockedPage();
+      if (block) throw blockedError(block);
       await sleep(150);
     }
     throw new Error('FamilySearch did not show ' + what + ' in time.');
@@ -893,7 +917,8 @@ if (!window.__arkivet2fsAttach) {
     // Only the steps themselves, not what every object has (constructor, toString)
     const step = request && typeof request.linker === 'string' && Object.hasOwn(STEPS, request.linker) && STEPS[request.linker];
     if (!step) return false;
-    step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error) }));
+    step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error),
+      ...(error && error.blocked ? { blocked: true } : {}) }));
     return true;  // answers later
   });
 }

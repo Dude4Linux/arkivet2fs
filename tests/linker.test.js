@@ -570,6 +570,20 @@ test('checkOnFamilySearch(): reads FS in an unfocused popup window behind the li
   assert.equal($('source').classList.contains('in-sourcebox'), true);
 });
 
+test('checkOnFamilySearch(): FS\'s security service blocking the page is said, not tried again in a shown window', async () => {
+  const blocked = "FamilySearch's security service blocked the page (error 15, incident ID TEST-1). Open FamilySearch in this browser to see why; its page says what to do.";
+  const { chrome, asked, windows } = fakeFs({ findSource: () => ({ ok: false, blocked: true, error: blocked }) });
+  const { win, state } = checkedPage(chrome);
+  await win.checkOnFamilySearch();
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource']);  // once
+  assert.equal(state.fsCheck.error, blocked);
+  assert.equal(windows[0].open, false);  // closed all the same
+  // in Bokmål, the code and incident ID kept
+  const nb = load([...SHARED, 'linker.js'], { html: 'linker.html', lang: 'nb', fast: true });
+  assert.equal(nb.fsMessage(blocked), 'Sikkerhetstjenesten til FamilySearch blokkerte siden (feil 15, hendelses-ID TEST-1). ' +
+    'Åpne FamilySearch i denne nettleseren for å se hvorfor; siden der sier hva du skal gjøre.');
+});
+
 test('a load reported complete while the tab still loads (Firefox\'s about:blank) is waited out before a step', async () => {
   const fs = fakeFs({
     findSource: ({ title }) => ({ ok: true, sources: [] })
