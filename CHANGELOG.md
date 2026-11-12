@@ -79,6 +79,8 @@ fixes, new features, changes that break what users have).
   shows the death in the linker and offers it for the tree, in the burial's year
   (the year before when the day comes after the burial's). Before, the death row was
   empty, and a tree with the burial's date as the death's wasn't offered the right one.
+- A marriage's bride is shown as female and the groom as male in the linker's facts,
+  where the bride's sex was blank.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

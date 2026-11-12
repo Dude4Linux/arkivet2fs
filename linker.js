@@ -265,6 +265,9 @@ function givenNameFit(person, tree) {
 const FEMALE_ROLE = /(?<!\p{L})(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughter|wife|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|d)(?!\p{L})/iu;
 const MALE_ROLE = /(?<!\p{L})(søn|son|fader|far|father|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)(?!\p{L})/iu;
 function recordSex(person) {
+  // a bride or groom (not their fathers: "Bride's Father")
+  if (/^(brur|brud|bride)$/i.test(person.role || '') || /^bride$/i.test(person.roleEnglish || '')) return 'Female';
+  if (/^(brudgom|brudgum|groom)$/i.test(person.role || '') || /^groom$/i.test(person.roleEnglish || '')) return 'Male';
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
   if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
   if (/(sen|søn|son)(\s|$)/i.test(last) && !FEMALE_ROLE.test(person.role || '')) return 'Male';

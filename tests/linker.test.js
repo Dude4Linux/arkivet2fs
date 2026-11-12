@@ -279,6 +279,12 @@ test('recordSex(): from a patronymic or a family position', () => {
   // the census codes d and s are whole words: "avdød" (deceased) doesn't end in d for daughter
   assert.equal(w.recordSex({ name: 'Lars', role: 'avdød', roleEnglish: 'Deceased' }), '');
   assert.equal(w.recordSex({ name: 'Lars', role: 'd, fl' }), 'Female');
+  // a bride and groom by their roles, not their fathers (bug: a bride's sex was blank)
+  assert.equal(w.recordSex({ name: 'Eli Dalbø', role: 'brur', roleEnglish: 'Bride' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli Dalbø', role: 'brud', roleEnglish: 'Bride' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Kolmund Dalbø', role: 'brudgom', roleEnglish: 'Groom' }), 'Male');
+  assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'bruras far', roleEnglish: 'Bride\'s Father' }), 'Male');
+  assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'brudgommens far', roleEnglish: 'Groom\'s Father' }), 'Male');
 });
 
 test('defaultTags(): by record type and role', () => {
