@@ -155,6 +155,26 @@ test("buildQueries(): children's baptisms also where the person died while they 
   assert.ok(!old.levels[0].fields['m[]'].includes('0903'), JSON.stringify(plain(old.levels[0].fields)));
 });
 
+test("runQuery(): the other names are searched while a child's baptism is still missing", async () => {
+  // DA has the 1862 baptism under Jørgensen, the 1866 one under Lindemann
+  const page = (id, date) => `<div id="searchResultList"><div class="unit"><div class="name"><a href="/en/view/1/${id}">Lars</a></div>`
+    + `<div class="role"><span>Role:</span> far</div><div class="action"><span>Date:</span> ${date}</div></div></div><p>Your search resulted in 1 hits</p>`;
+  const asked = [];
+  const fetch = async (url) => {
+    const p = new URL(String(url)).searchParams;
+    asked.push(p.get('lastname') || '');
+    const html = p.get('lastname') === 'Jørgens*' ? page('pd99000000000901', '1862-05-04')
+      : p.get('lastname') === 'Lindem*' ? page('pd99000000000902', '1866-02-11') : '<div id="searchResultList"></div>';
+    return new Response(html);
+  };
+  const wq = load(SHARED, { fetch, fast: true });
+  const q = wq.buildQueries(jorgensen()).find((x) => x.kind === 'children');
+  const result = await wq.runQuery(q);
+  assert.deepEqual(plain(result.missing), []);
+  assert.ok(asked.includes('Lindem*'), JSON.stringify(asked));
+  assert.deepEqual([...new Set(result.found.flatMap((f) => f.hits.map((h) => h.id)))], ['pd99000000000901', 'pd99000000000902']);
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');

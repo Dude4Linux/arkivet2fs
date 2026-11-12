@@ -97,6 +97,9 @@ fixes, new features, changes that break what users have).
 - Children's baptisms are also searched where the person died, when that was while
   they could still have children: a father who died young in another town had his
   last children baptized there.
+- The person's other names (FamilySearch's alternate names, other spellings of the
+  patronymic) are searched while children's baptisms or censuses are still missing,
+  no longer only when nothing at all was found under the main name.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
