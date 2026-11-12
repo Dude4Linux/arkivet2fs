@@ -98,6 +98,20 @@ test('a search: the plan runs strict to wide, and the record checks find the bap
   assert.match(groups[1].textContent, /record not read: Digital Arkivet answered 404\./);
 });
 
+test('searchReport(): the criteria, each query with its searches on DA, and the hits shown with their reasons', async () => {
+  const { w } = await searched();
+  const text = w.searchReport();
+  assert.match(text, /\n- Page: search\n/);
+  assert.match(text, /#### Criteria \(the page address\)\n\n- q\.givenName: Lars\n- q\.surname: Halvorsen\n/);
+  assert.match(text, /\n- treeref: TEST-001\n/);
+  assert.match(text, /#### Searches\n\n- Baptism · /);
+  assert.match(text, /\n {2}- [^\n]+: (none|\d+ hits?)[^\n]* <https:\/\/www\.digitalarkivet\.no\/[^>]*search\/persons\/advanced\?[^>]+>\n/);  // each search, linked
+  assert.match(text, /#### Record checks\n\nChecked the records of the best \d+ hits/);
+  assert.match(text, /#### Hits shown\n\n- \*\*Baptism \(4\)\*\*\n {2}- Lars · Child · [^\n]+ · score -?\d+ <https:\/\/www\.digitalarkivet\.no\/[^>]*pd99000000000018>\n {4}- Events: Baptism 23 August 1846\n/);
+  assert.match(text, /\n {4}- ✓ father Halvor Larsen in the record/);
+  assert.match(text, /\n- \*\*Census \(26\)\*\* \(1–10 of 26\)\n/);  // its first page only
+});
+
 test('"Review & Attach" opens the linker on the record, for the FS person', async () => {
   const { w } = await searched();
   const link = w.document.querySelector('a.hit-attach');

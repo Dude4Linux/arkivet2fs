@@ -421,8 +421,11 @@ Developer notes are in `CLAUDE.md`. After changing the code, reload the extensio
 
 Report bugs and ideas in the [issues](https://github.com/Dude4Linux/arkivet2fs/issues):
 the DA record or search (its address or permanent ID), what you expected, and what
-the extension did. A record's address is enough; please don't paste FamilySearch pages
-or living people's details. Security problems go privately, as `SECURITY.md` says.
+the extension did. **Copy report**, at the top of the search page and the linker,
+puts all of that on the clipboard, with the version and browser and a place to say
+what went wrong; it also names the tree persons you paired, with their IDs. Issues
+are public: read the report before you paste it, and take out living people. Please
+don't paste FamilySearch pages. Security problems go privately, as `SECURITY.md` says.
 
 Pull requests are welcome. Before you open one:
 

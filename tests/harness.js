@@ -30,7 +30,7 @@ const ROOT = path.join(__dirname, '..');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 // The scripts of search.html and linker.html, in their order (CLAUDE.md)
-const SHARED = ['i18n.js', 'i18n_strings.js', 'releases.js', 'access.js', 'da_places.js', 'da_search.js', 'da_match.js', 'da_record.js', 'da_verify.js'];
+const SHARED = ['i18n.js', 'i18n_strings.js', 'releases.js', 'report.js', 'access.js', 'da_places.js', 'da_search.js', 'da_match.js', 'da_record.js', 'da_verify.js'];
 
 function offlineFetch(url) {
   return Promise.reject(new Error('The tests are offline; no fetch of ' + url));

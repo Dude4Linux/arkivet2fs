@@ -612,6 +612,48 @@ function daWarning(message, criteria) {
   return el('section', { class: 'da-warning', role: 'alert' }, [el('p', { text: message }), retry]);
 }
 
+// The problem report (report.js): the criteria, each query's searches and the hits
+// shown, as the page has them, for "Copy report"
+function searchReport() {
+  const text = (node) => (node ? node.textContent.replace(/\s+/g, ' ').trim() : '');
+  const params = [...new URLSearchParams(location.search)].map(([k, v]) => '- ' + k + ': ' + v);
+  const warning = text(document.querySelector('.da-warning p'));
+  const queries = [...document.querySelectorAll('#results .query')].map((q) => {
+    const lines = ['- ' + [text(q.querySelector('.query-title')), text(q.querySelector('.query-summary')), text(q.querySelector('.query-status'))].filter(Boolean).join(' · ')];
+    const hint = q.querySelector('.query-hint');
+    if (hint && !hint.hidden && text(hint)) lines.push('  - Hint: ' + text(hint));
+    for (const li of q.querySelectorAll('.query-steps li')) {
+      const a = li.querySelector('a');
+      lines.push('  - ' + text(li) + (a ? ' <' + a.href + '>' : ''));
+    }
+    return lines.join('\n');
+  });
+  const hits = [...document.querySelectorAll('#results .group-hits')].map((g) => {
+    const lines = ['- **' + text(g.querySelector('h3')) + '**' + (g.querySelector('.pager') ? ' (' + text(g.querySelector('.pager .muted')) + ')' : '')];
+    for (const li of g.querySelectorAll('li.hit')) {
+      const name = li.querySelector('.hit-name');
+      const person = [text(name), text(li.querySelector('.hit-role')), text(li.querySelector('.hit-source'))].filter(Boolean).join(' · ');
+      lines.push('  - ' + person + ' · score ' + text(li.querySelector('.hit-score')) + (name ? ' <' + name.href + '>' : '')
+        + (li.classList.contains('unlikely') ? ' [dimmed]' : ''));
+      const events = [...li.querySelectorAll('.hit-details > div')].map((d) => [...d.children].map(text).join(' ') || text(d)).filter(Boolean).join('; ');
+      if (events) lines.push('    - Events: ' + events);
+      const also = li.querySelector('.hit-also');
+      if (also) lines.push('    - ' + text(also));
+      const done = li.querySelector('.hit-done');
+      if (done) lines.push('    - ' + text(done));
+      for (const r of li.querySelectorAll('.reasons li')) lines.push('    - ' + text(r));
+    }
+    return lines.join('\n');
+  });
+  return reportText('search', [
+    ['Criteria (the page address)', params],
+    ['DigitalArkivet', warning || null],
+    ['Searches', queries],
+    ['Record checks', text(document.querySelector('.check-status')) || null],
+    ['Hits shown', hits.length ? hits : text(document.querySelector('#results .groups')) || null]
+  ], navigator);
+}
+
 // --- Page -----------------------------------------------------------------------------
 
 function render() {
@@ -638,8 +680,10 @@ document.getElementById('criteria').addEventListener('submit', (event) => {
   render();
 });
 window.addEventListener('popstate', render);
+watchErrors(window);  // for the problem report
 localizePage();
 document.querySelector('.topbar').append(languageMenu());
 addVersionLink(document.querySelector('.topbar'));
+reportButton(document.querySelector('.topbar'), searchReport);
 watchDone();
 whenSiteAccess(document, render);  // access.js: the sites granted first

@@ -92,6 +92,22 @@ button, input, select { font: inherit; }
 .topbar .version-link.new { color: var(--link); font-weight: 600; }
 .topbar .fs-link:not([hidden]) ~ .version-link { margin-left: 16px; }
 .topbar .version-link ~ select.language { margin-left: 12px; }
+/* "Copy report" (report.js), before the version */
+.topbar .report-button {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 13px;
+  color: var(--link);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.topbar .report-button:hover { border-color: var(--link); }
+.topbar .report-button.bad { color: var(--bad); }
+.topbar .fs-link:not([hidden]) ~ .report-button { margin-left: 16px; }
+.topbar .report-button ~ .version-link { margin-left: 12px; }
 
 .layout {
   display: grid;

@@ -44,6 +44,12 @@ fixes, new features, changes that break what users have).
   accessed is no longer updated for that, on every run.
 - The release notes on the Updates page show bold text as bold, no longer with the
   `**` around it.
+- **Copy report** in the header of the search page and the linker puts a problem
+  report on the clipboard, to paste into a GitHub issue: the version, browser and
+  language, a place to say what went wrong, and what the page read and did (the
+  search's criteria, searches and hits; in the linker, the record as read, the
+  source, each person's pairing, facts and changes, and the log of what was done on
+  FamilySearch). Nothing is sent: read it before you paste it.
 
 ## 1.5.0 - 2026-11-10
 

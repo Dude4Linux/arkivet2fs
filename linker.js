@@ -1306,12 +1306,15 @@ function personRow(person, family, suggestion, why) {
   row.reason = () => reason.value.trim();
   row.tree = () => family.find((tree) => tree.pid === select.value) || null;
   row.label = () => nameInput.value.trim() || role;
+  row.why = () => hint.textContent;
+  row.status = () => (fsStatus.hidden ? '' : fsStatus.textContent);
   // The record's facts beside FS's of the tree person chosen (a PID typed: once read)
   row.showFacts = () => {
     const pid = row.pid();
     const tree = row.tree() || (PID_PATTERN.test(pid) ? { pid, name: '' } : null);
     const reading = !!state.detailsPending && state.detailsPending.has(pid);
     const list = tree && !reading ? factAdditions(person, state.record, tree, nameInput.value.trim()) : [];
+    row.offered = list;
     row.additions = () => [];
     facts.replaceChildren(factsTable(person, state.record, tree, reading), ...(list.length ? [additionsBox(row, person, pid, list)] : []));
     showChanges();
@@ -3025,6 +3028,77 @@ function closeNewPerson() {
   }
 }
 
+// --- The problem report (report.js) ---------------------------------------------------
+// What the linker read from DA, what it shows (the source, each person's pairing, facts
+// and changes) and what it did on FS (the log), for "Copy report"
+function linkerReport() {
+  const params = new URLSearchParams(location.search);
+  const sections = [];
+  const shown = (id) => { const node = $(id); return node && !node.hidden && node.textContent.trim() ? node.textContent.trim() : null; };
+  sections.push(['Opened with', ['rec', 'also', 'pid', 'draft'].filter((k) => params.get(k)).map((k) => '- ' + k + ': ' + params.get(k))]);
+  sections.push(['Page status', shown('status')]);
+
+  // The record as read: its people with every field the reader gave them
+  const r = state.record;
+  if (r) {
+    const own = (p) => Object.entries(p).filter(([k, v]) => k !== 'key' && v != null && v !== '' && typeof v !== 'object')
+      .map(([k, v]) => k + ': ' + v).join('; ');
+    const fields = Object.entries(r.fields || {}).map(([k, v]) => k + ': ' + v).join('; ');
+    sections.push(['Record as read', [
+      '- Permanent ID: ' + (r.permanentId || '?') + ', ' + ((r.recordTypeInfo || {}).type || '?') + ', ' + (r.recordDate || 'no date'),
+      ...(r.sourceTitle ? ['- DA source: ' + r.sourceTitle + (r.sourceUrl ? ' (' + r.sourceUrl + ')' : '')] : []),
+      ...(r.county || r.church ? ['- County: ' + (r.county || '-') + '; church: ' + (r.church || '-')] : []),
+      ...(fields ? ['- Open person\'s fields: ' + fields] : []),
+      ...state.people.map((p) => '- ' + own(p))]]);
+  }
+
+  // The sources as they stand in the boxes, with what the SourceBox check found
+  const check = state.fsCheck || {};
+  const sourceLines = (prefix, i) => {
+    const v = reviewedSource(prefix);
+    const found = check.sources && check.sources[i];
+    const fs = fsSource(i);
+    const diffs = fs ? sourceDiffs(fs.fields, v) : [];
+    return ['- Title: ' + v.title, '- Date: ' + v.date, '- Web page: ' + v.url, '- Citation:', ...reportBlock(v.citation), '- Notes:', ...reportBlock(v.notes),
+      '- SourceBox: ' + (check.checking ? 'still checking' : check.error ? 'check failed: ' + check.error
+        : !found ? 'not checked' : found.otherRecord ? 'a source of this title is of another record'
+          : !found.id ? 'not there' : found.id + ', attached to ' + (found.persons.map((p) => p.pid).join(', ') || 'no one') + (found.ids.length > 1 ? ' (' + found.ids.length + ' sources of the title)' : '')),
+      ...diffs.map((d) => '- Differs from the SourceBox: ' + d.key + ' (' + fieldChoice(i, d) + ')')];
+  };
+  if (r) sections.push(['Source', sourceLines('f', 0)]);
+  if (state.parallel) sections.push(['Source of the other church book', sourceLines('g', 1)]);
+
+  // Each person: the pairing, why, the facts side by side, tags and the changes offered
+  const people = (state.rows || []).map((row) => {
+    const pid = row.pid();
+    const tree = row.tree() || (PID_PATTERN.test(pid) ? { pid, name: '' } : null);
+    const lines = ['- ' + row.label() + ' (' + (row.person.roleEnglish || row.person.role || '?') + (row.person.household ? ', household ' + row.person.household : '') + ')'
+      + (row.node.hidden ? ' [hidden]' : '') + ' → ' + (pid ? pid + (tree && tree.relation ? ' (' + relationLabel(tree) + ')' : '') : 'not attached')
+      + (row.touched() ? ' [chosen by hand]' : '')];
+    const say = (label, text) => { if (text) lines.push('  - ' + label + ': ' + text); };
+    say('Why', row.why());
+    say('FamilySearch', row.status());
+    if (tree) {
+      const da = recordFacts(row.person, state.record), fs = treeFacts(tree, state.record);
+      for (const f of FACTS.filter((f) => da[f] || fs[f])) {
+        const how = compareFact(f, da[f], fs[f], row.person, tree);
+        lines.push('  - ' + f + ': ' + (da[f] ? da[f].text : '—') + ' | FS: ' + (fs[f] ? fs[f].text : '—') + (how ? ' ' + MARKS[how] : ''));
+      }
+      if (!fullTree(tree.pid)) lines.push('  - (the FS person\'s page was not read)');
+      say('Tags', row.tags().join(', '));
+      const ticked = new Map((row.additions ? row.additions() : []).map((a) => [a.key, a]));
+      for (const a of row.offered || []) {
+        const done = ticked.get(additionKey(row.person, pid, a));
+        lines.push('  - [' + (done ? 'x' : ' ') + '] ' + additionLabel(a) + ': ' + additionText(done || a) + (a.current ? ' (FS has: ' + a.current + ')' : ''));
+      }
+    }
+    return lines.join('\n');
+  });
+  sections.push(['People', people]);
+  sections.push(['On FamilySearch (the log)', [...document.querySelectorAll('#log li')].map((li) => '- ' + (li.className ? '[' + li.className + '] ' : '') + li.textContent)]);
+  return reportText('linker', sections.filter(([, body]) => body && (!Array.isArray(body) || body.length)), navigator);
+}
+
 async function setPerson(pid) {
   state.fs = await storedPerson(pid);
   await showPeople();
@@ -3090,6 +3164,7 @@ async function main() {
 }
 
 if (typeof chrome !== 'undefined' && chrome.storage) {
+  watchErrors(window);  // for the problem report
   $('fs-pid').addEventListener('change', async () => {
     state.trusted = true;
     await setPerson($('fs-pid').value.trim().toUpperCase());
@@ -3104,5 +3179,6 @@ if (typeof chrome !== 'undefined' && chrome.storage) {
   localizePage();
   document.querySelector('.topbar').append(languageMenu());
   addVersionLink(document.querySelector('.topbar'));
+  reportButton(document.querySelector('.topbar'), linkerReport);
   whenSiteAccess(document, main);  // access.js: the sites granted first
 }
