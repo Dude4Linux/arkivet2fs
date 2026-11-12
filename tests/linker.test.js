@@ -1278,6 +1278,24 @@ test('factAdditions(): a burial\'s death date into FS\'s year, the burial, resid
   assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).map((a) => a.fact)), ['Death', 'Burial']);
 });
 
+test('recordFacts(): a date of death without a year field takes the burial\'s year, or the year before', () => {
+  const { win, state } = checkedPage();
+  const base = record('burial-1854');
+  const b = { ...base, fields: { ...base.fields } };
+  delete b.fields['year of death'];
+  const lars = w.recordPeople(b)[0];
+  assert.equal(w.recordFacts(lars, b).Death.text, '12 April 1854');
+  // FS has the burial's date as the death's: the record's date of death is offered
+  state.record = b;
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '18 April 1854', place: 'Vinger, Hedmark, Norway' }, residences: [], occupations: [] };
+  const death = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' })).find((a) => a.fact === 'Death');
+  assert.equal(death.action, 'edit');
+  assert.equal(death.value.date, '12 April 1854');
+  // died in December, buried in January
+  const jan = { ...b, recordDate: '1854-01-05', fields: { ...b.fields, 'date of death': '12-28' } };
+  assert.equal(w.recordFacts(w.recordPeople(jan)[0], jan).Death.text, '28 December 1853');
+});
+
 test('factAdditions(): a death FS has with neither date nor place ("Deceased") is changed, not added', () => {
   const { win, state } = checkedPage();
   const b = record('burial-1854');

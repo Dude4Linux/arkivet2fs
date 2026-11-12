@@ -75,6 +75,10 @@ fixes, new features, changes that break what users have).
   a farm.
 - A birthplace the record gives without a year (a marriage's) is offered for the
   tree's birth when that has a date but no place.
+- A burial whose date of death has no year (DA gives "05-03" and the burial's date)
+  shows the death in the linker and offers it for the tree, in the burial's year
+  (the year before when the day comes after the burial's). Before, the death row was
+  empty, and a tree with the burial's date as the death's wasn't offered the right one.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

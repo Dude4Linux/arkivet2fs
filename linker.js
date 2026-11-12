@@ -789,7 +789,10 @@ function recordFacts(person, record) {
   else if (type === 'death_burial' && kind === 'deceased') {
     event('Burial');
     const died = String(fields['date of death'] || '').match(/^(?:(\d{4})-)?(\d{1,2})-(\d{1,2})$/);
-    const diedYear = Number((died && died[1]) || String(fields['year of death'] || '').match(/\b1[5-9]\d\d\b/)?.[0]) || null;
+    // no year of death: the burial's year, or the year before when the day comes after it
+    const before = died && recorded && recorded.month && Number(died[2]) * 100 + Number(died[3]) > recorded.month * 100 + (recorded.day || 0);
+    const diedYear = Number((died && died[1]) || String(fields['year of death'] || '').match(/\b1[5-9]\d\d\b/)?.[0]) ||
+      (died && recorded && recorded.year ? recorded.year - (before ? 1 : 0) : null);
     if (died || diedYear) {
       const d = { year: diedYear, month: died ? Number(died[2]) : null, day: died ? Number(died[3]) : null };
       facts.Death = { text: dateText(d), date: d, year: diedYear };
