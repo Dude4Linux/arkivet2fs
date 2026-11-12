@@ -255,7 +255,14 @@ function notesElement(doc, text) {
   const inline = (parent, line) => {
     String(line).split('`').forEach((part, i) => {
       if (!part) return;
-      if (i % 2) { const code = doc.createElement('code'); code.textContent = part; parent.append(code); } else parent.append(doc.createTextNode(part));
+      if (i % 2) { const code = doc.createElement('code'); code.textContent = part; parent.append(code); return; }
+      // **bold** outside code; an unpaired ** stays as written
+      const bits = part.split('**');
+      if (bits.length % 2 === 0) bits[bits.length - 2] += '**' + bits.pop();
+      bits.forEach((bit, j) => {
+        if (!bit) return;
+        if (j % 2) { const strong = doc.createElement('strong'); strong.textContent = bit; parent.append(strong); } else parent.append(doc.createTextNode(bit));
+      });
     });
     return parent;
   };

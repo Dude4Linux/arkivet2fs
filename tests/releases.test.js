@@ -277,6 +277,18 @@ test('notesElement(): lists, sub-items and code, as text only', () => {
   assert.ok(box.textContent.includes('<img src=x'));
 });
 
+test('notesElement(): **bold** as strong, outside code, an unpaired ** as written', () => {
+  const w = releasesWindow();
+  const box = w.notesElement(w.document, '- Click **Allow access** on the bar.\n- Keep `a **b** c` as code.\n- A lone ** stays.');
+  const items = box.querySelectorAll('li');
+  assert.equal(items[0].querySelector('strong').textContent, 'Allow access');
+  assert.equal(items[0].textContent, 'Click Allow access on the bar.');
+  assert.equal(items[1].querySelector('strong'), null);
+  assert.equal(items[1].querySelector('code').textContent, 'a **b** c');
+  assert.equal(items[2].querySelector('strong'), null);
+  assert.equal(items[2].textContent, 'A lone ** stays.');
+});
+
 test('the service worker: a store install is never checked', async () => {
   const { chrome, calls } = chromeWith({ installType: 'normal' });
   const gh = fakeGitHub();

@@ -32,6 +32,8 @@ fixes, new features, changes that break what users have).
 - A death (or other vital) the tree has with neither date nor place, such as
   "Deceased" from an old import, is now changed with the record's date and place.
   Before, the linker offered to add a second one, which FamilySearch refused.
+- The release notes on the Updates page show bold text as bold, no longer with the
+  `**` around it.
 
 ## 1.5.0 - 2026-11-10
 
