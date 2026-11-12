@@ -2152,10 +2152,15 @@ function fsSource(i) {
   return $(i ? 'g-title' : 'f-title').value.trim() === source.title ? source : null;
 }
 
+// A citation without the day it was accessed (" : accessed 2 November 2026)"), which
+// changes each run: two differing only in it are the same (fs_attach.js does the same)
+const withoutAccess = (text) => String(text || '').replace(/ : accessed [^)]*\)/g, ' : accessed)');
+
 // The fields that differ, both filled (an empty one here keeps FS's; one empty on FS is
 // filled from here): [{key, label, fs, ours}]
 function sourceDiffs(fs, ours) {
-  return SOURCE_FIELDS.filter(([key]) => (ours[key] || '').trim() && (fs[key] || '').trim() && !sameText(fs[key], ours[key]))
+  const same = (key) => (key === 'citation' ? sameText(withoutAccess(fs[key]), withoutAccess(ours[key])) : sameText(fs[key], ours[key]));
+  return SOURCE_FIELDS.filter(([key]) => (ours[key] || '').trim() && (fs[key] || '').trim() && !same(key))
     .map(([key, label]) => ({ key, label, fs: fs[key].replace(/\r\n/g, '\n').trim(), ours: ours[key] }));
 }
 

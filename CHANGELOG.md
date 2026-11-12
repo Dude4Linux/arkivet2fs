@@ -36,6 +36,12 @@ fixes, new features, changes that break what users have).
   the linker says so, with the error code and incident ID from FamilySearch's page,
   instead of "FamilySearch did not show the SourceBox search in time". Opening
   FamilySearch in the same browser shows that page and what to do.
+- A residence below a municipality whose first word is another municipality's name
+  ("Lom, byens grund", in Vågå) is no longer saved in that municipality:
+  of FamilySearch's place suggestions, only a place in the same municipality is taken,
+  otherwise the place stays as written.
+- A source already in the SourceBox whose citation differs only in the day it was
+  accessed is no longer updated for that, on every run.
 - The release notes on the Updates page show bold text as bold, no longer with the
   `**` around it.
 

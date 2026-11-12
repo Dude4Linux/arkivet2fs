@@ -216,6 +216,14 @@ if (!window.__arkivet2fsAttach) {
   // form as Create Source with a change reason. Only fields that differ are written; a
   // field the linker has empty keeps what FS has. Nothing differs: Cancel, so the
   // source's history on FS gets no change.
+  // A field as FS has it and as the linker has it are the same (line ends aside; a
+  // citation also when only the day it was accessed differs, which changes each run)
+  function sameField(key, theirs, ours) {
+    const text = (s) => String(s || '').replace(/\r\n/g, '\n').trim();
+    const access = (s) => (key === 'citation' ? s.replace(/ : accessed [^)]*\)/g, ' : accessed)') : s);
+    return access(text(theirs)) === access(text(ours));
+  }
+
   async function editSource({ sourceId, source, reason, read }) {
     checkSourceBox();
     const findButton = () => byTestId('row-' + sourceId + '-edit-button');
@@ -254,7 +262,7 @@ if (!window.__arkivet2fsAttach) {
       const field = document.querySelector(selector);
       const want = (source[key] || '').trim();
       if (!field) { if (want) missing.push(key); continue; }
-      if (!want || field.value.replace(/\r\n/g, '\n').trim() === want) continue;
+      if (!want || sameField(key, field.value, want)) continue;
       setValue(field, source[key]);
       changed.push(key);
     }
@@ -460,8 +468,11 @@ if (!window.__arkivet2fsAttach) {
     const named = kinds.filter((o) => {
       const [name, ...more] = lines(o);
       const have = parts(name);
-      // A farm's place (farm, municipality, county, country): the same municipality
-      if (want.length >= 4 && have.length >= 4 && have[1] !== want[1]) return false;
+      // A place below a municipality (a farm, "Bakken, Vågå, Oppland, Norway", or more
+      // parts, "Lom, byens grund, Vågå, ..."): only one below that same
+      // municipality, the third part from the end; not a municipality of the farm's name
+      const municipality = (list) => list[list.length - 3];
+      if (want.length >= 4 && (have.length < 4 || municipality(have) !== municipality(want))) return false;
       const alternates = more.filter((l) => /^Alternate Names?:/i.test(l)).flatMap((l) => l.replace(/^Alternate Names?:\s*/i, '').split(',').map(key));
       return have[0] === want[0] || alternates.includes(want[0]);
     });

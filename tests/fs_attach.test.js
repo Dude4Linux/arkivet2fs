@@ -174,6 +174,26 @@ test('editSource(): nothing different is cancelled, not saved', async () => {
   assert.equal(fs.cancelled, 1);
 });
 
+test('editSource(): a citation differing only in the day it was accessed is not written again', async () => {
+  const cite = (day) => 'Norway, Oppland, Vågå, "Vågå parish 1842-1856", baptisms; database, National Archives of Norway, Digitalarkivet, ' +
+    'Permanent ID pd99000000000001 (https://www.digitalarkivet.no/view/255/pd99000000000001 : accessed ' + day + ').';
+  const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs = editDialog(page, { ...ON_FS, citation: cite('2 November 2026') });
+  const answer = await page.step('editSource', { sourceId: 'TEST-S01',
+    source: { date: ON_FS.date, title: TITLE, url: ON_FS['web-page'], citation: cite('11 November 2026'), notes: 'Old notes' } });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.changed), []);
+  assert.equal(fs.saved, null);
+  // another change in it is written, with today's day
+  const page2 = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
+  const fs2 = editDialog(page2, { ...ON_FS, citation: cite('2 November 2026') });
+  const changed = cite('11 November 2026').replace('baptisms', 'Baptisms');
+  const answer2 = await page2.step('editSource', { sourceId: 'TEST-S01',
+    source: { date: ON_FS.date, title: TITLE, url: ON_FS['web-page'], citation: changed, notes: 'Old notes' } });
+  assert.deepEqual(plain(answer2.changed), ['citation']);
+  assert.equal(fs2.saved.citation, changed);
+});
+
 test('editSource() with read: FS\'s fields, cancelled, nothing written', async () => {
   const page = sourceBox([['TEST-S01', TITLE]], [['TEST-S01', TITLE]]);
   const fs = editDialog(page, { ...ON_FS, notes: 'Old notes\r\nline two' });
@@ -471,7 +491,10 @@ const FACT_LISTS = {
   'Bakken nedre, Vågå, Oppland, Norway': [['Vågå, Oppland, Norway', 'Municipality, 1781 - 2019'], ['Bakken, Oppland, Norway', 'Populated Place,'],
     ['Bakkom, Gausdal, Kristians, Norway', 'Farm, 1781 - 1879</div><div>Alternate Name: Bakken']],
   'Bakken, Vågå, Oppland, Norway': [['Bakkom, Gausdal, Kristians, Norway', 'Farm, 1781 - 1879</div><div>Alternate Name: Bakken'],
-    ['Bakken, Vågå, Oppland, Norway', 'Farm, 1781 - 2019']]
+    ['Bakken, Vågå, Oppland, Norway', 'Farm, 1781 - 2019']],
+  // A residence on a town's land named after another municipality: FS offers that municipality
+  'Lom, byens grund, Vågå, Oppland, Norway': [['Lom, Oppland, Norway', 'Municipality, 1781 - 2019'],
+    ['Lom, Lom, Oppland, Norway', 'Farm, 1781 - 2019']]
 };
 
 // `saveOff`: Save off while the date and place are what the form opened with (FS's
@@ -705,6 +728,14 @@ test('addFact(): a farm\'s place stays as typed unless FS has that farm in that 
   assert.equal(known.ok, true, known.error);
   assert.equal(saved[0].place, 'Bakken, Vågå, Oppland, Norway');
   assert.match(known.fields.find((f) => f.name === 'place').picked, /Farm, 1781 - 2019/, 'the farm in Vågå, not Bakkom in Gausdal');
+});
+
+test('addFact(): a place below a municipality is never taken for the municipality (or a farm elsewhere) of its first word', async () => {
+  const { step } = factPage();
+  const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1840', place: 'Lom, byens grund, Vågå, Oppland, Norway', description: 'Lom, byens grund' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: false });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Lom, byens grund, Vågå, Oppland, Norway', picked: '' });
 });
 
 test('addFact(): a residence, its fields inside divs of the same name, as FS has them', async () => {

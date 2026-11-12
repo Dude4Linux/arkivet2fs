@@ -648,6 +648,19 @@ test('the SourceBox copy with other fields: each shown with a choice, the record
   assert.equal(win.readPlan(false).source.notes, $('f-notes').value.trim());
 });
 
+test('the SourceBox copy differing only in the citation\'s access day: nothing to choose, nothing to update', async () => {
+  const { chrome } = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    editSource: ({ source }) => ({ ok: true, sourceId: 'TEST-S01', fields: { ...source, citation: source.citation.replace(/ : accessed [^)]*\)/, ' : accessed 1 January 2020)') } })
+  });
+  const { win, $ } = checkedPage(chrome);
+  assert.match($('f-citation').value, / : accessed [^)]+\)/);
+  await win.checkOnFamilySearch();
+  assert.equal($('fs-fields').hidden, true);
+  assert.equal(win.readPlan(false).source.citation, $('f-citation').value.trim());
+});
+
 test('the SourceBox copy is the extension\'s older one: the record\'s notes by default', async () => {
   const { chrome } = fakeFs({
     findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S01', title }] }),
