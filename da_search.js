@@ -617,13 +617,16 @@ function buildQueries(criteria) {
     // town had his last children baptized there)
     const diedThen = P.death && P.deathPlace && P.death.from <= to;
     const levels = levelsFor([P.marriagePlace, ...P.residences, P.birthPlace, diedThen ? P.deathPlace : '']);
+    // With a spouse, only the couple's records count for the goal: the person's name
+    // alone finds other men's children of those years
+    const namesRelative = (st) => Boolean(st.fields.related_first_name || st.fields.related_last_name);
     const spouses = P.spouses.length ? P.spouses : [null];
     spouses.forEach((spouse, k) => {
       const s = relative(spouse, relation, other);
       const steps = s ? (P.sex === 'Female' ? pairSteps(me, s) : pairSteps(s, me)) : [];
       const q = query('children' + (k ? '-' + k : ''), spouse ? t("Children's baptisms with {name}", { name: spouse.given }) : t("Children's baptisms"),
         { 'roles[]': roles, ...years(from, to) }, [...steps, ...alone(me)], levels,
-        [as(roles), span(from, to)], goal ? { goal } : {});
+        [as(roles), span(from, to)], { ...(goal ? { goal } : {}), ...(s ? { counts: namesRelative } : {}) });
       if (abroad) q.skip = abroad;
     });
   }
@@ -919,7 +922,8 @@ const firstPage = async (params) => parseResults(await fetchResultPage(daSearchU
 // The order of a query's searches: a step with a surname (the person's or a
 // relative's, or a farm) is "named". First the named steps at each place level,
 // narrowest first (the parish, then its county); then, while nothing is found, the
-// named steps in all of Norway (a rare surname is found anywhere); then, while the
+// named steps in all of Norway (a rare surname is found anywhere; a step that
+// counts for the goal, the couple, while the goal isn't met); then, while the
 // goal isn't met (a child's baptism or a census still missing), the other names
 // (fallback steps) in the widest of those places; last, the steps by given names only, in the narrowest place: they find
 // everyone of that name, so in the county they'd bury the person's records (and
@@ -936,7 +940,7 @@ function searchPlan(query) {
   const plan = [];
   for (const level of local) for (const step of strict) plan.push({ step, level });
   const widest = local[local.length - 1] || wide[0];
-  for (const level of wide) for (const step of strict) plan.push({ step, level, ifNone: true });
+  for (const level of wide) for (const step of strict) plan.push({ step, level, ifNone: !(query.counts && query.counts(step)) });
   for (const step of query.steps.filter((s) => s.fallback)) plan.push({ step, level: widest });
   for (const step of loose) plan.push({ step, level: local[0] || wide[0] });
   return plan;
@@ -945,7 +949,8 @@ function searchPlan(query) {
 // Run a query's searches in searchPlan()'s order until the goal is met. A search
 // finding more hits than are read (MAX_PAGES pages) isn't read: most would be other
 // people, the stricter steps find the person's, and it isn't run at the wider
-// levels either.
+// levels either. With `counts(step)`, only the hits of the steps it accepts count
+// for the goal and as found (`ifNone`); the others are still listed.
 // → { found: [{ step, hits }], searches: [{ step, place, total, read, params }], missing }
 async function runQuery(query) {
   const limit = readLimit();
@@ -967,7 +972,7 @@ async function runQuery(query) {
     }
     search.read = hits.length;
     found.push({ step, hits });
-    all.push(...hits);
+    if (!query.counts || query.counts(step)) all.push(...hits);
     missing = query.goal(all);
   }
   return { found, searches, missing };

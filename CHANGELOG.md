@@ -100,6 +100,11 @@ fixes, new features, changes that break what users have).
 - The person's other names (FamilySearch's alternate names, other spellings of the
   patronymic) are searched while children's baptisms or censuses are still missing,
   no longer only when nothing at all was found under the main name.
+- A child's baptism counts as found only when the record names the couple (the
+  person with the spouse): other men of the person's name had children in those
+  years too, and their baptisms no longer stop the search. While one is missing,
+  the couple is also searched in all of Norway, so a baptism in a town FamilySearch
+  has no place for is found.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

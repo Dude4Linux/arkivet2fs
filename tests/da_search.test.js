@@ -175,6 +175,33 @@ test("runQuery(): the other names are searched while a child's baptism is still 
   assert.deepEqual([...new Set(result.found.flatMap((f) => f.hits.map((h) => h.id)))], ['pd99000000000901', 'pd99000000000902']);
 });
 
+// A DA result page of baptisms with the person as father: [[id, date], ...]
+const fatherPage = (rows) => `<div id="searchResultList">${rows.map(([id, date]) => `<div class="unit"><div class="name"><a href="/en/view/1/${id}">Lars</a></div>`
+  + `<div class="role"><span>Role:</span> far</div><div class="action"><span>Date:</span> ${date}</div></div>`).join('')}</div><p>Your search resulted in ${rows.length} hits</p>`;
+
+test("runQuery(): other fathers of the name don't meet the children's goal; the couple is searched in all of Norway", async () => {
+  // In the FS places DA has only other Lars Jørgensens' children of those years;
+  // the couple's are in a town FS has no place in
+  const asked = [];
+  const fetch = async (url) => {
+    const p = new URL(String(url)).searchParams;
+    const local = p.getAll('m[]').length || p.getAll('c[]').length;
+    asked.push([p.get('lastname'), p.get('related_first_name'), local ? 'local' : 'Norway'].join(' '));
+    const html = p.get('lastname') === 'Jørgens*' && !p.get('related_first_name') && !p.get('related_last_name') && local
+      ? fatherPage([['pd99000000000911', '1862-03-01'], ['pd99000000000912', '1866-07-08']])
+      : p.get('lastname') === 'Jørgens*' && p.get('related_first_name') === 'Astr*' && !local
+        ? fatherPage([['pd99000000000903', '1862-05-04'], ['pd99000000000904', '1866-02-11']])
+        : '<div id="searchResultList"></div>';
+    return new Response(html);
+  };
+  const wq = load(SHARED, { fetch, fast: true });
+  const q = wq.buildQueries(jorgensen()).find((x) => x.kind === 'children');
+  const result = await wq.runQuery(q);
+  const ids = new Set(result.found.flatMap((f) => f.hits.map((h) => h.id)));
+  assert.ok(ids.has('pd99000000000903') && ids.has('pd99000000000904'), JSON.stringify(asked));
+  assert.deepEqual(plain(result.missing), []);
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');
