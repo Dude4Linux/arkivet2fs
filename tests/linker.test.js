@@ -368,7 +368,7 @@ test('compareRecords() and parallelNote(): the two entries side by side, the dif
 
 test('withBook(): the book named after the source title, in the title and the citation', () => {
   const named = w.withBook(record('baptism-1846'), MINISTERIAL);
-  assert.equal(named.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P), Ministerialbok A-13 - Birth');
+  assert.equal(named.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P), Ministerialbok A-13 - Birth, 23 August 1846');
   assert.match(named.citation, /\(0515P\)," Ministerialbok A-13, AV\/SAK-0000-0001\/F\/Fa\/L0013, Births and baptisms, p\. 24/);
 });
 
@@ -383,7 +383,7 @@ test('two sources: both filled, renames carry into both, readPlan() gives both w
   assert.equal($('compare').querySelectorAll('tr.differs').length, 1);
   assert.match($('f-notes').value, /\n\n--- Also recorded in ---\nKlokkerbok B-10 .*pd99000000000918/);
   assert.match($('g-notes').value, /\n\n--- Also recorded in ---\nMinisterialbok A-13 .*pd99000000000018/);
-  assert.match($('g-title').value, /\(0515P\), Klokkerbok B-10 - Birth$/);
+  assert.match($('g-title').value, /\(0515P\), Klokkerbok B-10 - Birth, 23 August 1846$/);
 
   // the child gains a surname: in both sources
   const child = state.people.find((p) => p.roleEnglish === 'Child');
@@ -1835,8 +1835,13 @@ test('run(): a source of this title for another record is not written over or at
   assert.deepEqual(plain(tabs.closed), []);
 });
 
-test('formerTitles(): the titles a source got before 1.6.0, the year in front', () => {
+test('formerTitles(): the titles a source got before, the year in front or no date at the end', () => {
   assert.deepEqual(plain(w.formerTitles('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846')), ['1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth']);
+  // the record's date at the end: without it (1.6.0's first builds), and that with the year in front
+  assert.deepEqual(plain(w.formerTitles('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth, 23 August 1846', '1846')), [
+    'Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth']);
+  assert.deepEqual(plain(w.formerTitles('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth, 1846', '1846')), [
+    'Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth']);
   assert.deepEqual(plain(w.formerTitles('Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"', '1865')), [
     '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"',  // edited by hand on FS
     '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census']);
@@ -1846,19 +1851,60 @@ test('formerTitles(): the titles a source got before 1.6.0, the year in front', 
 
 test('run(): a source under its former, year-first title is used, given the new title, not made again', async () => {
   const { chrome, asked } = fakeFs({
-    findSource: ({ title, older }) => ({ ok: true, sources: [{ id: 'TEST-S07', title: older[0] }], title: older[0] }),
+    findSource: ({ older }) => ({ ok: true, sources: [{ id: 'TEST-S07', title: older[1] }], title: older[1] }),
     attachedTo: () => ({ ok: true, persons: [] }),
-    editSource: () => ({ ok: true, sourceId: 'TEST-S07', changed: ['title'], missing: [] }),
+    editSource: ({ read }) => read ? { ok: true, sourceId: 'TEST-S07', fields: {} } : { ok: true, sourceId: 'TEST-S07', changed: ['title'], missing: [] },
     attach: () => ({ ok: true })
   });
   const { win, $ } = checkedPage(chrome);
   const title = $('f-title').value;
   await win.run(false);
-  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'attachedTo', 'editSource']);
-  assert.match(asked[0][1].older[0], /^1846, /);
-  assert.equal(asked[2][1].title, asked[0][1].older[0]);  // found in the SourceBox by its former title
-  assert.equal(asked[2][1].source.title, title);  // and given the new one
+  assert.deepEqual(plain(asked.map(([name]) => name)), ['findSource', 'editSource', 'attachedTo', 'editSource']);
+  assert.match(asked[0][1].older[1], /^1846, /);
+  assert.equal(asked[1][1].read, true);  // read first: a former title could be another record's
+  assert.equal(asked[3][1].title, asked[0][1].older[1]);  // found in the SourceBox by its former title
+  assert.equal(asked[3][1].source.title, title);  // and given the new one
   assert.match($('log').textContent, /under its former title "1846, /);
+});
+
+test('lookUpSource(): sources under the title without the date are searched with it, and only this record\'s used (bug: two children of one name had one title)', async () => {
+  // a son named after a brother who died: the brother's source has the title without a date
+  const searched = [];
+  const { chrome, asked } = fakeFs({
+    findSource: ({ title, older, search }) => {
+      searched.push(search);
+      return { ok: true, sources: [{ id: 'TEST-S11', title: older[0] }, { id: 'TEST-S12', title: older[0] }], title: older[0] };
+    },
+    editSource: ({ sourceId }) => sourceId === 'TEST-S11' ? { ok: false, otherRecord: true, other: 'pd99000000000077' }
+      : { ok: true, sourceId, fields: { title: 'x' } },
+    attachedTo: () => ({ ok: true, persons: [] })
+  });
+  const { win, $ } = checkedPage(chrome);
+  const title = $('f-title').value;
+  assert.match(title, / - Birth, 23 August 1846$/);
+  const base = title.replace(/, 23 August 1846$/, '');
+  const tab = await win.openTab(value(win, 'SOURCEBOX_URL'));
+  const source = win.reviewedSource('f');
+  const found = await win.lookUpSource(tab, title, true, source, win.sameRecordIds(0));
+  assert.deepEqual(searched, [base]);  // one search finds the title and its former ones
+  assert.equal(found.id, 'TEST-S12');
+  assert.deepEqual(plain(found.ids), ['TEST-S12']);
+  assert.equal(found.formerTitle, base);
+  assert.deepEqual(plain(found.fields), { title: 'x' });
+  // the brother's only: none of this record, so a new source is made
+  asked.length = 0;
+  const { chrome: chrome2, asked: asked2 } = fakeFs({
+    findSource: ({ older }) => ({ ok: true, sources: [{ id: 'TEST-S11', title: older[0] }], title: older[0] }),
+    editSource: () => ({ ok: false, otherRecord: true, other: 'pd99000000000077' }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S13' }),
+    attachedTo: () => ({ ok: true, persons: [] }),
+    attach: () => ({ ok: true })
+  });
+  const page = checkedPage(chrome2);
+  await page.win.run(false);
+  assert.deepEqual(plain(asked2.map(([name]) => name)).slice(0, 3), ['findSource', 'editSource', 'createSource']);
+  assert.equal(asked2[2][1].title, title);
+  assert.match(page.$('log').textContent, /Source created \(TEST-S13\)/);
 });
 
 test('lookUpSource(): a census source under its former title is searched for by that title', async () => {

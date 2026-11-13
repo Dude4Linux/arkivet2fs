@@ -90,6 +90,27 @@ test('findSource(): a dated source, which FS lists with the date\'s year in fron
   assert.equal((await other.step('findSource', { title: TITLE, older: ['1846, ' + TITLE] })).title, '1846, ' + TITLE);
 });
 
+test('findSource(): with `search`, a part of the title, the title and older ones holding the part (one made without the date at the end)', async () => {
+  const dated = TITLE + ', 23 August 1846';
+  const searched = [];
+  const page = sourceBox([], [['TEST-S01', TITLE], ['TEST-S02', '1846, ' + TITLE], ['TEST-S03', TITLE + ', 3 May 1849']]);
+  page.w.document.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
+    searched.push(page.w.document.querySelector('[data-testid="source-box-filter-field"]').value);
+  });
+  const answer = await page.step('findSource', { title: dated, older: [TITLE, '1846, ' + TITLE], search: TITLE });
+  assert.deepEqual(searched, [TITLE]);
+  assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01']);  // not the brother's of 1849
+  assert.equal(answer.title, TITLE);
+  // the dated title itself first
+  const both = sourceBox([], [['TEST-S01', TITLE], ['TEST-S04', dated]]);
+  const first = await both.step('findSource', { title: dated, older: [TITLE], search: TITLE });
+  assert.deepEqual(plain(first.sources.map((s) => s.id)), ['TEST-S04']);
+  assert.equal(first.title, dated);
+  // a `search` that isn't part of the title: the title is searched
+  const plainSearch = sourceBox([], [['TEST-S04', dated]]);
+  assert.deepEqual(plain((await plainSearch.step('findSource', { title: dated, search: 'Ola' })).sources.map((s) => s.id)), ['TEST-S04']);
+});
+
 test('findSource(): Home\'s rows coming in after the search was clicked aren\'t taken for its hits', async () => {
   const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox',
     '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button><div id="list"></div>');

@@ -20,7 +20,7 @@ test('a baptism: the child, the parents, the date of birth with the year', () =>
   assert.equal(r.permanentId, 'pd99000000000018');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pd', type: 'birth_baptism' });
   assert.equal(r.recordDate, '1846-08-23');
-  assert.equal(r.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth');
+  assert.equal(r.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth, 23 August 1846');
   assert.equal(before(r.citation, ' : accessed'),
     'Norway, Oppland, Vågå Parish, "Church book from Vågå parish, Vågå local parish 1842-1856 (0515P)," Births and baptisms, ' +
     'p. 24, entry 66, baptism of Lars, 23 August 1846; database, National Archives of Norway, Digitalarkivet, ' +
@@ -69,7 +69,7 @@ test('a header date DA wrote wrong ("1846-2308") is only its year', () => {
 test('a burial: split date of death merged, age in years, the position translated', () => {
   const r = record('burial-1854');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pg', type: 'death_burial' });
-  assert.equal(r.title, 'Lars Larsen Holt-Sletten - Vinger parish 1847-1855 (0421Q) - Burial');
+  assert.equal(r.title, 'Lars Larsen Holt-Sletten - Vinger parish 1847-1855 (0421Q) - Burial, 18 April 1854');
   assert.match(r.citation, /^Norway, Hedmark, Vinger Parish, "Church book from Vinger parish 1847-1855 \(0421Q\)," Burials, p\. 434, entry 37, burial of Lars Larsen Holt-Sletten, 18 April 1854;/);
   assert.deepEqual(people(r), ['Lars Larsen Holt-Sletten (Deceased)']);
   assert.match(r.notes, /^Date of death: 12 April 1854$/m);
@@ -158,7 +158,7 @@ test('a census of 1891: one household, though only its head has a household numb
 test("an emigrant protocol: the open person only, the protocol's page and line", () => {
   const r = record('emigration-1902');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pe', type: 'emigration' });
-  assert.equal(r.title, 'Lars Halvorsen - Oslo police district, Mobility control, Emigrant protocols, no. 20: 1901-1903 - Emigration');
+  assert.equal(r.title, 'Lars Halvorsen - Oslo police district, Mobility control, Emigrant protocols, no. 20: 1901-1903 - Emigration, 5 September 1902');
   assert.match(r.citation, /"Oslo police district, Mobility control, Emigrant protocols, no\. 20: 1901-1903," Group of travellers, p\. 340, line 30, emigration of Lars Halvorsen, 5 September 1902;/);
   assert.deepEqual(people(r), ['Lars Halvorsen (Emigrant)']);
   assert.equal(r.fields.destination, 'Minnesota');
@@ -170,7 +170,7 @@ test("a marriage from the bride's entry: read from the groom's, so both entries 
   assert.ok(!r.error, r.error);
   assert.equal(r.recordTypeInfo.type, 'marriage');
   assert.deepEqual(people(r).slice(0, 2), ['Kolmund Finsteinsen Dalbø (Groom)', 'Eli Kolvaldsdatter Daltveit (Bride)']);
-  assert.equal(r.title, 'Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit - Vågå parish, Vågå local parish 1842-1856 (0515P) - Marriage');
+  assert.equal(r.title, 'Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit - Vågå parish, Vågå local parish 1842-1856 (0515P) - Marriage, 22 April 1849');
   assert.equal(r.principalUrl, 'https://www.digitalarkivet.no/en/pv99000000000371');
   // from the groom's entry, his page is the one
   const file = 'da/marriage-bride.html';

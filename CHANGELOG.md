@@ -47,12 +47,16 @@ fixes, new features, changes that break what users have).
   saved without one. Opening such a record in the linker again and updating the
   source fills it in.
 - Source titles begin with the name, as FamilySearch titles its own records'
-  sources; the year is in the source's date, which the SourceBox shows in front of
-  the title and sorts by. A census ends as FamilySearch's census sources do
-  ("Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census,
-  1865""), so one household's censuses stay apart. A source made before
-  under the year-first title is still found: updating it gives it the new title
-  instead of making another.
+  sources, and end with the record's date ("Lars, son of Halvor Larsen - Vågå
+  parish ... - Birth, 23 August 1846"), so two records of one name, parents and
+  parish, such as a child named after a brother who died, don't share a title. The
+  SourceBox shows the source date's year in front of the title and sorts by it. A
+  census ends as FamilySearch's census sources do ("Halvor Larsen household, Bakken
+  nedre, Nordlien - Vågå - "Norway, Census, 1865""), so one household's censuses
+  stay apart. A source made before under the year-first title, or without the date
+  at the end, is still found: updating it gives it the new title instead of making
+  another. Of those, only a source of this record is used (each is read first);
+  a brother's of the same name gets a source of his own.
 - A source already in the SourceBox with a date is found again. FamilySearch lists
   a dated source with the date's year in front of its title, which the linker took
   for part of the title, so it made a second source for the same record. The search

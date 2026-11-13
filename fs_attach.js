@@ -137,15 +137,17 @@ if (!window.__arkivet2fsAttach) {
   }
 
   // The sources with this title, wherever they are in the SourceBox: [{id, title}].
-  // With none, those of an `older` title holding this one, which the search (titles
-  // containing the text) shows too: a source made before 1.6.0, with the year in
-  // front; `title` then says which.
-  async function findSource({ title, older = [] }) {
+  // With none, those of an `older` title holding the text searched for (`search`, a
+  // part of the title; else the title), which the search (titles containing the text)
+  // shows too: a source made before, with the year in front or without the date at
+  // the end; `title` then says which.
+  async function findSource({ title, older = [], search }) {
     checkSourceBox();
     const wanted = clean(title);
     if (!wanted) throw new Error('The source needs a title.');
-    const rows = await searchSourceBox(wanted);
-    for (const name of [wanted, ...older.map(clean).filter((o) => o && o !== wanted && o.includes(wanted))]) {
+    const text = clean(search || '') && wanted.includes(clean(search)) ? clean(search) : wanted;
+    const rows = await searchSourceBox(text);
+    for (const name of [wanted, ...older.map(clean).filter((o) => o && o !== wanted && o.includes(text))]) {
       const sources = rows.filter((r) => r.title === name);
       if (sources.length) return { ok: true, sources, title: name };
     }

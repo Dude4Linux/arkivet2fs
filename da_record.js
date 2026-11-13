@@ -1001,14 +1001,15 @@ function extractRecord(document, pageUrl) {
 
     // FS title: "<principal> - <source title> - <record type>", as FamilySearch titles
     // its own records' sources (the name first; the year is in the source's date), e.g.
-    //   "John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth"
+    //   "John, child of John Aslaksen - Nord-Audnedal parish, ... (1028P) - Birth, 3 November 1816"
     //   "Andreas Olsen household - 0529 Vestre Toten - "Norway, Census, 1891""
     // "Church book from" / "1891 census for" are dropped to keep titles short (the
     // citation keeps the full source title); a census ends as FS's own census sources
-    // do, "Norway, Census, 1801", whose year tells one household's censuses apart. The
-    // type is left off when the source title already names it (probate). The SourceBox
-    // shows the source date's year in front of the title. Before 1.6.0 the year came
-    // first in the title (linker.js formerTitles()).
+    // do, "Norway, Census, 1801", whose year tells one household's censuses apart, and
+    // the others with the record's date. The type is left off when the source title
+    // already names it (probate). The SourceBox shows the source date's year in front
+    // of the title. Before 1.6.0 the year came first in the title, and 1.6.0's first
+    // builds had no date (linker.js formerTitles()).
     const titleTypes = {
       'birth_baptism': 'Birth', 'marriage': 'Marriage', 'death_burial': 'Burial',
       'confirmation': 'Confirmation',
@@ -1057,6 +1058,10 @@ function extractRecord(document, pageUrl) {
     if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {
       titleParts.push(censusYear ? '"Norway, Census, ' + censusYear + '"' : titleType);
     }
+    // The record's date last (a census's year is there already): two records of one
+    // name, parents and parish, as a child named after a brother who died, otherwise
+    // have one title
+    if (date && !censusYear && titleSource) titleParts[titleParts.length - 1] += ', ' + date;
     const title = titleParts.filter(Boolean).join(' - ') ||
                   document.title.replace(/\s*-\s*The Digital Archive\s*$/i, '').trim();
 

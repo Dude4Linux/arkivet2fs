@@ -2433,8 +2433,8 @@ async function lookUpSources(tabId, titles, active = false, sources = []) {
   const out = [];
   for (const [i, title] of titles.entries()) {
     await navigate(tabId, SOURCEBOX_URL, active);
-    const found = { ...(await lookUpSource(tabId, title, active)), book: state.books[i] || '' };
-    if (found.id && sources[i]) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active, found.formerTitle, sameRecordIds(i)));
+    const found = { ...(await lookUpSource(tabId, title, active, sources[i], sameRecordIds(i))), book: state.books[i] || '' };
+    if (found.id && sources[i] && !found.fields) Object.assign(found, await readSourceFields(tabId, found.id, sources[i], active, found.formerTitle, sameRecordIds(i)));
     out.push(found);
   }
   return out;
@@ -2457,14 +2457,18 @@ function stepError(answer) {
   return error;
 }
 
-// The titles this extension gave a source before 1.6.0, which a source made then may
-// still have: the record's year in front, "1846, Lars, son of Halvor Larsen - Vågå
-// parish ... - Birth", a census also ending "- Census" ("1865, Halvor Larsen household,
-// Bakken nedre, Nordlien - Vågå - Census"). [] for a title with a year in front.
+// The titles this extension gave a source before, which a source made then may still
+// have: before 1.6.0 the record's year in front, "1846, Lars, son of Halvor Larsen -
+// Vågå parish ... - Birth", a census also ending "- Census" ("1865, Halvor Larsen
+// household, Bakken nedre, Nordlien - Vågå - Census"); in 1.6.0's first builds no date
+// at the end, "Lars, son of Halvor Larsen - Vågå parish ... - Birth". [] for a title
+// with a year in front.
 function formerTitles(title, year) {
   if (!title || /^\d{4}, /.test(title)) return [];
   const census = title.match(/^(.+) - "Norway, Census, (\d{4})"$/);
   if (census) return [census[2] + ', ' + title, census[2] + ', ' + census[1] + ' - Census'];
+  const dated = title.match(/^(.+ - .+), (?:\d{1,2} \p{L}+ )?(\d{4})$/u);
+  if (dated) return [dated[1], dated[2] + ', ' + dated[1]];
   return year ? [year + ', ' + title] : [];
 }
 
@@ -2474,27 +2478,45 @@ function recordYear() {
   return (String(record.recordDate || record.date || '').match(/\d{4}/) || [''])[0];
 }
 
-// The source of this title in the SourceBox, or one made before 1.6.0 under its former
-// title (`formerTitle`: an update gives it this one), and who it is attached to
-async function lookUpSource(tabId, title, active = true) {
+// The source of this title in the SourceBox, or one made before under a former title
+// (`formerTitle`: an update gives it this one), and who it is attached to. One search
+// finds the title and the former ones it shares a part with; a census's former title
+// that doesn't is searched for itself. Sources of a former title, which had no date
+// and could be another record's (a child named after a brother who died), are read
+// with `source` (the Edit Source dialog, cancelled) and only this record's are kept;
+// their `fields` come along.
+async function lookUpSource(tabId, title, active = true, source = null, sameRecord = []) {
   const former = formerTitles(title, recordYear());
-  let found = await step(tabId, 'findSource', { title, older: former });
+  const forms = [title, ...former];
+  const search = forms.find((f) => forms.every((o) => o.includes(f))) || title;
+  let found = await step(tabId, 'findSource', { title, older: former, search });
   if (!found.ok) throw stepError(found);
-  // A former title the search for this one doesn't show (a census's): searched for itself
-  for (const older of former.filter((f) => !f.includes(title))) {
+  for (const older of former.filter((f) => !f.includes(search))) {
     if (found.sources.length) break;
     await navigate(tabId, SOURCEBOX_URL, active);
     found = await step(tabId, 'findSource', { title: older });
     if (!found.ok) throw stepError(found);
     found.title = older;
   }
-  const ids = found.sources.map((s) => s.id);
-  if (!ids.length) return { title, id: null, ids, persons: [] };
+  let ids = found.sources.map((s) => s.id);
   const old = found.title && found.title !== title ? { formerTitle: found.title } : {};
+  let fields = null;
+  if (old.formerTitle && source && ids.length) {
+    const mine = [];
+    for (const id of ids) {
+      const read = await readSourceFields(tabId, id, source, active, old.formerTitle, sameRecord);
+      if (read.otherRecord) continue;
+      if (!read.fields) throw new Error(read.fieldsError);
+      mine.push(id);
+      if (!fields) fields = read.fields;
+    }
+    ids = mine;
+  }
+  if (!ids.length) return { title, id: null, ids, persons: [] };
   await navigate(tabId, attachedToUrl(ids[0]), active);
   const read = await step(tabId, 'attachedTo', { sourceId: ids[0] });
   if (!read.ok) throw stepError(read);
-  return { title, id: ids[0], ids, persons: read.persons, ...old };
+  return { title, id: ids[0], ids, persons: read.persons, ...old, ...(fields ? { fields } : {}) };
 }
 
 // The source in the SourceBox for run(), and who has it: searched for, and once more
@@ -2502,10 +2524,11 @@ async function lookUpSource(tabId, title, active = true) {
 // check made before (`state.fsCheck`, when the page opened, or the last run's), when it
 // answered for this title; else null, and run() stops: a source created then could be
 // a second copy of one the SourceBox has.
-async function sourceForRun(tabId, title, i) {
+async function sourceForRun(tabId, source, i) {
+  const title = source.title;
   for (let tries = 1; ; tries++) {
     try {
-      return await lookUpSource(tabId, title);
+      return await lookUpSource(tabId, title, true, source, sameRecordIds(i));
     } catch (e) {
       log(t('The SourceBox could not be searched for the title: {error}', { error: e.message || String(e) }), 'near');
       if (e.blocked || tries >= 2) break;
@@ -2709,7 +2732,7 @@ async function run(attach) {
       if (i > 0) await navigate(tabId, SOURCEBOX_URL);
       if (book) log(book);
       // The source as the SourceBox has it, in any folder, and who has it already
-      const known = await sourceForRun(tabId, source.title, i);
+      const known = await sourceForRun(tabId, source, i);
       if (!known) throw new Error(t('Nothing was created: the SourceBox could not be searched, so a new source might be a second copy of one already there. Try again.'));
       await navigate(tabId, SOURCEBOX_URL);
       let sourceId = known.id;
