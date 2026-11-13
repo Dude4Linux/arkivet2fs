@@ -1272,6 +1272,24 @@ test('factAdditions(): a record name of FS\'s given names only is no alternate n
   assert.deepEqual(names('Lars Ole Halvorsen', 'Lars Ole Halvorsøn'), [{ given: 'Lars Ole', surname: 'Halvorsøn', nameType: 'AKA' }]);
 });
 
+test('compareFact(): a name is ≈ when the linker offers it as an alternate name, ✓ only when it doesn\'t (bug: ✓ beside an offered name)', () => {
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  const halvor = state.people.find((p) => p.name === 'Halvor Larsen');
+  const mark = (person, pid, fsName) => {
+    state.fs = { pid, name: fsName, gender: 'Male', altNames: [], residences: [], occupations: [] };
+    return win.compareFact('Name', { text: person.name }, { text: fsName }, person, { pid, name: fsName }, state.record);
+  };
+  assert.equal(mark(halvor, 'TEST-HAL', 'Halvor Larsen'), 'same');
+  // the patronymic in another spelling: offered, so not the same
+  assert.equal(mark(halvor, 'TEST-HAL', 'Halvor Lauritsen'), 'near');
+  assert.equal(plain(win.factAdditions(halvor, state.record, { pid: 'TEST-HAL' })).filter((a) => a.fact === 'Name').length, 1);
+  // a child by the given name only
+  assert.equal(mark(lars, 'TEST-LAR', 'Lars Halvorsen'), 'same');
+  // another given name
+  assert.equal(mark(halvor, 'TEST-HAL', 'Ole Larsen'), 'differs');
+});
+
 test('factAdditions(): a christening FS lacks; a birth date FS has as a year only', () => {
   const { win, state } = checkedPage();
   const lars = state.people.find((p) => p.name === 'Lars');

@@ -866,11 +866,15 @@ function treeFacts(tree, record) {
 }
 
 // How a record fact compares with FS's: 'same' ✓, 'near' ≈, 'differs' ✗, or '' (no
-// comparison: one side doesn't have it, or it isn't compared, as places and occupations)
-function compareFact(fact, da, fs, person, tree) {
+// comparison: one side doesn't have it, or it isn't compared, as places and occupations).
+// A name is the same when the given names agree and the record's is no other name
+// than FS's (otherName(), which offers it as an alternate name; with the page read).
+function compareFact(fact, da, fs, person, tree, record) {
   if (!da || !fs) return '';
   if (fact === 'Name') {
     const fit = givenNameFit(person, tree);
+    const full = record && tree && fullTree(tree.pid);
+    if (fit === 2 && full && otherName(person, record, full)) return 'near';
     return fit === 2 ? 'same' : fit === 1 ? 'near' : 'differs';
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
@@ -892,7 +896,7 @@ function factsTable(person, record, tree, reading) {
   const fs = treeFacts(tree, record);
   const head = el('tr', {}, [el('th', {}), el('th', { text: 'DigitalArkivet' }), el('th', { text: 'FamilySearch' })]);
   const rows = FACTS.filter((f) => da[f] || fs[f]).map((f) => {
-    const how = compareFact(f, da[f], fs[f], person, tree);
+    const how = compareFact(f, da[f], fs[f], person, tree, record);
     const fsCell = el('td', {}, how ? [el('span', { class: 'mark ' + how, text: MARKS[how] + ' ' }), document.createTextNode(fs[f].text)]
       : [document.createTextNode(fs[f] ? fs[f].text : '')]);
     return el('tr', { class: how }, [el('th', { text: t(f) }), el('td', { text: da[f] ? da[f].text : '' }), fsCell]);
@@ -1078,6 +1082,20 @@ function emigrationDestination(record) {
 // The year of an FS date, or null
 const fsYear = (text) => (parseFsDate(text) || {}).year || Number((String(text || '').match(/\b1[5-9]\d\d\b|\b20\d\d\b/) || [])[0]) || null;
 
+// The record's name as FS's form takes it ({given, surname}) when FS has it neither as
+// the name nor as an alternate one (`full`: the tree person as read), else null. A
+// name of FS's given names only (a baptism's "Lars Ole" for FS's Lars Ole Halvorsen)
+// has no surname: its last word isn't one, and it's no other name.
+function otherName(person, record, full, name) {
+  const asWritten = name || stripVariants(person.name);
+  const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
+  const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
+  const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
+  if (!parts.surname || givenOnly) return null;
+  const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
+  return known.includes(sameNameKey(parts.given + ' ' + parts.surname)) ? null : { given: parts.given, surname: parts.surname };
+}
+
 function factAdditions(person, record, tree, name) {
   const full = tree && fullTree(tree.pid);
   if (!full) return [];
@@ -1086,19 +1104,9 @@ function factAdditions(person, record, tree, name) {
   const place = recordPlace(record);
   const year = (daDateParts(record.recordDate) || {}).year;
 
-  // A name FS has neither as the name nor as an alternate one. A name of FS's given
-  // names only (a baptism's "Lars Ole" for FS's Lars Ole Halvorsen)
-  // has no surname: its last word isn't one, and it's no other name.
-  const asWritten = name || stripVariants(person.name);
-  const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
-  const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
-  const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
-  if (parts.surname && !givenOnly) {
-    const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
-    if (!known.includes(sameNameKey(parts.given + ' ' + parts.surname))) {
-      out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { given: parts.given, surname: parts.surname, nameType: 'AKA' } });
-    }
-  }
+  // A name FS has neither as the name nor as an alternate one
+  const other = otherName(person, record, full, name);
+  if (other) out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { ...other, nameType: 'AKA' } });
 
   // Birth, christening, death, burial: added, or FS's combined with the record's.
   // A birthplace can lie anywhere (a census's, a burial's). A death took place at the
@@ -3216,7 +3224,7 @@ function linkerReport() {
     if (tree) {
       const da = recordFacts(row.person, state.record), fs = treeFacts(tree, state.record);
       for (const f of FACTS.filter((f) => da[f] || fs[f])) {
-        const how = compareFact(f, da[f], fs[f], row.person, tree);
+        const how = compareFact(f, da[f], fs[f], row.person, tree, state.record);
         lines.push('  - ' + f + ': ' + (da[f] ? da[f].text : '—') + ' | FS: ' + (fs[f] ? fs[f].text : '—') + (how ? ' ' + MARKS[how] : ''));
       }
       if (!fullTree(tree.pid)) lines.push('  - (the FS person\'s page was not read)');
