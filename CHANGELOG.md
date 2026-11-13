@@ -105,6 +105,9 @@ fixes, new features, changes that break what users have).
   years too, and their baptisms no longer stop the search. While one is missing,
   the couple is also searched in all of Norway, so a baptism in a town FamilySearch
   has no place for is found.
+- The person's other names are also searched for the person alone, not only with
+  the spouse: a baptism can name the father by his family name and the mother by
+  another of her given names.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

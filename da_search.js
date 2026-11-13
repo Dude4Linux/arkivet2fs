@@ -721,15 +721,19 @@ function buildQueries(criteria) {
   }
 
   // Queries searching on the person's full name get the other names as fallback
-  // steps (instead of the person's name in the first step that has it). Record kinds
-  // turned off in the sidebar (criteria.off) aren't run.
+  // steps (instead of the person's name in the first step that has it, then in the
+  // step of the person alone: a record can name the person by another name and the
+  // relative by another given name). Record kinds turned off in the sidebar
+  // (criteria.off) aren't run.
   const off = criteria.off || [];
   for (const q of queries) {
     q.kind = q.id.replace(/-.*$/, '');
-    const named = stem && q.steps.find((s) => s.fields.lastname === stem && s.fields.firstname === given);
-    if (named) {
+    const mine = (s) => s.fields.lastname === stem && s.fields.firstname === given;
+    const named = stem && q.steps.find(mine);
+    const lone = named && q.steps.find((s) => s !== named && mine(s) && Object.keys(s.fields).every((k) => k === 'firstname' || k === 'lastname'));
+    for (const base of [named, lone].filter(Boolean)) {
       for (const v of variants) {
-        q.steps.push({ ...named, fields: { ...named.fields, ...v.fields }, text: named.text.replace(nameText, v.text), fallback: true });
+        q.steps.push({ ...base, fields: { ...base.fields, ...v.fields }, text: base.text.replace(nameText, v.text), fallback: true });
       }
     }
     q.params = q.steps.length ? withFields(withFields(q.base, q.steps[0].fields), q.levels[0].fields) : q.base;
