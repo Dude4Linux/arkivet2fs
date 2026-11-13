@@ -130,6 +130,8 @@ fixes, new features, changes that break what users have).
 - Gi and gj before a vowel are now read as j, as old spellings have them: Giermund
   and Ingiald in a record match Gjermund and Ingjald, and a patronymic
   Giermundsdatter has the same father as Jermundsen.
+- F and v are now one letter where old spellings mix them: Leiv and Lev in a record
+  match Leif, Rolv matches Rolf and Halvdan Halfdan.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

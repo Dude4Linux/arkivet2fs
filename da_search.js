@@ -121,7 +121,8 @@ const GIVEN_NAME_FORMS = [
   ['gjertrud', 'gjertru', 'gertrud'],
   ['ragnhild', 'ragnild', 'rangdi', 'ragni'],
   ['engebret', 'engebrigt', 'ingebret', 'ingebrigt'],
-  ['eli', 'elin']
+  ['eli', 'elin'],
+  ['leiv', 'leif', 'lev']
 ];
 
 // Dialect forms that start differently (Imbjør for Ingebjørg, as in Gudbrandsdalen):

@@ -128,6 +128,14 @@ test('skeleton(): gi and gj before a vowel are j; not gi before a consonant', ()
   assert.equal(w.sameFather(w.patronymicBase('Giermundsdatter'), w.patronymicBase('Jermundsen')), true);
 });
 
+test('nameMatch(): f and v: Leif, Leiv and Lev; Rolf and Rolv, Halfdan and Halvdan', () => {
+  for (const [a, b] of [['Leiv', 'Leif'], ['Lev', 'Leif'], ['Leif', 'Lev'], ['Rolv', 'Rolf'], ['Halvdan', 'Halfdan'], ['Ulv', 'Ulf']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+  assert.equal(w.sameFather('Lev', 'Leif'), true);
+  assert.equal(w.nameMatch('Frode', 'Vrode'), false, 'not an f at the start');
+});
+
 test('jaroWinkler(): 1 for the same word, less the more they differ', () => {
   assert.equal(w.jaroWinkler('Lars', 'lars'), 1);
   assert.equal(w.jaroWinkler('Lars', ''), 0);
