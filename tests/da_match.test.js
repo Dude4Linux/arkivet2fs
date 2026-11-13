@@ -72,6 +72,13 @@ test('nameMatch(): Johan, John, Jon and Joen for Johannes, either way; not Johan
   for (const [a, b] of [['Johanne', 'Johannes'], ['Jens', 'Johannes']]) assert.equal(w.nameMatch(a, b), false, a + ' ≠ ' + b);
 });
 
+test('nameMatch(): å and aa are one letter, also in names too short for skeleton()', () => {
+  for (const [a, b] of [['Aase', 'Åse'], ['Åse', 'Aase'], ['Aasa', 'Åsa'], ['Aasne', 'Åsne']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+  assert.equal(w.nameMatch('Aase', 'Åsne'), false);
+});
+
 test('sameFather(): spellings of one father, and John, Jon, Joen for Johannes', () => {
   for (const [a, b] of [['Halvard', 'Halvor'], ['Johan', 'Johanne'], ['John', 'Johanne'], ['Joen', 'Johan'], ['Aanen', 'Aanon']]) {
     assert.equal(w.sameFather(a, b), true, a + ' = ' + b);

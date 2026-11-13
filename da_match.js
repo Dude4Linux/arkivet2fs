@@ -124,13 +124,15 @@ function sameFather(x, y) {
 
 // A word of a hit's name is the FS name, one of its forms (Ingbjør for Ingeborg:
 // nameForms() in da_search.js), starts with its stem (Anne for Anna), or has its
-// consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole)
+// consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole).
+// Å and the older aa are one letter (Aase for Åse).
+const foldAa = (s) => fold(s).replace(/å/g, 'aa');
 function nameMatch(word, name) {
-  if (fold(word) === fold(name)) return true;
+  if (foldAa(word) === foldAa(name)) return true;
   const forms = nameForms(name);
   if (forms.length > 1 && forms.includes(nameKey(word))) return true;
   const stem = givenStem(name);
-  if (stem.endsWith('*') && fold(word).startsWith(fold(stem.slice(0, -1)))) return true;
+  if (stem.endsWith('*') && foldAa(word).startsWith(foldAa(stem.slice(0, -1)))) return true;
   const sk = skeleton(name);
   return sk.length >= 2 && skeleton(word) === sk;
 }
