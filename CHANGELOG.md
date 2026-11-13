@@ -127,6 +127,9 @@ fixes, new features, changes that break what users have).
 - An old i for j after a consonant is now the same name: Biørn and Torbiørn in a
   record match Bjørn and Torbjørn (before, Torbiørn was only close and Biørn not
   even that).
+- Gi and gj before a vowel are now read as j, as old spellings have them: Giermund
+  and Ingiald in a record match Gjermund and Ingjald, and a patronymic
+  Giermundsdatter has the same father as Jermundsen.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

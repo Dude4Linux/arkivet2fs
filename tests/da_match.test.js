@@ -120,6 +120,14 @@ test('skeleton(): the old i for j between a consonant and o, ø, å or u; not be
   assert.equal(w.nameMatch('Biørn', 'Bjørn'), true);
 });
 
+test('skeleton(): gi and gj before a vowel are j; not gi before a consonant', () => {
+  for (const [a, b] of [['Giermund', 'Gjermund'], ['Giermund', 'Jermund'], ['Torgius', 'Torjus'], ['Giertrud', 'Gjertrud'], ['Ingiald', 'Ingjald']]) {
+    assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b);
+  }
+  for (const [a, b] of [['Birgitte', 'Birjtte'], ['Regine', 'Rejne']]) assert.notEqual(w.skeleton(a), w.skeleton(b), a + ' ≠ ' + b);
+  assert.equal(w.sameFather(w.patronymicBase('Giermundsdatter'), w.patronymicBase('Jermundsen')), true);
+});
+
 test('jaroWinkler(): 1 for the same word, less the more they differ', () => {
   assert.equal(w.jaroWinkler('Lars', 'lars'), 1);
   assert.equal(w.jaroWinkler('Lars', ''), 0);
