@@ -824,8 +824,11 @@ function extractRecord(document, pageUrl) {
       let line = role + ': ' + person.name + (person.primary ? ' *' : '');
       const details = [];
       if (person.position) details.push(expandAbbreviations(person.position));
-      // Censuses give a birth year or an age ("35", "3 m"), church books a year
-      if (person.birthYear) {
+      // Censuses give a birth year or an age ("35", "3 m"), 1910 a full date, church books a year
+      const born = fullBirthDate(person.birthYear);
+      if (born) {
+        details.push('b. ' + formatDate(born.year + '-' + born.month + '-' + born.day));
+      } else if (person.birthYear) {
         details.push(/^\d{4}/.test(person.birthYear) ? 'b. ' + person.birthYear
           : 'age ' + translateFieldValue('Age', person.birthYear));
       }
@@ -1107,6 +1110,15 @@ function onDigitalArkivet(address) {
   } catch (e) {
     return false;
   }
+}
+
+// A census's full date of birth (1910's "Age/born: 1845-04-06", once with the age
+// after it, "1892-11-14@17") as {year, month, day}; null for a year or an age
+function fullBirthDate(text) {
+  const m = String(text || '').trim().match(/^(1[5-9]\d\d)-(\d{1,2})-(\d{1,2})(?![\d?.])/);
+  if (!m) return null;
+  const month = Number(m[2]), day = Number(m[3]);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? { year: Number(m[1]), month, day } : null;
 }
 
 async function loadMoreResidents(doc, fetchText) {

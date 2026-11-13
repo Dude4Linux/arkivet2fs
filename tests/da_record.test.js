@@ -98,6 +98,27 @@ test('a census of 1900: coded positions, and the other household at the residenc
   assert.match(r.notes, /Skogvogter, Dagarbeider \[day labourer\] ved Gaardsbr\./);
 });
 
+// 1910 gives each resident's full date of birth, once with the age after it ("@17")
+function withBirthDates(doc) {
+  for (const label of doc.querySelectorAll('#collapse-persons .row > div:first-child')) {
+    const value = label.nextElementSibling;
+    if (label.textContent.trim() !== 'Age/born:' || !value) continue;
+    if (value.textContent.trim() === '1844') value.textContent = '1844-03-05';
+    if (value.textContent.trim() === '1854') value.textContent = '1854-11-20@46';
+  }
+  return doc;
+}
+
+test('a census\'s full dates of birth read as dates in the notes', () => {
+  const file = 'da/census-1900.html';
+  const r = w.extractRecord(withBirthDates(fixtureDoc(w, file)), fixtureUrl(file));
+  assert.match(r.notes, /^Man of the House: Lars Halvorsen Solbakken \* \(.*, b\. 5 March 1844, Vågå herred\*\)$/m);
+  assert.match(r.notes, /^Woman of the House: Kjersti Larsdatter \(.*, b\. 20 November 1854, Vågå herred\*\)$/m);
+  assert.equal(w.fullBirthDate('1854-11-20@46').day, 20);
+  assert.equal(w.fullBirthDate('1854'), null);
+  assert.equal(w.fullBirthDate('1846-20??.09'), null);
+});
+
 test('a census of 1891: one household, though only its head has a household number ("000" is none)', () => {
   const r = record('census-1891-grandchildren');
   assert.equal(r.others.length, 0);

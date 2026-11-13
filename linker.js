@@ -790,8 +790,8 @@ function recordFacts(person, record) {
   if (sex) facts.Sex = { text: t(sex), value: sex };
 
   // Birth: the person's own date of birth, else a year (an age gives one about)
-  const born = mine ? ownBirthDate(record) : null;
   const raw = String(person.birthYear || '').trim();
+  const born = (mine ? ownBirthDate(record) : null) || fullBirthDate(raw);
   const year = born ? born.year : birthYearOf(person, record);
   const fromAge = !born && /^\d{1,3}\b/.test(raw);
   const birthPlace = person.birthPlace || fields['birth place'] || fields['place of birth'] || '';

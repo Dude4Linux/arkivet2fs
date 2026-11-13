@@ -812,6 +812,22 @@ test('recordFacts(): a burial\'s death, age and residence; a census age gives a 
   assert.equal(facts.Occupation, 'Tjener');
 });
 
+test('recordFacts(): a census\'s full date of birth is the birth, not about a year', () => {
+  const file = 'da/census-1900.html';
+  const doc = fixtureDoc(w, file);
+  for (const label of doc.querySelectorAll('#collapse-persons .row > div:first-child')) {
+    const value = label.nextElementSibling;
+    if (label.textContent.trim() === 'Age/born:' && value && value.textContent.trim() === '1854') value.textContent = '1854-11-20@46';
+  }
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  const kjersti = w.recordPeople(r).find((p) => p.name === 'Kjersti Larsdatter');
+  const birth = w.recordFacts(kjersti, r).Birth;
+  assert.equal(birth.text, '20 November 1854, Vågå herred*');
+  assert.deepEqual(plain(birth.date), { year: 1854, month: 11, day: 20 });
+  assert.equal(birth.year, 1854);
+  assert.equal(birth.approx, false);
+});
+
 test('recordFacts(): a family word or marital status in the occupation is no occupation', () => {
   // 1900's children have "Søn" and "Datter" where the census asks for the occupation
   const r = record('census-1900');
