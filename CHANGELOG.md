@@ -148,6 +148,8 @@ fixes, new features, changes that break what users have).
 - The 1910 census's full dates of birth are written as dates ("b. 6 April 1845", no
   longer "b. 1845-04-06") in the source's notes, and the linker compares and adds
   them as the birth date, not only its year.
+- A census position "Barn" is translated "[child]" in the source's notes, no longer
+  "[children]" ("Børn" stays "[children]").
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

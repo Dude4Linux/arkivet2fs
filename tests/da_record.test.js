@@ -98,6 +98,15 @@ test('a census of 1900: coded positions, and the other household at the residenc
   assert.match(r.notes, /Skogvogter, Dagarbeider \[day labourer\] ved Gaardsbr\./);
 });
 
+test('a census position\'s "Barn" is a child, "Børn" children', () => {
+  const file = 'da/census-1801-son.html';
+  const doc = fixtureDoc(w, file);
+  const cell = [...doc.querySelectorAll('#collapse-persons div')].find((d) => d.textContent.trim() === 'Deres børn' && !d.children.length);
+  cell.textContent = 'Deres Barn';
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.deepEqual(plain(r.people.map((p) => p.roleEnglish).slice(2)), ['Deres Barn [child]', 'Deres børn [children]', 'Deres børn [children]']);
+});
+
 // 1910 gives each resident's full date of birth, once with the age after it ("@17")
 function withBirthDates(doc) {
   for (const label of doc.querySelectorAll('#collapse-persons .row > div:first-child')) {

@@ -325,7 +325,7 @@ function extractRecord(document, pageUrl) {
     [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar', 'Familiens overhode', 'Familieoverhode'], 'head of household'],
     [['Husmoder', 'Husmor', 'Huusmoder'], 'woman of the house'],
     [['Søn', 'Sønn', 'Sön'], 'son'], [['Datter', 'Dotter', 'Dattér'], 'daughter'],
-    [['Børn', 'Born', 'Barn'], 'children'],
+    [['Barn'], 'child'], [['Børn', 'Born'], 'children'],
     [['Fader', 'Far'], 'father'], [['Moder', 'Mor'], 'mother'],
     [['Broder', 'Bror'], 'brother'], [['Søster', 'Syster'], 'sister'],
     [['Svigersøn', 'Svigersønn', 'Svigersön'], 'son-in-law'], [['Svigerdatter', 'Sønnekone', 'Sönnekone'], 'daughter-in-law'],
