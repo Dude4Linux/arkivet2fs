@@ -120,6 +120,8 @@ fixes, new features, changes that break what users have).
   husband's name scored as the person.
 - Johannes in a record is now close to Hans in the tree, and the other way round:
   church books could write the full name for a Hans.
+- Johan, John, Jon and Joen in a record are now the same given name as Johannes in
+  the tree, and the other way round, as they already were in patronymics.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

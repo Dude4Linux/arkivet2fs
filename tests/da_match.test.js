@@ -65,6 +65,13 @@ test("nameMatch(): Åshild, Rønnaug and Ånund in their old spellings", () => {
   }
 });
 
+test('nameMatch(): Johan, John, Jon and Joen for Johannes, either way; not Johanne or Jens', () => {
+  for (const [a, b] of [['John', 'Johannes'], ['Jon', 'Johannes'], ['Joen', 'Johannes'], ['Johan', 'Johannes'], ['Johannes', 'Jon'], ['Johannes', 'Johan']]) {
+    assert.equal(w.nameMatch(a, b), true, a + ' = ' + b);
+  }
+  for (const [a, b] of [['Johanne', 'Johannes'], ['Jens', 'Johannes']]) assert.equal(w.nameMatch(a, b), false, a + ' ≠ ' + b);
+});
+
 test('sameFather(): spellings of one father, and John, Jon, Joen for Johannes', () => {
   for (const [a, b] of [['Halvard', 'Halvor'], ['Johan', 'Johanne'], ['John', 'Johanne'], ['Joen', 'Johan'], ['Aanen', 'Aanon']]) {
     assert.equal(w.sameFather(a, b), true, a + ' = ' + b);

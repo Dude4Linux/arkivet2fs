@@ -112,6 +112,7 @@ const GIVEN_NAME_FORMS = [
   ['guri', 'gudrid', 'gurid'],
   ['gudbrand', 'gulbrand', 'gubrand'],
   ['knud', 'knut'],
+  ['johannes', 'johan', 'johann', 'john', 'jon', 'joen'],
   ['ole', 'ola', 'olav', 'olaf', 'oluf'],
   ['iver', 'ivar'],
   ['halvor', 'halvard', 'halvar'],
