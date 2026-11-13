@@ -114,6 +114,10 @@ fixes, new features, changes that break what users have).
 - In a person's facts, a name is marked ✓ only when it is the name FamilySearch has;
   one the linker offers as an alternate name (a patronymic in another spelling) is
   marked ≈. The ✓ used to compare only the given names.
+- A hit found by the surname and a relative alone (a mother Johansdatter with the
+  husband's name) whose given name isn't the person's now counts against the hit.
+  It was taken for a spelling DigitalArkivet had matched, and another woman with the
+  husband's name scored as the person.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

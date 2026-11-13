@@ -179,9 +179,14 @@ function scoreHit(hit, P) {
   const first = names.find((w) => P.givens.some((g) => fold(g) === fold(w)));
   const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g) || nameNear(w, g)));
   const variant = !first && !close && P.givens.length && names[0];
+  // A variant only when a search asked for the given name: a search by the surname
+  // and a relative (the mother Johans* of a father) finds other given names, other
+  // people (Marit Johansdatter for Astri Johansdatter)
+  const byGiven = (hit.queries || []).some((q) => !q.fields || q.fields.firstname);
   if (first) add(2, first, true);
   else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => nameMatch(close, g) || nameNear(close, g)) }), null);
-  else if (variant) add(allGiven ? 0 : 1, t('{name} (variant of {fs})', { name: variant, fs: P.given }), null);
+  else if (variant && byGiven) add(allGiven ? 0 : 1, t('{name} (variant of {fs})', { name: variant, fs: P.given }), null);
+  else if (variant) add(-3, t('{name} in the record, not {fs}', { name: variant, fs: P.given }), false);
   // Further given names (Magdalen for Magdaline)
   const used = new Set([first || close || variant]);
   for (const name of P.givenNames.slice(1)) {

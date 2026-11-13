@@ -20,6 +20,27 @@ function scored(name) {
 }
 const reason = (hit, re) => hit.reasons.find((r) => re.test(r.text));
 
+test('scoreHit(): another given name is a variant only when the search asked for the given name (bug: a mother found by surname and husband scored as the person)', () => {
+  const astri = w.profile(criteria({
+    name: [{ givenName: 'Astri', surname: 'Johansdatter' }], sex: [{ sex: 'Female' }],
+    spouse: [{ spouseGivenName: 'Halvor', spouseSurname: 'Larsen' }]
+  }));
+  const hit = { id: 'pd99000000000951', name: 'Marit Johannesdatter', role: 'Mother', date: '1866-05-06', source: '' };
+  const score = (fields) => {
+    const merged = new Map();
+    w.mergeHits(merged, { fields, reasons: ['father Halvor Lars*'] }, [hit]);
+    return plain(w.groupHits(merged, astri)).flatMap((g) => g.hits)[0];
+  };
+  // found by the surname and the husband: Marit isn't Astri
+  const bySurname = score({ firstname: '', lastname: 'Johan*', related_first_name: 'Halvor', related_last_name: 'Lars*' });
+  assert.equal(reason(bySurname, /^Marit/).ok, false, JSON.stringify(bySurname.reasons));
+  assert.ok(reason(bySurname, /^Marit/).points < 0);
+  // DA gave it for Astr*: a variant DA matched
+  const byGiven = score({ firstname: 'Astr*', lastname: 'Johan*' });
+  assert.equal(reason(byGiven, /^Marit/).ok, null);
+  assert.ok(byGiven.score > bySurname.score);
+});
+
 test('yearPoints(): the same +2, one off +1, then -2, -4, -6', () => {
   assert.deepEqual([0, 1, 2, 3, 4, 9, 10, 30].map(w.yearPoints), [2, 1, -2, -2, -4, -4, -6, -6]);
 });
