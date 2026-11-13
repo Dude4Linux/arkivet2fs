@@ -1176,6 +1176,41 @@ test('run(): a change FS finds it has already (its Save stays off) is logged as 
   assert.deepEqual(tabs.closed, [2]);
 });
 
+test('run(): a fact step FS was slow with is tried once more on the page loaded again; a save only when it never reached Save', async () => {
+  const slow = { ok: false, timeout: true, error: 'FamilySearch did not show Tag Sources in time.' };
+  let tries = 0;
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => (tries++ ? { ok: true, fields: [], shown: 'Christening 23 August 1846 Vågå' }
+      : { ok: false, timeout: true, unsaved: true, error: 'FamilySearch did not show the last form to close in time.' }),
+    tagFact: () => (tries++ < 3 ? slow : { ok: true })
+  });
+  const urls = [];
+  const update = chrome.tabs.update;
+  chrome.tabs.update = (id, options) => { if (options.url) urls.push([options.url, options.active]); return update(id, options); };
+  const { win, $ } = withChristening(chrome);
+  await win.run(true);
+  assert.deepEqual(plain(asked.map(([name]) => name)).slice(-4), ['addFact', 'addFact', 'tagFact', 'tagFact']);
+  // the person's page loaded with the tab in front: at first (not read in the tab), and for each try again
+  assert.equal(urls.filter(([url, active]) => /details\/TEST-LAR$/.test(url) && active).length, 3);
+  assert.match($('log').textContent, /did not show the last form to close in time\. Trying once more, with the page loaded again\./);
+  assert.match($('log').textContent, /The source is tagged to it\./);
+  assert.deepEqual(tabs.closed, [2]);  // all done in the end
+
+  // Failed after its Save was clicked (not `unsaved`): not tried again, since FS may have it
+  const saved = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => ({ ok: false, timeout: true, error: 'FamilySearch did not show the saved fact in time.' }),
+    tagFact: () => ({ ok: true })
+  });
+  await withChristening(saved.chrome).win.run(true);
+  assert.equal(saved.asked.filter(([name]) => name === 'addFact').length, 1);
+});
+
 // chrome.storage.local in memory, with its onChanged
 function memoryStorage(kept = {}) {
   return { local: { async get(key) { return key in kept ? { [key]: kept[key] } : {}; }, async set(items) { Object.assign(kept, items); } }, kept };

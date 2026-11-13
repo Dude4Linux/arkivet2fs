@@ -2539,13 +2539,13 @@ async function saveAdditions(tabId, pair, sourceId, title) {
     if (fresh && onTreeAlready(fresh, a)) {
       log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
     } else {
-      const saved = await step(tabId, 'addFact', { pid: pair.pid, addition: a, reason: a.reason, save: true });
+      const saved = await factStep(tabId, 'addFact', { pid: pair.pid, addition: a, reason: a.reason, save: true });
       if (!saved.ok) { log(t('Not changed for {name} ({what}): {error}', { name: pair.label, what, error: saved.error }), 'bad'); continue; }
       if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
       else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changes.push(what); }
     }
     const match = a.action === 'name' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]];
-    const tagged = await step(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
+    const tagged = await factStep(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
     if (!tagged.ok) log(t('The source is not tagged to it: {error}', { error: tagged.error }), 'near');
     else log(t(tagged.already ? 'The source was tagged to it already.' : 'The source is tagged to it.'), 'ok');
   }
@@ -2553,6 +2553,19 @@ async function saveAdditions(tabId, pair, sourceId, title) {
   if (changes.length) await readNow(tabId, pair.pid);
   for (const row of state.rows || []) if (row.pid() === pair.pid && row.showFacts) row.showFacts();
   return changes;
+}
+
+// A fact step tried once more when FS was slow (`timeout`: its tab not drawn, a busy
+// page), on the person's page loaded again with the tab in front, so no form of the
+// first try is left over; an addition only when it failed before its Save (`unsaved`),
+// so it can't be added twice. Tagging is safe to try again: a source tagged already is
+// left as it is.
+async function factStep(tabId, name, args) {
+  const answer = await step(tabId, name, args);
+  if (answer.ok || !answer.timeout || (name === 'addFact' && !answer.unsaved)) return answer;
+  log(t('{error} Trying once more, with the page loaded again.', { error: answer.error }), 'near');
+  await navigate(tabId, personDetailsUrl(args.pid));
+  return step(tabId, name, args);
 }
 
 // The tree person read again in the work tab (fs_person.js), kept for the page and

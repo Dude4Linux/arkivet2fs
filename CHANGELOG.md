@@ -157,6 +157,9 @@ fixes, new features, changes that break what users have).
   open, and every fact after it failed ("did not show the last form to close in
   time"). That window is now closed when tagging fails, and a fact's form or window
   still open before the next fact is closed too.
+- A fact FamilySearch was slow to save or tag is tried once more, with the person's
+  page loaded again and its tab in front. A save is tried again only when it
+  failed before its Save was clicked, so a fact is never added twice.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
