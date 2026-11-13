@@ -56,11 +56,13 @@ function hasWord(text, word) {
 // start (Kjetil = Kittil, Kjersti = Kirsti, Gjermund = Jermund, Hjalmar = Jalmar) and
 // a final dt (Arndt = Arnt), and one sound at the start for sj, skj, sch, sk before
 // a front vowel, and the old si before a vowel (Sjønne = Skjønne = Siønne = Sionne;
-// Schjønnesen = Skjønnesen). Not its g → k, d → t, nd → n, ld → l or the final d
+// Schjønnesen = Skjønnesen). The old i for j between a consonant and o, ø, å or u
+// (Biørn = Bjørn, Torius = Torjus); not before a or e, where it's a vowel of its own
+// (Maria, Marie, Christian). Not its g → k, d → t, nd → n, ld → l or the final d
 // after a vowel: they make Guri Kari, Gunder Gunnar, Ingrid Inger.
 function skeleton(name) {
   return fold(name).replace(/[^\p{L}]/gu, '').replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i')
-    .replace(/^(sch|sj|si(?=[aeouæøå])|sk(?=[iyøæ]|ei))/, 'sk').replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
+    .replace(/^(sch|sj|si(?=[aeouæøå])|sk(?=[iyøæ]|ei))/, 'sk').replace(/(?<=[^aeiouyæøåäöüé])i(?=[oøåu])/g, 'j').replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
     .replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/w/g, 'v').replace(/z/g, 's').replace(/x/g, 'ks')
     .replace(/(?<=.)h(?![aeiouyæøåäöüé])|(?<=[^aeiouyæøåäöüé])h/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
 }
@@ -94,7 +96,7 @@ function jaroWinkler(x, y) {
 }
 
 // Two spellings close enough to be one name, where nameMatch() can't tell (Ingebrigt,
-// Ingebret; Torbjørn, Torbiørn; Gulbrand, Gudbrand; Tollef, Tollev): Jaro-Winkler
+// Ingebret; Sigvard, Sigvart; Gulbrand, Gudbrand; Tollef, Tollev): Jaro-Winkler
 // 0.92 or more, both of at least 4 letters, ending in the same letter or both in a
 // consonant (Kari and Karin, Helge and Helga, Berte and Bertel are other names); and
 // Hans for Johannes, the short form a church book could write in full (SHORT_FORMS).

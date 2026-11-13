@@ -110,6 +110,16 @@ test('skeleton(): one sound for sj, skj, sch, sk before a front vowel, and the o
   }
 });
 
+test('skeleton(): the old i for j between a consonant and o, ø, å or u; not before a, e', () => {
+  for (const [a, b] of [['Biørn', 'Bjørn'], ['Torbiørn', 'Torbjørn'], ['Asbiørn', 'Asbjørn'], ['Torius', 'Torjus'], ['Biørg', 'Bjørg']]) {
+    assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b);
+  }
+  for (const [a, b] of [['Maria', 'Mari'], ['Marie', 'Mari'], ['Christian', 'Kristen'], ['Mathias', 'Matthis']]) {
+    assert.equal(w.skeleton(a), w.skeleton(b), a + ' = ' + b + ', as before');
+  }
+  assert.equal(w.nameMatch('Biørn', 'Bjørn'), true);
+});
+
 test('jaroWinkler(): 1 for the same word, less the more they differ', () => {
   assert.equal(w.jaroWinkler('Lars', 'lars'), 1);
   assert.equal(w.jaroWinkler('Lars', ''), 0);
@@ -133,8 +143,8 @@ test('nameClose(): Astri or Bodil for Astrid, not Hans', () => {
   assert.equal(w.nameClose('Hans', 'Astrid'), false);
 });
 
-test('nameClose(): Torbiørn for Torbjørn, Tollev for Tollef: near spellings', () => {
-  assert.equal(w.nameClose('Torbiørn', 'Torbjørn'), true);
+test('nameClose(): Sigvart for Sigvard, Tollev for Tollef: near spellings', () => {
+  assert.equal(w.nameClose('Sigvart', 'Sigvard'), true);
   assert.equal(w.nameClose('Tollev', 'Tollef'), true);
   assert.equal(w.nameClose('Torbjørn', 'Torbjørn'), false, 'the same name is a match');
   assert.equal(w.nameClose('Helga', 'Helge'), false);
