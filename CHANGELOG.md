@@ -137,6 +137,10 @@ fixes, new features, changes that break what users have).
   the wife in the tree, and a daughter-in-law under the family's -sen was left out
   the same way. A -sen now tells a man only in older records; the position
   (Husmoder, Kone, Tjenestepige, ...) tells a woman.
+- The town censuses of 1865 write a wife or child as the one above's: "Ovennævntes
+  Kone", "Disses Barn", "Ds's Søn", "Den Foregaaendes Hustru". These are now read
+  as the head's wife and children, for the search's record check and for pairing
+  the household in the linker.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

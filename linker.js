@@ -331,7 +331,7 @@ const KIN_TERMS = [
 ];
 function censusKin(person) {
   const role = foldRole(person.role).split(',')[0].replace(/\[.*?\]/g, '').trim().toLowerCase();
-  const m = role.match(/^(?:(hans|hendes|husbondens|husfaderens|husmoderens|konens|hustruens|mandens|deres)\s+)?(\S+)$/);
+  const m = role.match(new RegExp('^(?:(' + REFERRING + '|husbondens|husfaderens|husmoderens|konens|hustruens|mandens)\\s+)?(\\S+)$', 'u'));
   if (!m) return '';
   for (const [kind, re] of KIN_TERMS) if (re.test(m[2])) return /^(konens|hustruens|mandens)$/.test(m[1] || '') ? 'kin' : kind;
   return '';

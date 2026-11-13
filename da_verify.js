@@ -19,14 +19,19 @@ const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's bapti
 // boundary: "Sønnesøn" would be the code "s", a son). A grandchild's parents are a
 // child of the head and that child's spouse, a child-in-law (1891's "Sønnekone").
 const WORD_END = '(?![\\p{L}\\p{N}])';
+// A word naming whose relative a resident is when it's the one written above: his,
+// her, their, and in 1865's town censuses "Ovennævntes" (Overnevtes, Ovensts: the
+// above-named's), "Disses", "Ds's", "Dennes", "Den Foregaaendes" (the preceding
+// one's). Not any genitive: a "Logerendes Barn" is the lodger's child.
+const REFERRING = "(?:hans|hendes|deres|ove[nr]\\S*s|disses|dennes|ds['’]?s|sammes|(?:den )?foregaa?endes)";
 const ROLE_KINDS = {
-  child: new RegExp('^(child|confirmand|son|daughter|barn|konfirmant|s|d|((hans|hendes|deres) )?(søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
-  grandchild: new RegExp('^(?:(?:hans|hendes|deres|husbondens|husfaderens|husmoderens) )?(grandchild|grandson|granddaughter|barnebarn|barnebørn|(?:sønne|sønnens|søns|sønns|datter|datterens|datters|dotter) ?(?:søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
-  childInLaw: new RegExp('^(?:(?:hans|hendes|deres) )?(son-in-law|daughter-in-law|svigersøn|svigersønn|svigerdatter|svigerdotter|svigerbarn|sønnekone|(?:sønnens|søns|sønns) (?:kone|hustru)|(?:datterens|datters) (?:mand|mann))' + WORD_END, 'iu'),
+  child: new RegExp('^(child|confirmand|son|daughter|barn|konfirmant|s|d|(' + REFERRING + ' )?(søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
+  grandchild: new RegExp('^(?:(?:' + REFERRING + '|husbondens|husfaderens|husmoderens) )?(grandchild|grandson|granddaughter|barnebarn|barnebørn|(?:sønne|sønnens|søns|sønns|datter|datterens|datters|dotter) ?(?:søn|sønn|datter|dotter|barn|børn|born))' + WORD_END, 'iu'),
+  childInLaw: new RegExp('^(?:' + REFERRING + ' )?(son-in-law|daughter-in-law|svigersøn|svigersønn|svigerdatter|svigerdotter|svigerbarn|sønnekone|(?:sønnens|søns|sønns) (?:kone|hustru)|(?:datterens|datters) (?:mand|mann))' + WORD_END, 'iu'),
   father: /^(father|far|fader)$/i,
   mother: /^(mother|mor|moder)$/i,
   head: new RegExp('^(head of household|man of the house|woman of the house|hp|hf|hm|(hus|huus|hos)(bonde|bond|fader|far|moder|mor|mand)|bonde|gaardmand|gårdmann|familiens overhode|familieoverhode)' + WORD_END, 'iu'),
-  spouse: new RegExp('^(wife|husband|wife of head|his wife|hu|((hans|hendes) )?(kone|hustru|hustrue|hustroe|hustro|ægtefælle|ektefelle|mand|mann|ektemann))' + WORD_END, 'iu'),
+  spouse: new RegExp('^(wife|husband|wife of head|his wife|hu|(' + REFERRING + ' )?(kone|hustru|hustrue|hustroe|hustro|ægtefælle|ektefelle|mand|mann|ektemann))' + WORD_END, 'iu'),
   groom: /^(groom|brudgom)$/i,
   bride: /^(bride|brud|brur)$/i,
   deceased: /^(deceased|avdød|avdøde)$/i,

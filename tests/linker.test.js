@@ -253,6 +253,12 @@ test('censusKin(): the kin word of a family position', () => {
   assert.equal(w.censusKin({ role: 'deres Søn' }), 'child');
   assert.equal(w.censusKin({ role: 'Konens Søster' }), 'kin');
   assert.equal(w.censusKin({ role: 'Tjener' }), '');
+  // 1865's town censuses: the above-named's, these', the preceding one's
+  assert.equal(w.censusKin({ role: 'Ovennævntes Datter' }), 'child');
+  assert.equal(w.censusKin({ role: 'Disses Søn' }), 'child');
+  assert.equal(w.censusKin({ role: "Ds's Moder" }), 'mother');
+  assert.equal(w.censusKin({ role: 'Den Foregaaendes Søster' }), 'sibling');
+  assert.equal(w.censusKin({ role: 'Logerendes Barn' }), '');
 });
 
 test('patronymics: a clash of fathers, spellings of one, a father of this name', () => {

@@ -42,6 +42,20 @@ test('roleKind(): DA roles and census positions, in Norwegian or English', () =>
   assert.equal(kind('Sönnesön'), 'grandchild');
   assert.equal(kind('Sönnekone'), 'childInLaw');
   assert.equal(kind('Familiens overhode', 'Familiens overhode [head of household]'), 'head');
+  // 1865's town censuses refer to the one written above: the above-named's, these',
+  // the preceding one's
+  assert.equal(kind('Ovennævntes Kone'), 'spouse');
+  assert.equal(kind('Overnevtes Barn'), 'child');
+  assert.equal(kind('Ovennevtes Datter'), 'child');
+  assert.equal(kind('Ovensts Hustru'), 'spouse');
+  assert.equal(kind('Disses Barn'), 'child');
+  assert.equal(kind("Ds's Kone"), 'spouse');
+  assert.equal(kind("Ds's Søn"), 'child');
+  assert.equal(kind('Den Foregaaendes Hustru'), 'spouse');
+  assert.equal(kind('Dennes Svigersøn'), 'childInLaw');
+  // another one's: a lodger's child isn't the head's
+  assert.equal(kind('Logerendes Barn'), '');
+  assert.equal(kind('Tjenestepigens Søn'), '');
 });
 
 test('relativesInRecord(): an 1891 page, the grandchildren the son\'s and his wife\'s', () => {
