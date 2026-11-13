@@ -1259,6 +1259,19 @@ test('additionText(): an alternate name as written, given names before the surna
   assert.equal(w.additionText(name), 'Astri Larsdatter (Also known as)');
 });
 
+test('factAdditions(): a record name of FS\'s given names only is no alternate name (bug: the second given name offered as a surname)', () => {
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  const names = (fsName, name) => {
+    state.fs = { ...LARS_1846, name: fsName, altNames: [] };
+    return plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' }, name)).filter((a) => a.fact === 'Name').map((a) => a.value);
+  };
+  // a baptism names the child by the given names: Ole isn't a surname
+  assert.deepEqual(names('Lars Ole Halvorsen', 'Lars Ole'), []);
+  // a surname FS doesn't have still is one
+  assert.deepEqual(names('Lars Ole Halvorsen', 'Lars Ole Halvorsøn'), [{ given: 'Lars Ole', surname: 'Halvorsøn', nameType: 'AKA' }]);
+});
+
 test('factAdditions(): a christening FS lacks; a birth date FS has as a year only', () => {
   const { win, state } = checkedPage();
   const lars = state.people.find((p) => p.name === 'Lars');

@@ -108,6 +108,9 @@ fixes, new features, changes that break what users have).
 - The person's other names are also searched for the person alone, not only with
   the spouse: a baptism can name the father by his family name and the mother by
   another of her given names.
+- A name the record gives only as given names, as a baptism names the child, is no
+  longer offered as an alternate name with the last given name as the surname
+  ("Lars Ole" for FamilySearch's Lars Ole Halvorsen).
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

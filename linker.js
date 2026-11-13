@@ -1086,9 +1086,14 @@ function factAdditions(person, record, tree, name) {
   const place = recordPlace(record);
   const year = (daDateParts(record.recordDate) || {}).year;
 
-  // A name FS has neither as the name nor as an alternate one
-  const parts = nameParts(name || stripVariants(person.name), { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
-  if (parts.surname) {
+  // A name FS has neither as the name nor as an alternate one. A name of FS's given
+  // names only (a baptism's "Lars Ole" for FS's Lars Ole Halvorsen)
+  // has no surname: its last word isn't one, and it's no other name.
+  const asWritten = name || stripVariants(person.name);
+  const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
+  const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
+  const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
+  if (parts.surname && !givenOnly) {
     const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
     if (!known.includes(sameNameKey(parts.given + ' ' + parts.surname))) {
       out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { given: parts.given, surname: parts.surname, nameType: 'AKA' } });
