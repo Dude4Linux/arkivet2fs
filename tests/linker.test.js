@@ -1211,6 +1211,55 @@ test('run(): a fact step FS was slow with is tried once more on the page loaded 
   assert.equal(saved.asked.filter(([name]) => name === 'addFact').length, 1);
 });
 
+test('run(): a SourceBox FS doesn\'t search is searched once more, then the check made before goes; with none, nothing is created', async () => {
+  const slow = { ok: false, timeout: true, error: 'FamilySearch did not show the SourceBox search in time.' };
+  const answers = (findSource) => ({
+    findSource,
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-HAL', name: 'Halvor' }] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S06', missing: [] }),
+    editSource: () => ({ ok: true, sourceId: 'TEST-S05', changed: [], missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    addFact: () => ({ ok: true, fields: [], shown: 'Christening 23 August 1846 Vågå' }),
+    tagFact: () => ({ ok: true })
+  });
+  // The second search answers: the source found, written over, not created again
+  let n = 0;
+  const second = fakeFs(answers(({ title }) => (n++ ? { ok: true, sources: [{ id: 'TEST-S05', title }] } : slow)));
+  await withChristening(second.chrome).win.run(true);
+  assert.deepEqual(plain(second.asked.map(([name]) => name)).slice(0, 4), ['findSource', 'findSource', 'attachedTo', 'editSource']);
+  assert.ok(!second.asked.some(([name]) => name === 'createSource'));
+
+  // Never searched: the check made before found the source, which is used
+  const never = fakeFs(answers(() => slow));
+  let page = withChristening(never.chrome);
+  page.state.fsCheck = { sources: [{ title: page.$('f-title').value, id: 'TEST-S05', ids: ['TEST-S05'], persons: [{ pid: 'TEST-HAL', name: 'Halvor' }] }] };
+  await page.win.run(true);
+  let names = plain(never.asked.map(([name]) => name));
+  assert.ok(!names.includes('createSource'));
+  assert.ok(names.includes('editSource'));
+  assert.deepEqual(plain(never.asked.filter(([name]) => name === 'attach').map(([, args]) => args.pid)), ['TEST-LAR']);  // Halvor has it
+  assert.match(page.$('log').textContent, /Going by the SourceBox check made before, which found this source \(TEST-S05\)\./);
+
+  // The check made before found none: created, as before
+  const none = fakeFs(answers(() => slow));
+  page = withChristening(none.chrome);
+  page.state.fsCheck = { sources: [{ title: page.$('f-title').value, id: null, ids: [], persons: [] }] };
+  await page.win.run(true);
+  assert.ok(none.asked.some(([name]) => name === 'createSource'));
+
+  // No check to go by (it failed, or was of another title): nothing created or attached
+  for (const fsCheck of [{ error: 'FamilySearch did not answer.' }, { sources: [{ title: 'Another title', id: null, ids: [], persons: [] }] }]) {
+    const unknown = fakeFs(answers(() => slow));
+    page = withChristening(unknown.chrome);
+    page.state.fsCheck = fsCheck;
+    await page.win.run(true);
+    names = plain(unknown.asked.map(([name]) => name));
+    assert.deepEqual(names, ['findSource', 'findSource']);
+    assert.match(page.$('log').textContent, /Nothing was created: the SourceBox could not be searched/);
+    assert.deepEqual(unknown.tabs.closed, []);  // left open where it stopped
+  }
+});
+
 // chrome.storage.local in memory, with its onChanged
 function memoryStorage(kept = {}) {
   return { local: { async get(key) { return key in kept ? { [key]: kept[key] } : {}; }, async set(items) { Object.assign(kept, items); } }, kept };

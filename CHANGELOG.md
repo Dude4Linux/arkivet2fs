@@ -160,6 +160,10 @@ fixes, new features, changes that break what users have).
 - A fact FamilySearch was slow to save or tag is tried once more, with the person's
   page loaded again and its tab in front. A save is tried again only when it
   failed before its Save was clicked, so a fact is never added twice.
+- When FamilySearch didn't show the SourceBox search in time, the linker created
+  the source all the same, which could make a second copy of one already in the
+  SourceBox. It now searches once more, then goes by the SourceBox check made when
+  the page opened; with no check to go by, it stops without creating anything.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

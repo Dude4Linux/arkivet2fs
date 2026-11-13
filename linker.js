@@ -2493,6 +2493,29 @@ async function lookUpSource(tabId, title, active = true) {
   return { title, id: ids[0], ids, persons: read.persons, ...old };
 }
 
+// The source in the SourceBox for run(), and who has it: searched for, and once more
+// on the SourceBox loaded again when FS was slow. Still not searched: the SourceBox
+// check made before (`state.fsCheck`, when the page opened, or the last run's), when it
+// answered for this title; else null, and run() stops: a source created then could be
+// a second copy of one the SourceBox has.
+async function sourceForRun(tabId, title, i) {
+  for (let tries = 1; ; tries++) {
+    try {
+      return await lookUpSource(tabId, title);
+    } catch (e) {
+      log(t('The SourceBox could not be searched for the title: {error}', { error: e.message || String(e) }), 'near');
+      if (e.blocked || tries >= 2) break;
+      await navigate(tabId, SOURCEBOX_URL);
+    }
+  }
+  const before = ((state.fsCheck && state.fsCheck.sources) || [])[i];
+  if (!before || before.title !== title || before.error) return null;
+  log(before.id ? t('Going by the SourceBox check made before, which found this source ({id}).', { id: before.id })
+    : t('Going by the SourceBox check made before, which found no source with this title.'), 'near');
+  return { title, id: before.id || null, ids: before.ids || [], persons: before.persons || [],
+    ...(before.formerTitle ? { formerTitle: before.formerTitle } : {}) };
+}
+
 // The check before anything is saved: in a hidden tab (shown for a moment if FS didn't
 // draw it there), closed after
 async function checkOnFamilySearch() {
@@ -2682,13 +2705,8 @@ async function run(attach) {
       if (i > 0) await navigate(tabId, SOURCEBOX_URL);
       if (book) log(book);
       // The source as the SourceBox has it, in any folder, and who has it already
-      let known;
-      try {
-        known = await lookUpSource(tabId, source.title);
-      } catch (e) {
-        log(t('The SourceBox could not be searched for the title: {error}', { error: e.message || String(e) }), 'near');
-        known = { id: null, ids: [], persons: [] };
-      }
+      const known = await sourceForRun(tabId, source.title, i);
+      if (!known) throw new Error(t('Nothing was created: the SourceBox could not be searched, so a new source might be a second copy of one already there. Try again.'));
       await navigate(tabId, SOURCEBOX_URL);
       let sourceId = known.id;
       if (sourceId) {
