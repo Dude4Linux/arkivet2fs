@@ -845,6 +845,18 @@ test('recordFacts(): a family word or marital status in the occupation is no occ
   for (const work of ['Husmandskone', 'Tjenestepige', 'Skipperenke', 'Husmoder', 'Opholdes af sønnen']) assert.equal(occupation(work), work);
 });
 
+test('recordFacts(): a marriage\'s "Cop." or "Corp." (copulerede, married) is no occupation', () => {
+  const r = record('marriage-bride');
+  const [groom] = w.recordPeople(r);
+  for (const position of ['Cop.', 'Corp.', 'Copul.', 'Copulerede']) {
+    assert.equal(w.recordFacts({ ...groom, position }, r).Occupation, undefined, position);
+  }
+  assert.equal(w.recordFacts({ ...groom, position: 'Gaardmand' }, r).Occupation.text, 'Gaardmand');
+  // elsewhere "Corp." is a corporal
+  assert.equal(w.occupationOf('Corp.'), 'Corp.');
+  assert.equal(w.occupationOf('Corp.', true), '');
+});
+
 test('factsTable(): FS\'s facts beside the record\'s, the agreements and differences marked', () => {
   const { win, state } = checkedPage();
   state.fs = { ...LARS_1846, christening: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };

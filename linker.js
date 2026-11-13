@@ -828,7 +828,7 @@ function recordFacts(person, record) {
   } else if (person.residence) {
     facts.Residence = { text: joined(recorded && recorded.year, person.residence), year: recorded && recorded.year };
   }
-  const occupation = occupationOf(person.position);
+  const occupation = occupationOf(person.position, type === 'marriage');
   if (occupation) facts.Occupation = { text: occupation };
   return facts;
 }
@@ -838,11 +838,15 @@ function recordFacts(person, record) {
 // baptism's "Pige", "Barnet", "Hustru", 1865's "Smedens Kone"), and without a leading
 // marital status ("Gift Murerarbeider")
 const KIN_WORD = '(?:søn|sønn|datter|dotter|barn|barnet|børn|pige|pigen|pigebarn|dreng|drengen|drengebarn|gut|guten|hustru|hustrue|hustr|kone|konen|ugift|ugifte|gift|enke|enkemand|enkemann)';
-function occupationOf(position) {
+// In a marriage, "Cop." (copulerede, married), as the book notes the couple's wedding,
+// also stands where the position would, and DA can read it "Corp."; not elsewhere,
+// where "Corp." is a corporal
+const MARRIED_WORD = /^(?:cop|copul|copulerede?|copuleret|copulert|copulirt|corp)$/u;
+function occupationOf(position, marriage = false) {
   const text = String(position || '').replace(/^(?:u?gift)\s+(?=\S)/iu, '').trim();
   const bare = text.replace(/[.,;:]+$/u, '').replace(/\s+/g, ' ').toLowerCase();
   const kin = new RegExp('^(?:hj\\. ?|(?:hjemmev\\.?|hjemmeværende|' + REFERRING + '|\\p{L}+s) )?' + KIN_WORD + '$', 'iu');
-  return !bare || kin.test(bare) ? '' : text;
+  return !bare || kin.test(bare) || (marriage && MARRIED_WORD.test(bare)) ? '' : text;
 }
 
 // The tree person's whole page when known (the FS person, a relative's family read

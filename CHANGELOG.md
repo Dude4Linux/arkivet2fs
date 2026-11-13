@@ -164,6 +164,9 @@ fixes, new features, changes that break what users have).
   the source all the same, which could make a second copy of one already in the
   SourceBox. It now searches once more, then goes by the SourceBox check made when
   the page opened; with no check to go by, it stops without creating anything.
+- In a marriage, "Cop." or "Corp." (copulerede, married), which the church book
+  writes and DA transcribes where the position would be, is no longer offered as
+  the groom's or bride's occupation.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
