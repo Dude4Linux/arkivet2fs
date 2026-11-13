@@ -287,6 +287,30 @@ test('recordSex(): from a patronymic or a family position', () => {
   assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'brudgommens far', roleEnglish: 'Groom\'s Father' }), 'Male');
 });
 
+// Bug: from 1865 on, a town census gives a wife her husband's surname and a daughter
+// her father's, so "Kjersti Halvorsen" (hm) was read as a man and not paired
+test('recordSex(): a -sen from 1865 on says nothing; the position and occupation tell', () => {
+  const y1801 = { recordDate: '1801' }, y1900 = { recordDate: '1900' };
+  assert.equal(w.recordSex({ name: 'Reidar Larsen' }, y1801), 'Male');
+  assert.equal(w.recordSex({ name: 'Reidar Larsen' }, y1900), '');
+  assert.equal(w.recordSex({ name: 'Kjersti Halvorsen', role: 'hm', roleEnglish: 'Woman of the House' }, y1900), 'Female');
+  assert.equal(w.recordSex({ name: 'Lars Halvorsen', role: 'hf', roleEnglish: 'Man of the House' }, y1900), 'Male');
+  assert.equal(w.recordSex({ name: 'Eli Larsen', role: 'Ovennævntes Barn' }, { recordDate: '1865' }), '');
+  assert.equal(w.recordSex({ name: 'Asgjerd Olsen', role: '', roleEnglish: 'Resident', position: 'Husholderske' }, y1900), 'Female');
+  assert.equal(w.recordSex({ name: 'Dagrun Olsen', role: 'tj', roleEnglish: 'Servant', position: 'Telefonistinde' }, y1900), 'Female');
+  assert.equal(w.recordSex({ name: 'Per Olsen', role: 'tj', roleEnglish: 'Servant', position: 'Enkemand' }, y1801), 'Male');
+});
+
+test('suggestResidencePairs(): a wife with her husband\'s surname in 1900', () => {
+  const r = record('census-1900');
+  const kjersti = r.people.find((p) => p.name === 'Kjersti Larsdatter');
+  kjersti.name = 'Kjersti Halvorsen';
+  const people = w.recordPeople(r);
+  const fs = { ...LARS_1844, families: [{ ...LARS_1844.families[0], spouse: { ...LARS_1844.families[0].spouse, gender: 'Female' } }] };
+  const { pairs } = w.suggestResidencePairs(r, people, fs, {}, true);
+  assert.equal(pairs[people.find((p) => p.name === 'Kjersti Halvorsen').key], 'TEST-KJE');
+});
+
 test('defaultTags(): by record type and role', () => {
   assert.deepEqual(plain(w.defaultTags('birth_baptism', 'child')), ['Name', 'Gender', 'Birth', 'Christening']);
   assert.deepEqual(plain(w.defaultTags('birth_baptism', 'father')), ['Name']);

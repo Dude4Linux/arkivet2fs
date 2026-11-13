@@ -223,7 +223,7 @@ function childSex(person, record) {
     if (/^m/i.test(fields.gender || '')) return 'Male';
     if (/^(k|f)/i.test(fields.gender || '')) return 'Female';
   }
-  return person ? recordSex(person) : '';
+  return person ? recordSex(person, record) : '';
 }
 
 // --- A census residence ---------------------------------------------------------------
@@ -258,22 +258,30 @@ function givenNameFit(person, tree) {
   return first && given.split(/\s+/).some((g) => nameMatch(g, first) || nameNear(first, g)) ? 1 : 0;
 }
 
-// A resident's sex where the record tells it: a patronymic (Olsdatter, Halvorsen) or a
-// family position (hans Kone, deres Søn; the census codes d and s) → 'Male', 'Female' or ''
+// A resident's sex where the record tells it: a woman's patronymic (Olsdatter), the
+// family position (hans Kone, deres Søn; the census codes d, s, hm, hf), a woman's
+// occupation (Husholderske, Tjenestepige, Telefonistinde), else a man's patronymic
+// (Halvorsen) → 'Male', 'Female' or ''. A -sen says nothing from 1865 on: in the towns'
+// censuses a wife has her husband's surname and a daughter her father's (Kjersti
+// Halvorsen, hm), and a wrong sex keeps a resident from being paired at all.
 // (Whole words between letters, not \b, to which ø, å and æ aren't letters: "avdød"
 // would end in the code d)
-const FEMALE_ROLE = /(?<!\p{L})(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughter|wife|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|d)(?!\p{L})/iu;
-const MALE_ROLE = /(?<!\p{L})(søn|son|fader|far|father|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)(?!\p{L})/iu;
-function recordSex(person) {
+const FEMALE_ROLE = /(?<!\p{L})(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughter|wife|woman|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|husmoder|hm|d)(?!\p{L})/iu;
+const MALE_ROLE = /(?<!\p{L})(søn|son|fader|far|father|man|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|husfader|hf|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)(?!\p{L})/iu;
+const FEMALE_WORK = /(pige|inde|inne|erske|kone|enke|jomfru|madame|jordmor|budeie)(?!\p{L})/iu;
+const FAMILY_NAMES_FROM = 1865;
+function recordSex(person, record) {
   // a bride or groom (not their fathers: "Bride's Father")
   if (/^(brur|brud|bride)$/i.test(person.role || '') || /^bride$/i.test(person.roleEnglish || '')) return 'Female';
   if (/^(brudgom|brudgum|groom)$/i.test(person.role || '') || /^groom$/i.test(person.roleEnglish || '')) return 'Male';
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
   if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
-  if (/(sen|søn|son)(\s|$)/i.test(last) && !FEMALE_ROLE.test(person.role || '')) return 'Male';
   const role = foldRole((person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, ''));
   if (FEMALE_ROLE.test(role) && !MALE_ROLE.test(role)) return 'Female';
   if (MALE_ROLE.test(role) && !FEMALE_ROLE.test(role)) return 'Male';
+  if (FEMALE_WORK.test(foldRole(person.position || ''))) return 'Female';
+  const year = Number(((record && record.recordDate) || '').slice(0, 4)) || 0;
+  if (/(sen|søn|son)(\s|$)/i.test(last) && !(year >= FAMILY_NAMES_FROM)) return 'Male';
   return '';
 }
 
@@ -397,17 +405,27 @@ function relWord(rel, gender) {
   return REL_WORDS[rel];
 }
 
+// A -sen surname the resident shares with the paired resident of their household, from
+// 1865 on: the family's surname (the husband's on his wife, the father's on his
+// children), not the resident's own patronymic, so it doesn't clash with FS's
+function familySurname(candidate, from, year) {
+  if (!(year >= FAMILY_NAMES_FROM) || candidate.household !== from.household) return false;
+  const surnames = (p) => stripVariants(p.name).toLowerCase().split(/\s+/).slice(1);
+  const theirs = surnames(from);
+  return surnames(candidate).some((w) => isPatronymic(w) && theirs.includes(w));
+}
+
 // How well a resident fits as the tree relative of a paired resident → {score, why} or null
 function residentFit(record, people, from, fromTree, candidate, rel, tree) {
   const name = givenNameFit(candidate, tree);
   if (!name) return null;
   // The sex, where both tell it; a close given name needs it (Johanne isn't Johannes)
-  const sex = recordSex(candidate), fsSex = /^(male|female)$/i.test(tree.gender || '') ? tree.gender : '';
+  const sex = recordSex(candidate, record), fsSex = /^(male|female)$/i.test(tree.gender || '') ? tree.gender : '';
   if (sex && fsSex && sex.toLowerCase() !== fsSex.toLowerCase()) return null;
   if (name === 1 && !(sex && fsSex)) return null;
-  if (patronymicClash(candidate.name, tree.name)) return null;
-  const yc = birthYearOf(candidate, record), yt = treeYear(tree), yf = birthYearOf(from, record);
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
+  if (!familySurname(candidate, from, recordYear) && patronymicClash(candidate.name, tree.name)) return null;
+  const yc = birthYearOf(candidate, record), yt = treeYear(tree), yf = birthYearOf(from, record);
   let score = name === 2 ? 3 : 1;
   const why = [t('{relation} of {name} in FamilySearch', { relation: t(relWord(rel, tree.gender)), name: stripVariants(fromTree.name) }),
     name === 2 ? t('same given name') : t('close given name (FamilySearch: {name})', { name: tree.name })];
@@ -507,7 +525,7 @@ function suggestResidencePairs(record, people, fs, trees, trusted) {
   const fsSex = /^(male|female)$/i.test(fs.gender || '') ? fs.gender : '';
   const fsNames = [fs.name, fs.father ? givenOf(fs.name) + ' ' + patronymicOf(fs.father.name, fsSex) : ''].filter(Boolean);
   const contradicts = (p) => {
-    const y = birthYearOf(p, record), sex = recordSex(p);
+    const y = birthYearOf(p, record), sex = recordSex(p, record);
     if (year && y && Math.abs(y - year) > 3) return t('b. {year}, here b. about {here}', { year, here: y });
     if (sex && fsSex && sex.toLowerCase() !== fsSex.toLowerCase()) return t('{fs}, here {here}', { fs: t(fsSex).toLowerCase(), here: t(sex).toLowerCase() });
     if (fsNames.some((n) => patronymicClash(p.name, n))) return t('another patronymic');
@@ -562,7 +580,7 @@ function hintOthers(record, people, paired, why, known, pairs) {
       spouse: (tree.families || []).map((f) => f.spouse).filter(Boolean) };
     for (const rel of ['father', 'mother', 'spouse']) {
       const sexWanted = rel === 'father' ? 'Male' : rel === 'mother' ? 'Female' : '';
-      const here = rels[rel].filter((p) => !paired.has(p) && !why[p.key] && (!sexWanted || recordSex(p) === sexWanted));
+      const here = rels[rel].filter((p) => !paired.has(p) && !why[p.key] && (!sexWanted || recordSex(p, record) === sexWanted));
       if (here.length !== 1 || fsOf[rel].length !== 1) continue;
       const fsRel = fsOf[rel][0], p = here[0];
       const y = birthYearOf(p, record), fy = treeYear(fsRel);
@@ -2928,7 +2946,7 @@ function rowSex(r) {
   const tree = fullTree(r.pid()) || treePool(state.fs, state.trees).find((o) => o.pid === r.pid());
   if (tree && /^(male|female)$/i.test(tree.gender || '')) return tree.gender.charAt(0).toUpperCase() + tree.gender.slice(1).toLowerCase();
   const kind = roleKind(r.person);
-  return kind === 'father' ? 'Male' : kind === 'mother' ? 'Female' : recordSex(r.person);
+  return kind === 'father' ? 'Male' : kind === 'mother' ? 'Female' : recordSex(r.person, state.record);
 }
 
 // The relationship: child (a father and a mother, each any paired person or none),

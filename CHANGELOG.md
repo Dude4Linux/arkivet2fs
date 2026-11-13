@@ -132,6 +132,11 @@ fixes, new features, changes that break what users have).
   Giermundsdatter has the same father as Jermundsen.
 - F and v are now one letter where old spellings mix them: Leiv and Lev in a record
   match Leif, Rolv matches Rolf and Halvdan Halfdan.
+- In the censuses from 1865 on, a wife often has her husband's surname (Kjersti
+  Halvorsen): the linker took her for a man by the -sen and didn't pair her with
+  the wife in the tree, and a daughter-in-law under the family's -sen was left out
+  the same way. A -sen now tells a man only in older records; the position
+  (Husmoder, Kone, Tjenestepige, ...) tells a woman.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
