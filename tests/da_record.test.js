@@ -51,6 +51,21 @@ test('a page across a spread: "pp. 260–261", not "p. 260, 261" (bug: read as t
   assert.match(withPage('24b'), /, p\. 24b$/);
 });
 
+test('a header date DA wrote wrong ("1846-2308") is only its year', () => {
+  const file = 'da/baptism-1846.html';
+  const read = (date) => {
+    const doc = fixtureDoc(w, file);
+    doc.querySelector('div.parent-post > h4 a').firstChild.textContent = date;
+    return w.extractRecord(doc, fixtureUrl(file));
+  };
+  const r = read('1846-2308');
+  assert.equal(r.recordDate, '1846');
+  assert.match(r.citation, /, baptism of Lars, 1846; database/);
+  // a range of years stays
+  assert.equal(read('1846-1848').recordDate, '1846-1848');
+  assert.equal(read('1846-08').recordDate, '1846-08');
+});
+
 test('a burial: split date of death merged, age in years, the position translated', () => {
   const r = record('burial-1854');
   assert.deepEqual(r.recordTypeInfo, { prefix: 'pg', type: 'death_burial' });
