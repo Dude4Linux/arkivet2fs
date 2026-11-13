@@ -828,8 +828,21 @@ function recordFacts(person, record) {
   } else if (person.residence) {
     facts.Residence = { text: joined(recorded && recorded.year, person.residence), year: recorded && recorded.year };
   }
-  if (person.position) facts.Occupation = { text: person.position };
+  const occupation = occupationOf(person.position);
+  if (occupation) facts.Occupation = { text: occupation };
   return facts;
+}
+
+// The occupation a position gives: none for a family word or a marital status alone,
+// which censuses and church books write in its place (1900's "Søn", "Datter", a
+// baptism's "Pige", "Barnet", "Hustru", 1865's "Smedens Kone"), and without a leading
+// marital status ("Gift Murerarbeider")
+const KIN_WORD = '(?:søn|sønn|datter|dotter|barn|barnet|børn|pige|pigen|pigebarn|dreng|drengen|drengebarn|gut|guten|hustru|hustrue|hustr|kone|konen|ugift|ugifte|gift|enke|enkemand|enkemann)';
+function occupationOf(position) {
+  const text = String(position || '').replace(/^(?:u?gift)\s+(?=\S)/iu, '').trim();
+  const bare = text.replace(/[.,;:]+$/u, '').replace(/\s+/g, ' ').toLowerCase();
+  const kin = new RegExp('^(?:hj\\. ?|(?:hjemmev\\.?|hjemmeværende|' + REFERRING + '|\\p{L}+s) )?' + KIN_WORD + '$', 'iu');
+  return !bare || kin.test(bare) ? '' : text;
 }
 
 // The tree person's whole page when known (the FS person, a relative's family read

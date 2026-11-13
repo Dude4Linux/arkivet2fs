@@ -141,6 +141,10 @@ fixes, new features, changes that break what users have).
   Kone", "Disses Barn", "Ds's Søn", "Den Foregaaendes Hustru". These are now read
   as the head's wife and children, for the search's record check and for pairing
   the household in the linker.
+- The linker no longer offers "Søn", "Datter", "Hustru", "Barnet" or "Pige" as an
+  occupation to add: censuses and church books write the family word or a marital
+  status where the occupation goes. "Gift Murerarbeider" is offered as
+  "Murerarbeider".
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.

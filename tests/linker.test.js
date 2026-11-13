@@ -812,6 +812,23 @@ test('recordFacts(): a burial\'s death, age and residence; a census age gives a 
   assert.equal(facts.Occupation, 'Tjener');
 });
 
+test('recordFacts(): a family word or marital status in the occupation is no occupation', () => {
+  // 1900's children have "Søn" and "Datter" where the census asks for the occupation
+  const r = record('census-1900');
+  const person = (name) => w.recordPeople(r).find((p) => p.name === name);
+  assert.equal(w.recordFacts(person('Reidar Larsen'), r).Occupation, undefined);
+  assert.equal(w.recordFacts(person('Asgjerd Larsdatter'), r).Occupation, undefined);
+  assert.equal(w.recordFacts(person('Kjersti Larsdatter'), r).Occupation.text, 'Husmandskone');
+  const occupation = (position) => w.occupationOf(position);
+  for (const kin of ['Hustru', 'Hustrue', 'Hustr.', 'Barnet', 'Pige', 'Ugift', 'Hj. Søn', 'Hjemmeværende Datter', 'Ovennævntes Kone', 'Smedens Søn']) {
+    assert.equal(occupation(kin), '', kin);
+  }
+  // a leading marital status isn't part of it
+  assert.equal(occupation('Gift Murerarbeider'), 'Murerarbeider');
+  assert.equal(occupation('Ugift Tjenestepige'), 'Tjenestepige');
+  for (const work of ['Husmandskone', 'Tjenestepige', 'Skipperenke', 'Husmoder', 'Opholdes af sønnen']) assert.equal(occupation(work), work);
+});
+
 test('factsTable(): FS\'s facts beside the record\'s, the agreements and differences marked', () => {
   const { win, state } = checkedPage();
   state.fs = { ...LARS_1846, christening: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
