@@ -126,6 +126,14 @@ test('nameClose(): Torbiørn for Torbjørn, Tollev for Tollef: near spellings', 
   assert.equal(w.nameClose('Helga', 'Helge'), false);
 });
 
+test('nameNear(): Hans for Johannes, its short form, either way; not Johanne', () => {
+  assert.equal(w.nameNear('Hans', 'Johannes'), true);
+  assert.equal(w.nameNear('Johannes', 'Hans'), true);
+  assert.equal(w.nameClose('Johannes', 'Hans'), true, 'close, not a match');
+  assert.equal(w.nameMatch('Johannes', 'Hans'), false);
+  assert.equal(w.nameNear('Hans', 'Johanne'), false);
+});
+
 test('mergeHits() keeps a record once, with every search that found it', () => {
   const merged = new Map();
   const { hits } = w.parseResults(fixture('da/search-baptism.html'));

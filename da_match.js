@@ -96,10 +96,13 @@ function jaroWinkler(x, y) {
 // Two spellings close enough to be one name, where nameMatch() can't tell (Ingebrigt,
 // Ingebret; Torbjørn, Torbiørn; Gulbrand, Gudbrand; Tollef, Tollev): Jaro-Winkler
 // 0.92 or more, both of at least 4 letters, ending in the same letter or both in a
-// consonant (Kari and Karin, Helge and Helga, Berte and Bertel are other names). Only
-// ever a close name (≈), never a match, and never a reason against a record.
+// consonant (Kari and Karin, Helge and Helga, Berte and Bertel are other names); and
+// Hans for Johannes, the short form a church book could write in full (SHORT_FORMS).
+// Only ever a close name (≈), never a match, and never a reason against a record.
+const SHORT_FORMS = [['hans', 'johannes']];
 function nameNear(x, y) {
   const a = fold(x).replace(/[^\p{L}]/gu, ''), b = fold(y).replace(/[^\p{L}]/gu, '');
+  if (SHORT_FORMS.some((pair) => pair.includes(a) && pair.includes(b) && a !== b)) return true;
   if (a.length < 4 || b.length < 4) return false;
   const vowel = (c) => 'aeiouyæøåäöüé'.includes(c);
   const endA = a[a.length - 1], endB = b[b.length - 1];
