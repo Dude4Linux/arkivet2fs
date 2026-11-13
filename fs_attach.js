@@ -66,7 +66,8 @@ if (!window.__arkivet2fsAttach) {
       if (block) throw blockedError(block);
       await sleep(150);
     }
-    throw new Error('FamilySearch did not show ' + what + ' in time.');
+    // `timeout`: FS was slow (a tab not drawn, a busy page); linker.js may try again
+    throw Object.assign(new Error('FamilySearch did not show ' + what + ' in time.'), { timeout: true });
   }
   const waitGone = (find, what, timeoutMs = 20000) => waitFor(() => !find(), what, timeoutMs);
 
@@ -764,8 +765,7 @@ if (!window.__arkivet2fsAttach) {
 
   // The form of a fact, empty for an addition, FS's for an edit
   async function openFactForm(addition) {
-    // FS takes its time closing a dialog while its window isn't drawn
-    await waitGone(conclusionDialog, 'the last form to close', 20000);
+    await noFactDialog();
     const { type, action } = addition;
     let opener;
     if (action === 'name') {
@@ -828,6 +828,19 @@ if (!window.__arkivet2fsAttach) {
     return fields;
   }
 
+  // No fact form or view open before the next is opened: FS takes its time closing a
+  // dialog while its window isn't drawn, and one left open (a step that failed) is
+  // closed, so it doesn't hold up every fact after it
+  async function noFactDialog() {
+    try {
+      await waitGone(conclusionDialog, 'the last form to close', 10000);
+    } catch (error) {
+      if (error.blocked) throw error;
+      await closeFactDialog();
+      await waitGone(conclusionDialog, 'the last form to close', 10000);
+    }
+  }
+
   // Out of the form, and the fact's view (after an edit) closed
   async function closeFactDialog() {
     const d = conclusionDialog();
@@ -852,20 +865,27 @@ if (!window.__arkivet2fsAttach) {
     // the one to fill in: FS keeps one of each and offers no Add for it
     if (addition.action === 'add' && VITALS.includes(type) && bareFact(type)) addition = { ...addition, action: 'edit' };
     const before = new Set(displays(type).map((e) => clean(e.textContent)));
-    const form = await openFactForm(addition);
-    let fields;
+    // `unsaved`: failed before Save was clicked, so trying again can't add it twice
+    const unsaved = (error) => Object.assign(error, { unsaved: true });
+    let fields, submit;
     try {
-      fields = await fillFactForm(form, addition, reason);
-      await sleep(300);
+      const form = await openFactForm(addition);
+      try {
+        fields = await fillFactForm(form, addition, reason);
+        await sleep(300);
+      } catch (error) {
+        await closeFactDialog();
+        throw error;
+      }
+      if (!save) {
+        await closeFactDialog();
+        return { ok: true, fields };
+      }
+      submit = await waitFor(() => byTestId('conclusionDetailOverlay:submit:button', conclusionDialog() || document), 'the Save button')
+        .catch(async (error) => { await closeFactDialog(); throw error; });
     } catch (error) {
-      await closeFactDialog();
-      throw error;
+      throw unsaved(error);
     }
-    if (!save) {
-      await closeFactDialog();
-      return { ok: true, fields };
-    }
-    const submit = await waitFor(() => byTestId('conclusionDetailOverlay:submit:button', conclusionDialog() || document), 'the Save button');
     // FS's message in the form, if it shows one
     const problem = () => {
       const d = conclusionDialog();
@@ -906,7 +926,7 @@ if (!window.__arkivet2fsAttach) {
   // (the date, a description) among the facts of its type, else the last one.
   async function tagFact({ pid, type, match, sourceId, title }) {
     onPersonPage(pid);
-    await waitGone(conclusionDialog, 'the last form to close', 20000);
+    await noFactDialog();
     const all = await waitFor(() => { const d = displays(type); return d.length ? d : null; }, 'the ' + factName(type));
     const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
     // An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann Olsen too
@@ -924,6 +944,19 @@ if (!window.__arkivet2fsAttach) {
     const pencil = byTestId('pencil-edit-button', fact);
     if (!pencil) throw new Error('FamilySearch shows no way to open the ' + factName(type) + '.');
     pencil.click();
+    try {
+      return await tagFromView(sourceId, title);
+    } catch (error) {
+      // Nothing left open (the source list, the view), which would hold up the next fact
+      const closeList = byTestId('restore-source-cancel-button');
+      if (closeList) closeList.click();
+      await closeFactDialog();
+      throw error;
+    }
+  }
+
+  // The rest of tagFact, in the fact's view just opened
+  async function tagFromView(sourceId, title) {
     const view = await waitFor(conclusionDialog, 'the fact');
     // Tagged already (FS's tag dialog after attaching may have done it): left as it is
     await sleep(500);
@@ -934,12 +967,7 @@ if (!window.__arkivet2fsAttach) {
     const tagButton = await waitFor(() => [...view.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
     tagButton.click();
     const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
-    if (!item) {
-      const closeList = byTestId('restore-source-cancel-button');
-      if (closeList) closeList.click();
-      await closeFactDialog();
-      throw new Error('The source is not among the person\'s sources on FamilySearch, so it could not be tagged.');
-    }
+    if (!item) throw new Error('The source is not among the person\'s sources on FamilySearch, so it could not be tagged.');
     item.click();
     (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
     // FS may ask for a reason; then saved with it
@@ -961,7 +989,8 @@ if (!window.__arkivet2fsAttach) {
     const step = request && typeof request.linker === 'string' && Object.hasOwn(STEPS, request.linker) && STEPS[request.linker];
     if (!step) return false;
     step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error),
-      ...(error && error.blocked ? { blocked: true } : {}) }));
+      ...(error && error.blocked ? { blocked: true } : {}), ...(error && error.timeout ? { timeout: true } : {}),
+      ...(error && error.unsaved ? { unsaved: true } : {}) }));
     return true;  // answers later
   });
 }

@@ -915,9 +915,55 @@ test('addFact(): a form that doesn\'t open is closed again, so the next fact can
   const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846' } };
   const answer = await step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
   assert.equal(answer.ok, false);
+  // FS was slow, and nothing was saved: linker.js may try it again
+  assert.equal(answer.timeout, true);
+  assert.equal(answer.unsaved, true);
   assert.deepEqual(log, ['close BIRTH']);
   const next = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
   assert.equal(next.ok, true, next.error);
+});
+
+test('addFact(): a form FS doesn\'t close after Save is not answered as unsaved: trying again could add it twice', async () => {
+  const { step } = factPage({ stuck: true });
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.unsaved, undefined);
+});
+
+test('tagFact(): a view without Tag Sources is closed, and the facts after it are added and tagged', async () => {
+  const { step, tagged, w } = factPage();
+  const d = w.document;
+  // The birth's view comes without Tag Sources (FS slow, its tab not drawn)
+  const pencil = d.querySelector('[data-testid="conclusionDisplay:BIRTH"] [data-testid="pencil-edit-button"]');
+  const bare = pencil.cloneNode(true);
+  pencil.replaceWith(bare);
+  bare.addEventListener('click', () => {
+    const box = d.createElement('div');
+    box.innerHTML = '<div data-testid="conclusion-dialog"><button aria-label="Close">×</button></div>';
+    d.body.append(box);
+    box.querySelector('[aria-label="Close"]').addEventListener('click', () => box.remove());
+  });
+  const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'BIRTH', match: ['1846'], sourceId: 'TEST-S01' });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.timeout, true);
+  assert.equal(d.querySelector('[data-testid="conclusion-dialog"]'), null);
+  const added = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal(added.ok, true, added.error);
+  assert.equal((await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', match: ['1846'], sourceId: 'TEST-S01' })).ok, true);
+  assert.deepEqual(plain(tagged.map((t) => t.type)), ['CHRISTENING']);
+});
+
+test('addFact(), tagFact(): a fact\'s view left open is closed first, not waited for until the step fails', async () => {
+  const { step, tagged, w } = factPage();
+  const d = w.document;
+  d.querySelector('[data-testid="conclusionDisplay:BIRTH"] [data-testid="pencil-edit-button"]').click();
+  assert.ok(d.querySelector('[data-testid="conclusion-dialog"]'));
+  const added = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: true });
+  assert.equal(added.ok, true, added.error);
+  d.querySelector('[data-testid="conclusionDisplay:BIRTH"] [data-testid="pencil-edit-button"]').click();
+  const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', match: ['1846'], sourceId: 'TEST-S01' });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(tagged.map((t) => t.type)), ['CHRISTENING']);
 });
 
 test('addFact(): the place is picked from FS\'s list for the typed text, not the list still shown for the old value', async () => {
