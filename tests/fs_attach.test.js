@@ -123,6 +123,18 @@ test('findSource(): Home\'s rows coming in after the search was clicked aren\'t 
   assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01']);
 });
 
+test('findSource(): Home\'s rows aren\'t taken for the hits when one has the title and the list doesn\'t empty in time', async () => {
+  const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox',
+    '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button><div id="list"></div>');
+  const list = page.w.document.getElementById('list');
+  list.innerHTML = row('TEST-S01', TITLE) + row('TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"');
+  page.w.document.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
+    setTimeout(() => { list.innerHTML = row('TEST-S01', TITLE) + row('TEST-S03', TITLE); }, 3300);
+  });
+  const answer = await page.step('findSource', { title: TITLE });
+  assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01', 'TEST-S03']);  // the copy in another folder too
+});
+
 test('findSource(): none when the search finds nothing', async () => {
   const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']], [['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']]);
   assert.deepEqual(plain((await step('findSource', { title: TITLE })).sources), []);

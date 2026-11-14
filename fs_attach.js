@@ -110,9 +110,11 @@ if (!window.__arkivet2fsAttach) {
 
   // The SourceBox's search (all folders; Home shows only its newest sources): search
   // for the text and give the rows it shows. The list empties while it loads, then
-  // shows the hits or "No sources found." It's done only when a row has the text (FS
-  // shows titles containing it) or none is found: Home's rows, also ones still coming
-  // in after the click, aren't the hits.
+  // shows the hits or "No sources found." It's done only when every row has the text
+  // (FS shows titles containing it) or none is found: Home's rows, also ones still
+  // coming in after the click, aren't the hits, even when one of them has the text
+  // (a list that didn't empty in time). Should FS show a hit without the text, rows of
+  // which one has it are taken after all, once the wait is over.
   async function searchSourceBox(text) {
     const field = await waitFor(() => {
       const f = byTestId('source-box-filter-field');
@@ -123,16 +125,24 @@ if (!window.__arkivet2fsAttach) {
     (await waitFor(() => byTestId('source-box-search-button'), 'the SourceBox search')).click();
     const wanted = clean(text).toLowerCase();
     const none = () => /No sources found/i.test(document.body.textContent);
-    const done = () => {
+    const has = (r) => r.title.toLowerCase().includes(wanted);
+    const done = (all = true) => {
       const rows = sourceRows();
-      return rows.length ? rows.some((r) => r.title.toLowerCase().includes(wanted)) : none();
+      return rows.length ? (all ? rows.every(has) : rows.some(has)) : none();
+    };
+    const hits = async (ms) => {
+      try {
+        await waitFor(done, 'the SourceBox search', ms);
+      } catch (e) {
+        if (!done(false)) throw e;
+      }
     };
     // the list emptying to load, when it does so in time
     try { await waitFor(() => !sourceRows().length, 'the SourceBox search', 3000); } catch (e) { /* already loaded */ }
-    await waitFor(done, 'the SourceBox search', 15000);
+    await hits(15000);
     // Still so a moment later: the list didn't only empty to load
     await sleep(700);
-    if (!done()) await waitFor(done, 'the SourceBox search', 10000);
+    if (!done()) await hits(10000);
     return sourceRows();
   }
 
