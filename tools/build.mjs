@@ -31,7 +31,7 @@ const SHIP = [
   /^(LICENSE|README\.md)$/
 ];
 const EXCLUDE = [
-  /^(tests|tools|platform|keys|docs|\.github)\//,
+  /^(tests|tools|platform|keys|docs|relay|\.github)\//,
   /^\.gitignore$/,
   /^package(-lock)?\.json$/,
   /^icons\/(banner\.|icon\d+\.svg$)/, // the SVGs the PNGs are drawn from
@@ -195,6 +195,14 @@ export function checkTag(tag) {
   if (type !== 'tag') throw new Error(`${tag} isn't an annotated tag`);
   const v = version(`${tag}^{commit}`);
   if ('v' + v !== tag) throw new Error(`${tag} doesn't match manifest.json's version ${v}`);
+  const left = placeholders(git(['show', `${tag}^{commit}:report.js`]).toString('utf8'));
+  if (left.length) throw new Error(`${tag}'s report.js still has a placeholder: ${left.join(', ')}`);
+}
+
+// What report.js has to be filled in before a release: the report relay's address
+// (relay/README.md) until the Worker is set up
+export function placeholders(text) {
+  return [...new Set(text.match(/\bREPLACE-[A-Z-]+/g) || [])];
 }
 
 // {name, data, version, files} of the chromium package of a ref

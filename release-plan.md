@@ -2,7 +2,7 @@
 
 Status: **Phases 0–6 done**; v1.6.0 (13 November 2026) is the latest signed release.
 The steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
-folder loaded unpacked to store listings in four browsers, and then to testers:
+folder loaded unpacked to store listings in three stores, and then to testers:
 
 1. **1.4.1**: clean up and refine the Chrome version (name matching, the host
    permissions).
@@ -10,8 +10,8 @@ folder loaded unpacked to store listings in four browsers, and then to testers:
    names, events, a differing date or place), with the user's approval of each.
 3. **1.6.0**: one package for Chromium and Firefox; tested in Firefox, LibreWolf and
    Opera.
-4. **Store listings**: Chrome Web Store, Edge Add-ons, Opera add-ons, Firefox AMO, all
-   from the same zip.
+4. **Store listings**: Chrome Web Store, Opera add-ons and Firefox AMO, all from the
+   same zip (Edge isn't supported).
 5. **A call for testers** on a Norwegian genealogy Facebook group, with the store
    links; perhaps a RootsTech 2027 presentation later.
 
@@ -36,11 +36,16 @@ that works.
   The service worker (Firefox: the event page) loads its helpers with
   `importScripts()`.
 - Problems are reported with the pages' **Report on GitHub** (a public issue the user
-  pastes the report into); a relay to a private queue is undecided (1.6.0 or 1.7.0).
+  pastes the report into). 1.7.0 replaces it with **Send report**, to a private queue
+  (`relay/`: a Cloudflare Worker filing issues in a private repository through a
+  GitHub App), and declares Firefox's data collection.
 
 ## To do
 
-Phase 7 (store listings), then Phase 8 (testers).
+1.7.0: the report relay (in the code; the Worker, the App and the reports repository
+are set up by the maintainer, relay/README.md, and `relayUrl()` filled in before the
+tag). Then Phase 7 (store listings: Chrome Web Store, Opera add-ons, Firefox AMO),
+then Phase 8 (testers).
 
 ## What an extension can and can't do about updates
 
@@ -97,7 +102,7 @@ package.json              dev-only tools (jsdom, web-ext); nothing ships from np
 
 | File | For |
 |---|---|
-| `arkivet2fs-X.Y.Z-chromium.zip` | every browser: unpacked in Chromium browsers, and the upload to all four stores (the name stays, since copies from 1.2.0 on look for it) |
+| `arkivet2fs-X.Y.Z-chromium.zip` | every browser: unpacked in Chromium browsers, and the upload to all three stores (the name stays, since copies from 1.2.0 on look for it) |
 | `*.sig` next to each package | a detached signature of that file |
 | `SHA256SUMS`, `SHA256SUMS.sig` | checksums of everything, signed |
 
@@ -456,21 +461,21 @@ new browser.
 
 ### Phase 7: Store listings
 
-Same zip, four stores; each store signs and updates its own copy, and the update
+Same zip, three stores; each store signs and updates its own copy, and the update
 checker stays quiet there (it runs only in an unpacked copy). The self-hosted Firefox
 route (`web-ext sign --channel=unlisted`, `update_url`, `updates.json`) is dropped:
 AMO's listed channel updates Firefox and LibreWolf users by itself.
 
 - **Your accounts:** you create them and submit the listings yourself:
   - Chrome Web Store: $5 once (decided). Brave and Opera users can install from it too.
-  - Microsoft Edge Add-ons: free.
   - Opera add-ons (addons.opera.com): free; the review can take weeks.
   - Firefox AMO, listed: free.
 - **What every listing needs** (prepared in the repo, `store/`, excluded from the
   package):
   - **A privacy policy:** `PRIVACY.md` from SECURITY.md's "What the extension does with
-    your data" (the hosts, nothing sent to the developer, what is kept and for how
-    long), linked by its GitHub address.
+    your data" (the hosts, a problem report sent only by the user's Send, what is kept
+    and for how long), linked by its GitHub address, with "not affiliated with
+    FamilySearch or the National Archives of Norway".
   - **Permission justifications**, one line each: `activeTab` and `scripting` (read the
     open DA record; the FS steps), `storage` (drafts, the persons searched), `alarms`
     and `notifications` (errors; the update check of an unpacked copy), each host (DA,
@@ -481,10 +486,12 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
     made-up persons only. search.html and linker.html can be run on the test fixtures
     (sanitized DA pages, `TEST-` persons) and captured with headless Chrome, as the
     icons are; no real tree, no real FS page with other users' work.
+  - **Firefox's data collection** (1.7.0): `websiteContent` required, the report's
+    `technicalAndInteraction` and `personallyIdentifyingInfo` optional, asked for on
+    Send.
   - **Descriptions** in English and Norwegian (`_locales` has the short ones); the
     store icon (icon128.png).
-- **Later:** uploads from release.yml through the stores' APIs (Chrome's, Edge's and
-  AMO's take a zip and keys as secrets); until then by hand, after `tools/release`.
+- **Later:** uploads from release.yml through the stores' APIs (Chrome's and AMO's take a zip and keys as secrets); until then by hand, after `tools/release`.
 - **Test:** install from each store once its listing is public; the update from one
   store version to the next.
 

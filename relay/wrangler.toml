@@ -1,0 +1,22 @@
+# The report relay's Cloudflare Worker (relay/README.md). Deploy from this folder:
+#   npx wrangler@4 deploy
+name = "arkivet2fs-relay"
+main = "worker.mjs"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+REPO_OWNER = "Dude4Linux"
+REPO_NAME = "arkivet2fs-reports"
+# APP_CLIENT_ID, INSTALLATION_ID and PRIVATE_KEY are secrets (relay/README.md), so this
+# file needs no edit and the public repository names no App
+
+# Three reports a minute from one address. Cloudflare counts per location and
+# roughly: it keeps a loop from filling the queue, not a determined sender out.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60

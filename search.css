@@ -92,7 +92,7 @@ button, input, select { font: inherit; }
 .topbar .version-link.new { color: var(--link); font-weight: 600; }
 .topbar .fs-link:not([hidden]) ~ .version-link { margin-left: 16px; }
 .topbar .version-link ~ select.language { margin-left: 12px; }
-/* "Copy report" and "Report on GitHub" (report.js), before the version */
+/* "Send report" and "Copy report" (report.js), before the version */
 .topbar .report-button {
   margin-left: auto;
   padding: 2px 8px;
@@ -107,16 +107,49 @@ button, input, select { font: inherit; }
 .topbar .report-button:hover { border-color: var(--link); }
 .topbar .report-button.bad { color: var(--bad); }
 .topbar .fs-link:not([hidden]) ~ .report-button { margin-left: 16px; }
-.topbar .issue-link {
-  margin-left: 12px;
-  font-size: 13px;
-  color: var(--link);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.topbar .issue-link:hover { text-decoration: underline; }
-.topbar .issue-link.bad { color: var(--bad); }
+.topbar .report-button + .report-button { margin-left: 8px; }
 .topbar .report-button ~ .version-link { margin-left: 12px; }
+/* The "Send report" panel, below the header */
+.report-panel {
+  margin: 0 0 16px;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.report-panel h2 { margin: 0 0 6px; font-size: 18px; }
+.report-panel .report-about { margin: 0 0 10px; max-width: 70em; color: var(--muted); font-size: 14px; }
+.report-panel .report-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 12em;
+  padding: 6px 8px;
+  font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+  resize: vertical;
+}
+.report-panel .report-contact { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 10px 0; font-size: 14px; }
+.report-panel .report-contact input {
+  flex: 0 1 22em;
+  min-width: 0;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+}
+.report-panel .report-actions { display: flex; gap: 8px; }
+.report-panel .report-status { margin: 8px 0 0; font-size: 14px; }
+.report-panel .report-status:empty { display: none; }
+.report-panel .report-status.ok { color: var(--ok); }
+.report-panel .report-status.bad { color: var(--bad); }
+.report-panel .issue-link { color: var(--link); white-space: nowrap; }
 
 .layout {
   display: grid;

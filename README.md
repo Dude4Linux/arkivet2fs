@@ -474,13 +474,15 @@ Developer notes are in `CLAUDE.md`. After changing the code, reload the extensio
 
 ## Problems and contributing
 
-Report bugs and ideas in the [issues](https://github.com/Dude4Linux/arkivet2fs/issues):
-the DA record or search (its address or permanent ID), what you expected, and what
-the extension did. **Report on GitHub**, at the top of the search page and the
-linker, puts all of that on the clipboard, with the version and browser and a place
-to say what went wrong, and opens a new issue to paste it into (**Copy report** only
-copies it). The report also names the tree persons you paired, with their IDs.
-Issues are public: read the report before you submit it, and take out living people.
+**Send report**, at the top of the search page and the linker, sends a problem report
+to the developer: the version and browser, the DA record or search, and what the
+extension read, showed and did. It opens a panel with the report to read and edit
+first; say what went wrong under "What happened", and take out living people (the
+report names the tree persons you paired, with their IDs). Nothing is sent before you
+click **Send**, and the report goes to a private queue that only the developer reads.
+Ideas, and reports you'd rather make in public, go in the
+[issues](https://github.com/Dude4Linux/arkivet2fs/issues): **Copy report** puts the
+report on the clipboard to paste there. Issues are public.
 Please don't paste FamilySearch pages. Security problems go privately, as `SECURITY.md` says.
 
 Pull requests are welcome. Before you open one:

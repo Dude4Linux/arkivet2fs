@@ -3,7 +3,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, value, fixtureDoc, fixtureUrl, SHARED } = require('./harness.js');
+const { load, value, plain, fixtureDoc, fixtureUrl, SHARED, ROOT } = require('./harness.js');
 
 const w = load(SHARED);
 
@@ -70,22 +70,119 @@ test('reportButton(): a clipboard that refuses is said on the button', async () 
   assert.equal(button.textContent, 'Could not copy the report');
 });
 
-test('reportButton(): "Report on GitHub" copies the report, then opens the new issue, with nothing of the report in its address', async () => {
+// The linker with a fake relay; `answer` what the relay gives a POST
+function reportPage({ answer = { ok: true, number: 12 }, status = 200, url = 'https://arkivet2fs.test/linker.html', chrome } = {}) {
+  const sent = [];
   const opened = [];
-  const page = load(SHARED, { html: 'linker.html', chrome: { tabs: { create: (o) => { opened.push(o.url); } } } });
-  let copied = null;
-  Object.defineProperty(page.navigator, 'clipboard', { value: { writeText: async (text) => { copied = text; } } });
+  const fetch = async (address, init) => {
+    sent.push({ address, init, body: JSON.parse(init.body) });
+    if (answer instanceof Error) throw answer;
+    return { ok: status < 300, status, json: async () => answer };
+  };
+  const page = load(SHARED, { html: 'linker.html', url, fetch, chrome: chrome || { tabs: { create: (o) => { opened.push(o.url); } } } });
   const topbar = page.document.querySelector('.topbar');
-  page.reportButton(topbar, () => 'the report, Lars Halvorsen TEST-LAR');
-  const link = topbar.querySelector('a.issue-link');
-  assert.equal(link.textContent, 'Report on GitHub');
-  assert.equal(link.previousElementSibling.className, 'report-button');
+  page.reportButton(topbar, () => page.reportText('linker', [['Opened with', ['- pid: TEST-LAR']]], { userAgent: '' }));
+  const panel = () => page.document.querySelector('.report-panel');
+  const open = () => { topbar.querySelector('.send-report').click(); return panel(); };
+  const settle = () => new Promise((done) => setTimeout(done, 5));
+  return { page, topbar, sent, opened, panel, open, settle };
+}
+// The report with "What happened" filled in
+const told = (area) => { area.value = area.value.replace(/\(What did you do[^)]*\)/, 'The census paired the wrong Lars Halvorsen.'); };
+
+test('reportButton(): "Send report" before "Copy report"; the panel shows the report to edit and sends nothing yet', () => {
+  const p = reportPage();
+  const send = p.topbar.querySelector('.send-report');
+  assert.equal(send.textContent, 'Send report');
+  assert.equal(send.nextElementSibling.textContent, 'Copy report');
+  assert.equal(p.topbar.querySelector('a.issue-link'), null);
+  const panel = p.open();
+  assert.ok(panel.previousElementSibling.classList.contains('topbar'));
+  assert.match(panel.querySelector('.report-about').textContent, /private queue on GitHub; no one else sees it/);
+  assert.match(panel.querySelector('textarea').value, /^### arkivet2fs problem report\n[\s\S]*- pid: TEST-LAR/);
+  assert.equal(p.open(), panel);  // one panel
+  assert.equal(p.sent.length, 0);
+  [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+  assert.equal(p.panel(), null);
+});
+
+test('openReportPanel(): Send asks for "What happened" first, then posts the report as edited, with the contact', async () => {
+  const p = reportPage();
+  const panel = p.open();
+  const area = panel.querySelector('textarea');
+  const sendButton = panel.querySelector('button.primary');
+  sendButton.click();
+  await p.settle();
+  assert.equal(p.sent.length, 0);
+  assert.match(panel.querySelector('.report-status').textContent, /under "What happened" first/);
+  told(area);
+  panel.querySelector('input[type=email]').value = 'me@example.com';
+  sendButton.click();
+  await p.settle();
+  assert.equal(p.sent.length, 1);
+  const { address, init, body } = p.sent[0];
+  assert.equal(address, p.page.relayUrl());
+  assert.equal(init.method, 'POST');
+  assert.equal(init.credentials, 'omit');
+  assert.equal(body.page, 'linker');
+  assert.equal(body.contact, 'me@example.com');
+  assert.match(body.report, /The census paired the wrong Lars Halvorsen\./);
+  assert.ok(!body.report.includes(p.page.reportPrompt()));
+  assert.equal(panel.querySelector('.report-status').textContent, 'Sent, as report #12. Thank you!');
+  assert.ok(area.readOnly);
+  assert.ok(sendButton.disabled);
+});
+
+test('openReportPanel(): a relay that fails offers the GitHub issue, which copies the report as edited', async () => {
+  const p = reportPage({ answer: { ok: false, error: 'too many reports; try again in a minute' }, status: 429 });
+  let copied = null;
+  Object.defineProperty(p.page.navigator, 'clipboard', { value: { writeText: async (text) => { copied = text; } } });
+  const panel = p.open();
+  told(panel.querySelector('textarea'));
+  panel.querySelector('button.primary').click();
+  await p.settle();
+  const status = panel.querySelector('.report-status');
+  assert.match(status.textContent, /^Could not send the report: too many reports; try again in a minute\. Copy it and open an issue/);
+  assert.ok(!panel.querySelector('button.primary').disabled);  // can be tried again
+  const link = status.querySelector('a.issue-link');
   assert.equal(link.href, 'https://github.com/Dude4Linux/arkivet2fs/issues/new?template=problem-report.md');
   link.click();
-  await new Promise((done) => setTimeout(done, 5));
-  assert.equal(copied, 'the report, Lars Halvorsen TEST-LAR');
-  assert.deepEqual(opened, [link.href]);
-  assert.equal(link.textContent, 'Copied: paste it into the issue');
+  await p.settle();
+  assert.match(copied, /The census paired the wrong Lars Halvorsen/);
+  assert.deepEqual(p.opened, [link.href]);
+  // No connection at all
+  const off = reportPage({ answer: new Error('Failed to fetch') });
+  const offPanel = off.open();
+  told(offPanel.querySelector('textarea'));
+  offPanel.querySelector('button.primary').click();
+  await off.settle();
+  assert.match(offPanel.querySelector('.report-status').textContent, /Could not send the report: no connection\./);
+});
+
+test('openReportPanel(): in Firefox, Send asks for the data kinds first; refused, nothing is sent', async () => {
+  const requests = [];
+  let allow = false;
+  const chrome = { permissions: { request: (p) => { requests.push(p); return Promise.resolve(allow); } }, tabs: { create() {} } };
+  const p = reportPage({ url: 'moz-extension://0d1e2f3a-4b5c-6d7e-8f90-a1b2c3d4e5f6/linker.html', chrome });
+  const panel = p.open();
+  told(panel.querySelector('textarea'));
+  panel.querySelector('button.primary').click();
+  await p.settle();
+  assert.deepEqual(plain(requests), [{ data_collection: ['technicalAndInteraction'] }]);
+  assert.equal(p.sent.length, 0);
+  assert.match(panel.querySelector('.report-status').textContent, /didn't allow sending/);
+  allow = true;
+  panel.querySelector('input[type=email]').value = 'me@example.com';
+  panel.querySelector('button.primary').click();
+  await p.settle();
+  assert.deepEqual(plain(requests[1]), { data_collection: ['technicalAndInteraction', 'personallyIdentifyingInfo'] });
+  assert.equal(p.sent.length, 1);
+});
+
+test('the manifest declares what Firefox asks about: website content always, a report\'s kinds when sent', () => {
+  const manifest = JSON.parse(require('node:fs').readFileSync(require('node:path').join(ROOT, 'manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions,
+    { required: ['websiteContent'], optional: ['technicalAndInteraction', 'personallyIdentifyingInfo'] });
 });
 
 // Synthetic FS person (TEST-… PIDs), as in linker.test.js

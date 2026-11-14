@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_name__",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "__MSG_description__",
   "default_locale": "en",
   "permissions": [
@@ -77,7 +77,11 @@
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
-          "none"
+          "websiteContent"
+        ],
+        "optional": [
+          "technicalAndInteraction",
+          "personallyIdentifyingInfo"
         ]
       }
     }

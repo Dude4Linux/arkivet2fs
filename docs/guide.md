@@ -220,14 +220,22 @@ box at the top.
 
 ## 11. Report a problem
 
-At the top of the search page and the linker, **Report on GitHub** copies a report of
-the page (the version, the browser, the record, what the extension found and did) and
-opens a new issue on GitHub to paste it into. Say what you expected and what happened.
-**Copy report** only copies it, for an e-mail or a message.
+At the top of the search page and the linker, **Send report** opens a panel with a
+report of the page: the version, the browser, the record, what the extension found and
+did. Read it and edit it:
 
-Issues on GitHub are public. Read the report before you submit it: it names the tree
-persons you paired, with their FamilySearch IDs. Take out living people. Don't paste
-FamilySearch pages.
+- Under **What happened**, in place of the line in brackets, say what you did, what you
+  expected and what you saw.
+- Take out anything about living people. The report names the tree persons you
+  paired, with their FamilySearch IDs.
+- Add your e-mail address if you'd like an answer.
+
+Then click **Send**. The report goes to a private queue that only the developer reads;
+the panel gives its number. Firefox asks once whether the extension may send it.
+
+If it can't be sent, the panel offers to copy it and open an issue on GitHub instead.
+**Copy report** only copies it, for an e-mail, a message or a GitHub issue. Issues on
+GitHub are public. Don't paste FamilySearch pages.
 
 ## 12. Good habits
 

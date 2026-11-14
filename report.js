@@ -1,9 +1,11 @@
-// Problem reports: a page's "Copy report" button puts what the page read, shows and
-// did on the clipboard as text (Markdown, for a GitHub issue), with a heading naming
-// the version, browser and language and a place for the user to say what went wrong.
-// Nothing is sent from here: the user reads it and pastes it where they choose. The
-// report is in English but for what the page shows in the user's language (log lines,
-// hints). Function declarations only, as the other shared files.
+// Problem reports: a page's report is what it read, shows and did, as text (Markdown,
+// for a GitHub issue), with a heading naming the version, browser and language and a
+// place for the user to say what went wrong. The header's "Send report" opens a panel
+// with the report to read and edit, which sends it to the report relay (relay/, a
+// Cloudflare Worker filing it in the developer's private queue on GitHub) only when the
+// user clicks Send; "Copy report" puts it on the clipboard. The report is in English
+// but for what the page shows in the user's language (log lines, hints). Function
+// declarations only, as the other shared files.
 
 // "Chrome 142 on Linux" from the user agent. LibreWolf gives Firefox's; Brave gives
 // Chrome's and has navigator.brave.
@@ -41,7 +43,7 @@ function reportHeader(page, nav) {
     '- Language: ' + uiLanguage(),
     '- Date: ' + new Date().toISOString().slice(0, 10), '',
     '#### What happened', '',
-    '(What did you do, what did you expect, and what did you see instead?)', ''];
+    reportPrompt(), ''];
 }
 
 // A multi-line text as a fenced block, so Markdown keeps its lines
@@ -94,10 +96,20 @@ function copyReport(build, doc) {
   return copyText(text, doc);
 }
 
-// The new issue a report goes in: the template asks for the paste (.github/ISSUE_TEMPLATE).
-// Nothing of the report goes in the address.
+// The new issue a report goes in, when the relay can't take it: the template asks for
+// the paste (.github/ISSUE_TEMPLATE). Nothing of the report goes in the address.
 function issueUrl() {
   return 'https://github.com/' + defaultRepo() + '/issues/new?template=problem-report.md';
+}
+
+// The report relay (relay/README.md). tools/build.mjs won't build a release tag while
+// this is the placeholder.
+function relayUrl() {
+  return 'https://arkivet2fs-relay.REPLACE-SUBDOMAIN.workers.dev/report';
+}
+// How long a send may take
+function relayTimeoutMs() {
+  return 30000;
 }
 
 // A control's text for 3 s, then its own again
@@ -108,11 +120,169 @@ function flash(node, text, bad, label) {
   node.flashTimer = setTimeout(() => { node.textContent = label; node.classList.remove('bad'); }, 3000);
 }
 
-// The header's "Copy report" button and "Report on GitHub" link, before the version:
-// build() gives the report's text. The link copies the report too, then opens the new
-// issue in a tab of its own, for the user to paste it in.
+// The line the user is to replace with what happened (reportHeader())
+function reportPrompt() {
+  return '(What did you do, what did you expect, and what did you see instead?)';
+}
+
+// The page's name for the relay: linker.html is "linker"
+function reportPage(doc) {
+  return String(doc.defaultView.location.pathname).replace(/^.*\//, '').replace(/\.html$/, '') || 'page';
+}
+
+// Firefox asks the user for the kinds of data an extension sends (the manifest's
+// data_collection_permissions): a report is technical data, and with a contact address
+// also identifying information. Asked straight from the click, as Firefox wants; other
+// browsers have no such permission. Resolves to true when allowed.
+function askToSendReport(doc, contact) {
+  if (doc.defaultView.location.protocol !== 'moz-extension:') return Promise.resolve(true);
+  const kinds = ['technicalAndInteraction'].concat(contact ? ['personallyIdentifyingInfo'] : []);
+  try {
+    return Promise.resolve(chrome.permissions.request({ data_collection: kinds })).catch(() => false);
+  } catch (e) {
+    return Promise.resolve(false);
+  }
+}
+
+// The report to the relay: the issue's number, or an error with the relay's reason
+async function sendReport(fields, fetchFn) {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), relayTimeoutMs());
+  try {
+    let res;
+    try {
+      res = await fetchFn(relayUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+        signal: control.signal,
+        credentials: 'omit'
+      });
+    } catch (e) {
+      throw new Error(control.signal.aborted ? 'no answer' : 'no connection');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'status ' + res.status);
+    return data.number;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// An element with a class and text
+function reportElement(doc, tag, className, text) {
+  const node = doc.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+// The "Send report" panel, after the header: what the report is and where it goes, the
+// report to read and edit, an optional address for an answer, Send and Cancel. Nothing
+// is sent before Send. Opened again, the panel there is shown.
+function openReportPanel(topbar, build) {
+  const doc = topbar.ownerDocument;
+  const open = doc.querySelector('.report-panel');
+  if (open) { open.querySelector('textarea').focus(); return open; }
+  let text;
+  try { text = build(); } catch (e) {
+    text = reportText('report', [['The report could not be made', String((e && e.stack) || e)]], navigator);
+  }
+  const panel = reportElement(doc, 'section', 'report-panel');
+  panel.setAttribute('aria-labelledby', 'report-panel-title');
+  const title = reportElement(doc, 'h2', '', t('Send a problem report'));
+  title.id = 'report-panel-title';
+  const about = reportElement(doc, 'p', 'report-about', t('The report goes to the developer\'s private queue on GitHub; no one else sees it. It holds what this page read, shows and did: the record, and the tree persons you paired with their FamilySearch IDs. Read it, write under "What happened" what went wrong, and take out anything about living people.'));
+  const area = reportElement(doc, 'textarea', 'report-text');
+  area.value = text;
+  area.rows = 14;
+  area.spellcheck = false;
+  area.setAttribute('aria-label', t('The report'));
+  const contactLabel = reportElement(doc, 'label', 'report-contact', t('Your e-mail address, if you would like an answer (optional)'));
+  const contact = reportElement(doc, 'input');
+  contact.type = 'email';
+  contact.maxLength = 200;
+  contact.autocomplete = 'email';
+  contactLabel.append(contact);
+  const send = reportElement(doc, 'button', 'primary', t('Send'));
+  send.type = 'button';
+  const cancel = reportElement(doc, 'button', '', t('Cancel'));
+  cancel.type = 'button';
+  const status = reportElement(doc, 'p', 'report-status');
+  status.setAttribute('role', 'status');
+  const buttons = reportElement(doc, 'div', 'report-actions');
+  buttons.append(send, cancel);
+  panel.append(title, about, area, contactLabel, buttons, status);
+
+  const say = (message, bad) => {
+    status.replaceChildren(message);
+    status.classList.toggle('bad', !!bad);
+  };
+  // When the relay can't take it: copy the report (as edited) and open a GitHub issue
+  const fallback = (message) => {
+    const linkLabel = t('Copy it and open an issue on GitHub instead');
+    const link = reportElement(doc, 'a', 'issue-link', linkLabel);
+    link.href = issueUrl();
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const ok = await copyText(area.value, doc);
+      flash(link, ok ? t('Copied: paste it into the issue') : t('Could not copy the report'), !ok, linkLabel);
+      try { chrome.tabs.create({ url: link.href }); } catch (err) { doc.defaultView.open(link.href, '_blank', 'noopener'); }
+    });
+    status.replaceChildren(message + ' ', link);
+    status.classList.add('bad');
+  };
+  send.addEventListener('click', async () => {
+    const report = area.value.trim();
+    const address = contact.value.trim();
+    if (!report) { say(t('The report is empty.'), true); return; }
+    if (report.includes(reportPrompt())) {
+      say(t('Write what happened under "What happened" first, in place of the line in brackets.'), true);
+      area.focus();
+      return;
+    }
+    if (address && !contact.checkValidity()) { say(t('That is not an e-mail address.'), true); contact.focus(); return; }
+    // First, while the click still counts as the user's (Firefox)
+    const allowed = askToSendReport(doc, address);
+    send.disabled = true;
+    say(t('Sending…'));
+    if (!await allowed) {
+      send.disabled = false;
+      say(t('The browser didn\'t allow sending the report.'), true);
+      return;
+    }
+    let version = '';
+    try { version = chrome.runtime.getManifest().version; } catch (e) { /* not in the extension */ }
+    try {
+      const number = await sendReport({ report, contact: address, version, browser: browserName(navigator), page: reportPage(doc) }, doc.defaultView.fetch.bind(doc.defaultView));
+      say(t('Sent, as report {number}. Thank you!', { number: '#' + number }));
+      status.classList.add('ok');
+      area.readOnly = true;
+      contact.readOnly = true;
+      cancel.textContent = t('Close');
+    } catch (e) {
+      send.disabled = false;
+      fallback(t('Could not send the report: {detail}.', { detail: e.message }));
+    }
+  });
+  cancel.addEventListener('click', () => panel.remove());
+  topbar.after(panel);
+  area.focus();
+  return panel;
+}
+
+// The header's "Send report" and "Copy report" buttons, before the version: build()
+// gives the report's text
 function reportButton(topbar, build) {
   const doc = topbar.ownerDocument;
+  const sendButton = doc.createElement('button');
+  sendButton.type = 'button';
+  sendButton.className = 'report-button send-report';
+  sendButton.textContent = t('Send report');
+  sendButton.title = t('Send a problem report to the developer: you read it first, and nothing is sent until you click Send');
+  sendButton.addEventListener('click', () => openReportPanel(topbar, build));
   const button = doc.createElement('button');
   button.type = 'button';
   button.className = 'report-button';
@@ -123,27 +293,8 @@ function reportButton(topbar, build) {
     const ok = await copyReport(build, doc);
     flash(button, ok ? t('Copied') : t('Could not copy the report'), !ok, label);
   });
-  const link = doc.createElement('a');
-  link.className = 'issue-link';
-  link.href = issueUrl();
-  link.target = '_blank';
-  link.rel = 'noopener';
-  const linkLabel = t('Report on GitHub');
-  link.textContent = linkLabel;
-  link.title = t('Copy a problem report and open a new issue on GitHub to paste it into');
-  link.addEventListener('click', async (e) => {
-    e.preventDefault();
-    const ok = await copyReport(build, doc);
-    flash(link, ok ? t('Copied: paste it into the issue') : t('Could not copy the report'), !ok, linkLabel);
-    // Opened also when the copy failed: the user can still say what happened
-    try {
-      chrome.tabs.create({ url: link.href });
-    } catch (err) {
-      doc.defaultView.open(link.href, '_blank', 'noopener');
-    }
-  });
   const before = topbar.querySelector('.version-link, select.language');
+  topbar.insertBefore(sendButton, before);
   topbar.insertBefore(button, before);
-  topbar.insertBefore(link, before);
   return button;
 }
