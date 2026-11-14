@@ -4,7 +4,7 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
-## 1.6.0 - not released yet
+## 1.6.0 - 2026-11-13
 
 - Runs in Firefox (140 or later) and LibreWolf as well as Chrome, Brave and Opera:
   one package for all. Until it's on Mozilla's add-ons site, load it in Firefox from
