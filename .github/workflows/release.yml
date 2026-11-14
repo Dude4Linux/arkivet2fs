@@ -50,7 +50,9 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm ci
+      # no package's install scripts run in a job that can write the release and
+      # sign attestations (none of the test tools needs one)
+      - run: npm ci --ignore-scripts
 
       - run: npm test
 
