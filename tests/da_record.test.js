@@ -63,6 +63,8 @@ test('a header date DA wrote wrong ("1846-2308") is only its year', () => {
   assert.match(r.citation, /, baptism of Lars, 1846; database/);
   // a range of years stays
   assert.equal(read('1846-1848').recordDate, '1846-1848');
+  assert.equal(read('1846-48').recordDate, '1846-48');  // bug: cut to 1846
+  assert.equal(read('1846-23').recordDate, '1846');  // no month, and not a later year
   assert.equal(read('1846-08').recordDate, '1846-08');
 });
 

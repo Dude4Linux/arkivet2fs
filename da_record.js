@@ -872,11 +872,12 @@ function extractRecord(document, pageUrl) {
       if (dated) recordDate = dated[1];
     }
     // A date DA wrote wrong ("1803-2702", the day and month run together) is only its
-    // year; a range of years ("1740-1743") and a partial date ("1846-08") stay
+    // year; a range of years ("1740-1743", "1740-43") and a partial date ("1846-08") stay
     const parts = recordDate.match(/^(\d{4})-(\d+)(?:-(\d+))?$/);
     if (parts) {
       const [, year, second, day] = parts;
-      const range = second.length === 4 && !day && Number(second) >= Number(year) && Number(second) <= Number(year) + 150;
+      const range = !day && (second.length === 4 ? Number(second) >= Number(year) && Number(second) <= Number(year) + 150
+        : second.length === 2 && Number(second) > 12 && Number(second) >= Number(year.slice(2)));
       const valid = second.length <= 2 && Number(second) >= 1 && Number(second) <= 12 && (!day || (day.length <= 2 && Number(day) >= 1 && Number(day) <= 31));
       if (!range && !valid) recordDate = year;
     }

@@ -158,7 +158,8 @@ fixes, new features, changes that break what users have).
   "[children]" ("Børn" stays "[children]").
 - A record date DA wrote wrong ("1803-2702", with the day and month run together)
   is now only its year in the source's date and citation, which FamilySearch can
-  read; before, it went in as written, and the christening had no date.
+  read; before, it went in as written, and the christening had no date. A range of
+  years stays as written ("1740-1743", "1740-43").
 - When FamilySearch was slow to show a fact's Tag Sources, the fact's window stayed
   open, and every fact after it failed ("did not show the last form to close in
   time"). That window is now closed when tagging fails, and a fact's form or window
