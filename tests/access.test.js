@@ -46,6 +46,14 @@ test('whenSiteAccess(): a missing site gets a bar; its button asks for it and th
   assert.equal(p.bar(), null);
 });
 
+test('whenSiteAccess(): the farm check\'s sites withheld, the page starts all the same', async () => {
+  const p = page({ granted: HOSTS.slice(0, 2) });
+  await settle();
+  assert.equal(p.started.length, 1);
+  assert.equal(p.bar(), null);
+  assert.deepEqual(p.requests, []);
+});
+
 test('whenSiteAccess(): refused, the page doesn\'t start and says where to allow it', async () => {
   const p = page({ granted: [], answer: false });
   await settle();

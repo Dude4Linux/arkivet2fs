@@ -12,7 +12,8 @@ fixes, new features, changes that break what users have).
 - When the browser hasn't given the extension Digitalarkivet or FamilySearch (Firefox
   can hold them back, and so can Chrome when the extension's site access is "On
   click"), the search page and the linker say so, with an **Allow access** button,
-  instead of failing on the first search.
+  instead of failing on the first search. The farm check's sites (Rygh's Norske
+  Gaardnavne and Kartverket) aren't needed for them to start.
 - The update check no longer asks for GitHub when the extension is installed. It is
   off until you click **Allow the check** on the Updates page, which asks the browser
   for GitHub's two hosts once. A copy updated from 1.5.0 may need that click too.

@@ -4,12 +4,14 @@
 // show a bar with a button that asks for them (permissions.request() needs a click)
 // instead of failing on the first fetch. Only function declarations at the top level.
 
-// The sites the extension needs: the manifest's host_permissions (FamilySearch,
-// DigitalArkivet, and the farm check's Rygh and Kartverket); the update check's GitHub
-// hosts are optional and asked for on the Updates page
+// The sites the pages need: the manifest's host_permissions for FamilySearch and
+// DigitalArkivet. The farm check's Rygh and Kartverket, also host_permissions, are used
+// only by the service worker, which does without them, so a page doesn't wait for them;
+// the update check's GitHub hosts are optional and asked for on the Updates page
 function siteOrigins() {
   try {
-    return chrome.runtime.getManifest().host_permissions || [];
+    return (chrome.runtime.getManifest().host_permissions || [])
+      .filter((o) => /^https:\/\/www\.(familysearch\.org|digitalarkivet\.no)\//.test(o));
   } catch (e) {
     return [];
   }
