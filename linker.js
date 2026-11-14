@@ -774,6 +774,13 @@ function parishPlace(record) {
   return fsPlace(name, record);
 }
 
+// Whether the person is the record's open person, whose own fields the record has: by
+// their permanent ID, never by an ID that is missing ('' on both)
+function isOpenPerson(person, record) {
+  const own = (record.people || []).find((p) => p.current);
+  return !!own && (own === person || (!!own.id && own.id === person.id));
+}
+
 // What the record says of a person: { Fact: { text, date, year, approx, value } }
 function recordFacts(person, record) {
   const facts = {};
@@ -781,8 +788,7 @@ function recordFacts(person, record) {
   const kind = roleKind(person);
   const recorded = daDateParts(record.recordDate);
   const place = recordPlace(record);
-  const own = (record.people || []).find((p) => p.current);
-  const mine = !!own && own.id === person.id;  // the open person: their own fields too
+  const mine = isOpenPerson(person, record);  // the open person: their own fields too
   const fields = mine ? record.fields || {} : {};
   facts.Name = { text: stripVariants(person.name) };
   const gender = String(fields.gender || '');
@@ -1030,8 +1036,7 @@ function sameFarm(a, b) {
 // address: "Lars Larsen Holten"), in the birthplace's spelling when that is the same
 // farm (DA's "Holten" for the name's "Holden"); '' when none
 function deathFarm(person, record) {
-  const own = (record.people || []).find((p) => p.current);
-  const fields = own && own.id === person.id ? record.fields || {} : {};
+  const fields = isOpenPerson(person, record) ? record.fields || {} : {};
   const given = cleanPlace(fields['place of death'] || fields['death place'] || person.residence || '');
   if (given) return given;
   // in a town's church book the word after the patronymic is a family name

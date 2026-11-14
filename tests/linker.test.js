@@ -812,6 +812,17 @@ test('recordFacts(): a burial\'s death, age and residence; a census age gives a 
   assert.equal(facts.Occupation, 'Tjener');
 });
 
+test('recordFacts(), deathFarm(): without permanent IDs, only the open person gets the record\'s own fields (bug: anyone else did too)', () => {
+  const b = record('burial-1854');
+  const bare = { ...b, people: b.people.map((p) => ({ ...p, id: '' })), fields: { ...b.fields, 'place of death': 'Sletten' } };
+  const open = bare.people.find((p) => p.current);
+  const other = { name: 'Ole Olsen', role: 'Unknown', id: '' };
+  assert.equal(w.deathFarm(open, bare), 'Sletten');
+  assert.equal(w.deathFarm(other, bare), '');
+  assert.equal(plain(factTexts(w.recordFacts(open, bare))).Death, '12 April 1854');
+  assert.equal(plain(factTexts(w.recordFacts(other, bare))).Death, undefined);
+});
+
 test('recordFacts(): a census\'s full date of birth is the birth, not about a year', () => {
   const file = 'da/census-1900.html';
   const doc = fixtureDoc(w, file);

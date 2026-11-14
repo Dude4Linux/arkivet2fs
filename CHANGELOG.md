@@ -173,6 +173,8 @@ fixes, new features, changes that break what users have).
 - In a marriage, "Cop." or "Corp." (copulerede, married), which the church book
   writes and DA transcribes where the position would be, is no longer offered as
   the groom's or bride's occupation.
+- A record whose permanent IDs couldn't be read no longer gives the open person's
+  own details (place of death, date of birth, sex) to the other people in it.
 - A record on two pages of the church book is cited "pp. 260–261", no longer
   "p. 260, 261" (which read as if 261 were another part of the citation). A source
   made before has the old text; the linker offers to update it.
