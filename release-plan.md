@@ -1,6 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **Phases 0–3 done**; v1.4.0 is the latest signed release. The next four
+Status: **Phases 0–5 done**, v1.5.0 is the latest signed release; Phase 6 (1.6.0,
+Firefox) is tested and documented, waiting for its release. The next four
 steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
 folder loaded unpacked to store listings in four browsers, and then to testers:
 
@@ -19,23 +20,29 @@ No outreach before step 5. Safari is dropped (decision 8). Each phase ends with 
 test and a tagged release (or a test tag), so the next phase starts from something
 that works.
 
-## Where we are (1.4.0)
+## Where we are (1.6.0)
 
-- One Chromium MV3 extension at the repo root: Chrome and Brave load the folder
-  unpacked, from a signed zip on GitHub's releases or a clone. There's no build step
-  for the extension; `tools/build.mjs` zips a git ref. The tests are in the repo
-  (`tests/`, `npm test`: 187 tests, jsdom, offline, about 2 s; a dev-only
-  `package.json`).
+- One MV3 extension at the repo root for Chromium and Firefox 140+: Chrome, Brave and
+  Opera load the folder unpacked, Firefox and LibreWolf as a temporary add-on, from a
+  signed zip on GitHub's releases or a clone. Edge isn't supported. There's no build
+  step for the extension; `tools/build.mjs` zips a git ref. The tests are in the repo
+  (`tests/`, `npm test`: 323 tests, jsdom, offline; a dev-only `package.json`), and CI
+  runs `web-ext lint` on the package.
 - The repo is public on GitHub, `Dude4Linux/arkivet2fs`; git-server is a read-only
   pull mirror of it.
-- Unpacked copies check GitHub once a day and offer a signed download (update.html).
+- Unpacked copies check GitHub once a day, once allowed on the Updates page (optional
+  host permissions), and offer a signed download (update.html).
 - APIs used: `action`, `alarms`, `scripting`, `storage.local/session`, `tabs`,
-  `windows`, `notifications`, `management.getSelf`, `runtime`, `i18n`. The service
-  worker loads its helpers with `importScripts()`.
+  `windows`, `notifications`, `permissions`, `management.getSelf`, `runtime`, `i18n`.
+  The service worker (Firefox: the event page) loads its helpers with
+  `importScripts()`.
+- Problems are reported with the pages' **Report on GitHub** (a public issue the user
+  pastes the report into); a relay to a private queue is undecided (1.6.0 or 1.7.0).
 
 ## To do
 
-The open items are the phases below, starting with Phase 4 (1.4.1).
+Release 1.6.0 (`sh tools/release v1.6.0`), then Phase 7 (store listings) and Phase 8
+(testers).
 
 ## What an extension can and can't do about updates
 
@@ -445,7 +452,8 @@ new browser.
     need (staying signed in to FamilySearch: an exception for familysearch.org).
   - **Opera:** the Chromium package loaded unpacked. Opera's `chrome.notifications` is
     uncertain; if it's missing, errors show on the badge and in the page instead.
-  - **Chrome, Brave, Edge:** the same package once more, since the manifest changed.
+  - **Chrome, Brave:** the same package once more, since the manifest changed. (Edge
+    was dropped: not supported.)
 - **Release:** `sh tools/release v1.6.0`.
 
 ### Phase 7: Store listings
@@ -487,7 +495,7 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
 - **Where:** a Norwegian genealogy Facebook group you're a member of, asking for
   Norwegian-speaking volunteers to try it and send feedback. You post it; I can draft
   the text (Norwegian and English) for you to edit.
-- **What it gives:** the store links (one per browser), the README as the guide, and
+- **What it gives:** the store links (one per browser), the README and `docs/guide.md` as the guide, and
   where to report problems (GitHub issues, or a contact for those without a GitHub
   account). Ask testers for the browser, the version (the toolbar icon's tooltip) and
   the DA record's address.

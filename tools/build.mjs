@@ -31,7 +31,7 @@ const SHIP = [
   /^(LICENSE|README\.md)$/
 ];
 const EXCLUDE = [
-  /^(tests|tools|platform|keys|\.github)\//,
+  /^(tests|tools|platform|keys|docs|\.github)\//,
   /^\.gitignore$/,
   /^package(-lock)?\.json$/,
   /^icons\/(banner\.|icon\d+\.svg$)/, // the SVGs the PNGs are drawn from

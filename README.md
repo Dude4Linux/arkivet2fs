@@ -2,7 +2,7 @@
 
 <img src="icons/banner.png" alt="arkivet2fs: find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch" width="100%">
 
-A Chrome/Brave/Firefox extension that connects FamilySearch (FS) with Norway's Digitalarkivet
+A browser extension (Chrome, Brave, Opera, Firefox and LibreWolf) that connects FamilySearch (FS) with Norway's Digitalarkivet
 (DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
 citation, and attaches it to the tree persons the record names.
@@ -18,32 +18,75 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 
 ## Install
 
-There's no build step: the extension is its source files.
+There's no build step: the extension is its source files, and one package serves
+every browser below. It isn't in the browsers' add-on stores yet, so each browser loads
+it from a folder on your computer. You need to be signed in to FamilySearch;
+Digitalarkivet needs no account. A step-by-step guide to using it is in
+[`docs/guide.md`](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md).
+
+First, in every browser:
 
 1. Download `arkivet2fs-X.Y.Z-chromium.zip` from the latest release:
    https://github.com/Dude4Linux/arkivet2fs/releases/latest (or clone the repository,
-   or **Code** → **Download ZIP**, for the newest code).
+   or **Code** → **Download ZIP**, for the newest code). The name says "chromium", but
+   the same package works in Firefox.
 2. Unzip it where it can stay, for instance in your home folder. It unpacks to a folder
-   named `arkivet2fs`.
-3. Open `chrome://extensions` (or `brave://extensions`) and turn on **Developer mode**.
-4. Click **Load unpacked** and choose the `arkivet2fs` folder.
-5. Pin the extension's icon to the toolbar.
+   named `arkivet2fs`. Keep the folder where it is: the browser loads the extension
+   from it each time it starts.
 
-You need to be signed in to FamilySearch. Digitalarkivet needs no account.
+### Chrome and Brave
 
-**In Firefox** (140 or later) and LibreWolf, until the extension is on Mozilla's add-ons
-site: unzip the package as above, open `about:debugging`, choose **This Firefox**, then
-**Load Temporary Add-on…** and pick `manifest.json` in the `arkivet2fs` folder. Firefox
-keeps it until it closes; load it again after a restart (your stored persons and drafts
-are kept). If Firefox hasn't given the extension Digitalarkivet and FamilySearch, its
-pages show **Allow access**: click it once. In LibreWolf, keep FamilySearch's cookies
-when it closes (Settings → Privacy & Security → Cookies and Site Data → Manage
-Exceptions → `https://www.familysearch.org`, Allow), or you'll be signed out each time.
+1. Open `chrome://extensions` (in Brave, `brave://extensions`) and turn on **Developer
+   mode** at the top right.
+2. Click **Load unpacked** and choose the `arkivet2fs` folder.
+3. Pin the extension's icon to the toolbar (the puzzle piece, then the pin).
 
-**To update**, unzip the new release over the same folder, replacing its files, and
-click the reload button on the extension's card in `chrome://extensions`. Chrome keeps
-an unpacked extension's stored persons and drafts by its folder, so keep the folder
-where it is.
+Chrome may show an **Errors** button on the extension's card with a warning about
+`background.scripts`: that line of the manifest is for Firefox, and Chrome ignores it.
+If you've set the extension's **Site access** to "On click", its pages ask for
+Digitalarkivet and FamilySearch with an **Allow access** button the first time.
+
+### Opera
+
+1. Open `opera://extensions` and turn on **Developer mode** at the top right.
+2. Click **Load unpacked** and choose the `arkivet2fs` folder.
+3. Pin the icon from the extensions button (the cube) on the toolbar.
+
+### Firefox and LibreWolf
+
+Firefox 140 or later. Until the extension is on Mozilla's add-ons site, Firefox loads
+it as a temporary add-on, which it keeps until it closes:
+
+1. Open `about:debugging`, choose **This Firefox**, then **Load Temporary Add-on…**.
+2. Pick `manifest.json` in the `arkivet2fs` folder.
+3. Pin the icon from the extensions button (the puzzle piece) on the toolbar.
+4. If Firefox hasn't given the extension Digitalarkivet and FamilySearch, the search
+   page and the linker show **Allow access**: click it once.
+
+Load it again after each restart of Firefox; the persons you searched and the records
+you attached are kept. In LibreWolf, keep FamilySearch's cookies when it closes
+(Settings → Privacy & Security → Cookies and Site Data → Manage Exceptions →
+`https://www.familysearch.org`, Allow), or you'll be signed out of FamilySearch each
+time.
+
+When the linker reads FamilySearch, Firefox brings its reading window up in front of
+the linker for a moment; leave it, it closes by itself.
+
+### Other browsers
+
+Microsoft Edge isn't supported, and Safari isn't either. Other Chromium browsers with
+**Load unpacked** may work, but haven't been tried.
+
+### Updating
+
+Close the extension's search pages and linkers first: reloading the extension closes
+them. Then unzip the new release over the same folder, replacing its files, and:
+
+- **Chrome, Brave, Opera:** click the reload button on the extension's card on the
+  extensions page. The browser keeps an unpacked extension's stored persons and records
+  by its folder, so keep the folder where it is.
+- **Firefox, LibreWolf:** click **Reload** under the extension in `about:debugging`, or
+  load it again after a restart.
 
 From 1.2.0 the extension tells you when a new release is out: an arrow on its toolbar
 icon, a notification, and "v. X.Y.Z is out" at the top of its pages. Click the version
@@ -55,10 +98,12 @@ folder, then click **Reload the extension** there. **Remind me later** waits thr
 **Skip this version** waits for the next one. From 1.6.0 the check is off until you
 click **Allow the check** on the Updates page, which asks the browser for GitHub's two
 hosts. It then runs once a day and sends one request to GitHub (`api.github.com`),
-which sees your IP address and nothing else; turn it off on the Updates page. A copy installed from a store isn't checked: the store
-updates it.
+which sees your IP address and nothing else; turn it off on the Updates page. A copy
+installed from a store isn't checked: the store updates it.
 
-**To check a download** (optional): each package is signed with the maintainer's key,
+### Checking a download
+
+This is optional. Each package is signed with the maintainer's key,
 `keys/release.pub` in the repository, whose SHA-256 fingerprint is
 
     7642e107e134dfb53e43e4932b32a23301b88b8d28a32b10abe367d16d36bc54
@@ -85,6 +130,9 @@ scripts take the key from their clone (`keys/release.pub`); a copy elsewhere nee
 key's path (`verify.sh`: after the package; `release`: `--key`).
 
 ## Use
+
+This section describes each page; the [user guide](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md)
+takes you through them task by task, with what to do when something goes wrong.
 
 ### 1. Start from a FamilySearch person
 
@@ -412,6 +460,7 @@ use that language.
 | `.github/workflows/release.yml` | Drafts a release, with the package, for each version tag |
 | `tools/` | Building the package (`build.mjs`), signing a release (`sign.mjs`), checking a download (`verify.sh`); `release` signs, tests and publishes a draft release, or checks a published one |
 | `keys/release.pub` | The public key the releases are signed with |
+| `docs/guide.md` | The user guide, task by task |
 | `CHANGELOG.md` | What changed in each version |
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |
 | `LICENSE` | The GNU General Public License, version 3 |

@@ -6,9 +6,11 @@ fixes, new features, changes that break what users have).
 
 ## 1.6.0 - not released yet
 
-- Runs in Firefox (140 or later) and LibreWolf as well as Chrome, Brave, Edge and
-  Opera: one package for all. Until it's on Mozilla's add-ons site, load it in
-  Firefox from `about:debugging` (see the README).
+- Runs in Firefox (140 or later) and LibreWolf as well as Chrome, Brave and Opera:
+  one package for all. Until it's on Mozilla's add-ons site, load it in Firefox from
+  `about:debugging`. The README has the install steps for each browser, and a new
+  user guide (`docs/guide.md`) walks through the extension task by task. Microsoft
+  Edge isn't supported.
 - When the browser hasn't given the extension Digitalarkivet or FamilySearch (Firefox
   can hold them back, and so can Chrome when the extension's site access is "On
   click"), the search page and the linker say so, with an **Allow access** button,
