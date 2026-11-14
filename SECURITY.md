@@ -34,14 +34,14 @@ issue for those.
   (Kartverket). These are the manifest's host permissions. GitHub's `api.github.com`
   and `release-assets.githubusercontent.com` are optional ones, for the update check:
   no install asks for them, and the Updates page asks only when you click.
-- A problem report goes to the report relay (`arkivet2fs-relay`, a Cloudflare Worker
-  of the maintainer's, `relay/`) only when you click **Send** in the **Send report**
-  panel, after you've read and edited it there. The relay files it as an issue in the
-  maintainer's private reports repository on GitHub, which only the maintainer can
-  read, and keeps nothing itself; Cloudflare and GitHub see your IP address. The report
-  holds what the page read, showed and did: the record, the tree persons you paired
-  (names and FamilySearch IDs), the version and browser, and the e-mail address if you
-  give one. Firefox asks you before the first one is sent.
+- A problem report goes to the report relay (`report.arkivet2fs-relay.workers.dev`, a
+  Cloudflare Worker of the maintainer's, `relay/`) only when you click **Send** in the
+  **Send report** panel, after you've read and edited it there. The relay files it as an
+  issue in the maintainer's private reports repository on GitHub, which only the
+  maintainer can read, and keeps nothing itself; Cloudflare and GitHub see your IP
+  address. The report holds what the page read, showed and did: the record, the tree
+  persons you paired (names and FamilySearch IDs), the version and browser, and the
+  e-mail address if you give one. Firefox asks you before the first one is sent.
 - The update check (only in a copy loaded unpacked, once you've allowed it GitHub)
   asks GitHub once a day for the latest release, unauthenticated: GitHub sees your IP
   address, nothing else. A

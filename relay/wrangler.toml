@@ -1,6 +1,6 @@
 # The report relay's Cloudflare Worker (relay/README.md). Deploy from this folder:
 #   npx wrangler@4 deploy
-name = "arkivet2fs-relay"
+name = "report"
 main = "worker.mjs"
 compatibility_date = "2026-11-01"
 workers_dev = true

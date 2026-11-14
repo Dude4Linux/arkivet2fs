@@ -102,10 +102,11 @@ function issueUrl() {
   return 'https://github.com/' + defaultRepo() + '/issues/new?template=problem-report.md';
 }
 
-// The report relay (relay/README.md). tools/build.mjs won't build a release tag while
-// this is the placeholder.
+// The report relay (relay/README.md), the Worker `report` on the maintainer's
+// workers.dev subdomain. tools/build.mjs won't build a release tag with a placeholder
+// (REPLACE-…) here.
 function relayUrl() {
-  return 'https://arkivet2fs-relay.REPLACE-SUBDOMAIN.workers.dev/report';
+  return 'https://report.arkivet2fs-relay.workers.dev/report';
 }
 // How long a send may take
 function relayTimeoutMs() {
