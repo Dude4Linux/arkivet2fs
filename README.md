@@ -477,8 +477,8 @@ Developer notes are in `CLAUDE.md`. After changing the code, reload the extensio
 **Send report**, at the top of the search page and the linker, sends a problem report
 to the developer: the version and browser, the DA record or search, and what the
 extension read, showed and did. It opens a panel with the report to read and edit
-first; say what went wrong under "What happened", and take out living people (the
-report names the tree persons you paired, with their IDs). Nothing is sent before you
+first: take out living people (the report names the tree persons you paired, with
+their IDs), and say what went wrong in the **What happened?** box below it. Nothing is sent before you
 click **Send**, and the report goes to a private queue that only the developer reads.
 Ideas, and reports you'd rather make in public, go in the
 [issues](https://github.com/Dude4Linux/arkivet2fs/issues): **Copy report** puts the

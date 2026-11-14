@@ -8,9 +8,9 @@ fixes, new features, changes that break what users have).
 
 - **Send report**, at the top of the search page and the linker, sends a problem
   report straight to the developer, in place of the "Report on GitHub" link. It opens
-  a panel with the report to read and edit first: write what went wrong under "What
-  happened", take out anything about living people, and add an e-mail address if you'd
-  like an answer. Nothing is sent until you click **Send**. The report goes to a
+  a panel with the report to read and edit first: take out anything about living
+  people, write what went wrong in the "What happened?" box below it (it goes into the
+  report when you send it), and add an e-mail address if you'd like an answer. Nothing is sent until you click **Send**. The report goes to a
   private queue that only the developer reads, not to a public GitHub issue. If it
   can't be sent, the panel offers to copy it and open a GitHub issue instead. **Copy
   report** is still there.

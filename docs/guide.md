@@ -222,12 +222,12 @@ box at the top.
 
 At the top of the search page and the linker, **Send report** opens a panel with a
 report of the page: the version, the browser, the record, what the extension found and
-did. Read it and edit it:
+did. Then:
 
-- Under **What happened**, in place of the line in brackets, say what you did, what you
-  expected and what you saw.
-- Take out anything about living people. The report names the tree persons you
-  paired, with their FamilySearch IDs.
+- Read the report and take out anything about living people. It names the tree
+  persons you paired, with their FamilySearch IDs.
+- In the **What happened?** box below it, say what you did, what you expected and what
+  you saw. It goes into the report, under "What happened", when you send it.
 - Add your e-mail address if you'd like an answer.
 
 Then click **Send**. The report goes to a private queue that only the developer reads;

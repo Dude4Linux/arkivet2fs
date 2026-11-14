@@ -87,8 +87,33 @@ function reportPage({ answer = { ok: true, number: 12 }, status = 200, url = 'ht
   const settle = () => new Promise((done) => setTimeout(done, 5));
   return { page, topbar, sent, opened, panel, open, settle };
 }
-// The report with "What happened" filled in
-const told = (area) => { area.value = area.value.replace(/\(What did you do[^)]*\)/, 'The census paired the wrong Lars Halvorsen.'); };
+// "What happened?" answered in the panel's box
+const told = (panel) => { panel.querySelector('.report-what').value = 'The census paired the wrong Lars Halvorsen.'; };
+
+test('withWhatHappened(): the answer goes where the mark or the prompt is, else under the heading, else at the top', () => {
+  const p = reportPage();
+  const w = (report, answer) => p.page.withWhatHappened(report, answer);
+  const mark = p.page.reportAnswerMark();
+  assert.equal(w('# R\n\n#### What happened\n\n' + mark + '\n\n#### Opened with\n- x', ' It froze.\r\nTwice. '),
+    '# R\n\n#### What happened\n\nIt froze.\nTwice.\n\n#### Opened with\n- x');
+  assert.equal(w('#### What happened\n\n' + p.page.reportPrompt() + '\n', 'It froze.'), '#### What happened\n\nIt froze.\n');
+  // The mark edited out: first under the heading, before what the user wrote there
+  assert.equal(w('# R\n\n#### What happened\n\nMore below.\n', 'It froze.'), '# R\n\n#### What happened\n\nIt froze.\n\nMore below.\n');
+  assert.equal(w('# R\n- x', 'It froze.'), '#### What happened\n\nIt froze.\n\n# R\n- x');
+  assert.equal(w('# R\n' + mark, '  '), '# R\n' + mark);  // no answer: as it is
+  assert.equal(w(mark, 'Cost $& and $1.'), 'Cost $& and $1.');  // taken as written
+});
+
+test('openReportPanel(): an answer written in the report in place of the mark is sent too', async () => {
+  const p = reportPage();
+  const panel = p.open();
+  const area = panel.querySelector('.report-text');
+  area.value = area.value.replace(p.page.reportAnswerMark(), 'I wrote it here instead.');
+  panel.querySelector('button.primary').click();
+  await p.settle();
+  assert.equal(p.sent.length, 1);
+  assert.match(p.sent[0].body.report, /#### What happened\n\nI wrote it here instead\./);
+});
 
 test('reportButton(): "Send report" before "Copy report"; the panel shows the report to edit and sends nothing yet', () => {
   const p = reportPage();
@@ -100,6 +125,15 @@ test('reportButton(): "Send report" before "Copy report"; the panel shows the re
   assert.ok(panel.previousElementSibling.classList.contains('topbar'));
   assert.match(panel.querySelector('.report-about').textContent, /private queue on GitHub; no one else sees it/);
   assert.match(panel.querySelector('textarea').value, /^### arkivet2fs problem report\n[\s\S]*- pid: TEST-LAR/);
+  // "What happened?" is asked in a box of its own, above the address, and the report
+  // says where the answer goes instead of holding a line to replace
+  const what = panel.querySelector('textarea.report-what');
+  assert.ok(what);
+  assert.match(what.closest('label').textContent, /^What happened\?/);
+  assert.equal(what.closest('label').nextElementSibling, panel.querySelector('.report-contact'));
+  assert.equal(p.page.document.activeElement, what);
+  assert.match(panel.querySelector('.report-text').value, /#### What happened\n\n\(Your answer to "What happened\?" below goes here\.\)/);
+  assert.ok(!panel.querySelector('.report-text').value.includes(p.page.reportPrompt()));
   assert.equal(p.open(), panel);  // one panel
   assert.equal(p.sent.length, 0);
   [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
@@ -114,8 +148,9 @@ test('openReportPanel(): Send asks for "What happened" first, then posts the rep
   sendButton.click();
   await p.settle();
   assert.equal(p.sent.length, 0);
-  assert.match(panel.querySelector('.report-status').textContent, /under "What happened" first/);
-  told(area);
+  assert.equal(panel.querySelector('.report-status').textContent, 'Write what happened first.');
+  assert.equal(p.page.document.activeElement, panel.querySelector('.report-what'));
+  told(panel);
   panel.querySelector('input[type=email]').value = 'me@example.com';
   sendButton.click();
   await p.settle();
@@ -127,9 +162,13 @@ test('openReportPanel(): Send asks for "What happened" first, then posts the rep
   assert.equal(body.page, 'linker');
   assert.equal(body.contact, 'me@example.com');
   assert.match(body.report, /The census paired the wrong Lars Halvorsen\./);
+  assert.match(body.report, /#### What happened\n\nThe census paired the wrong Lars Halvorsen\.\n/);
   assert.ok(!body.report.includes(p.page.reportPrompt()));
+  assert.ok(!body.report.includes(p.page.reportAnswerMark()));
   assert.equal(panel.querySelector('.report-status').textContent, 'Sent, as report #12. Thank you!');
+  assert.equal(area.value, body.report);  // the report as sent
   assert.ok(area.readOnly);
+  assert.ok(panel.querySelector('.report-what').readOnly);
   assert.ok(sendButton.disabled);
 });
 
@@ -138,7 +177,7 @@ test('openReportPanel(): a relay that fails offers the GitHub issue, which copie
   let copied = null;
   Object.defineProperty(p.page.navigator, 'clipboard', { value: { writeText: async (text) => { copied = text; } } });
   const panel = p.open();
-  told(panel.querySelector('textarea'));
+  told(panel);
   panel.querySelector('button.primary').click();
   await p.settle();
   const status = panel.querySelector('.report-status');
@@ -153,7 +192,7 @@ test('openReportPanel(): a relay that fails offers the GitHub issue, which copie
   // No connection at all
   const off = reportPage({ answer: new Error('Failed to fetch') });
   const offPanel = off.open();
-  told(offPanel.querySelector('textarea'));
+  told(offPanel);
   offPanel.querySelector('button.primary').click();
   await off.settle();
   assert.match(offPanel.querySelector('.report-status').textContent, /Could not send the report: no connection\./);
@@ -165,7 +204,7 @@ test('openReportPanel(): in Firefox, Send asks for the data kinds first; refused
   const chrome = { permissions: { request: (p) => { requests.push(p); return Promise.resolve(allow); } }, tabs: { create() {} } };
   const p = reportPage({ url: 'moz-extension://0d1e2f3a-4b5c-6d7e-8f90-a1b2c3d4e5f6/linker.html', chrome });
   const panel = p.open();
-  told(panel.querySelector('textarea'));
+  told(panel);
   panel.querySelector('button.primary').click();
   await p.settle();
   assert.deepEqual(plain(requests), [{ data_collection: ['technicalAndInteraction'] }]);

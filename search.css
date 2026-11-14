@@ -134,6 +134,23 @@ button, input, select { font: inherit; }
   border-radius: 4px;
   resize: vertical;
 }
+.report-panel .report-what-label { display: block; margin: 10px 0 0; font-size: 14px; font-weight: 600; }
+.report-panel .report-what {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4.5em;
+  margin-top: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-line);
+  border-radius: 4px;
+  resize: vertical;
+}
 .report-panel .report-contact { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 10px 0; font-size: 14px; }
 .report-panel .report-contact input {
   flex: 0 1 22em;

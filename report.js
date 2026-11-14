@@ -121,9 +121,29 @@ function flash(node, text, bad, label) {
   node.flashTimer = setTimeout(() => { node.textContent = label; node.classList.remove('bad'); }, 3000);
 }
 
-// The line the user is to replace with what happened (reportHeader())
+// The line the user is to replace with what happened (reportHeader()), in a report
+// copied for a GitHub issue
 function reportPrompt() {
   return '(What did you do, what did you expect, and what did you see instead?)';
+}
+
+// The panel asks "What happened?" in a box of its own; until Send, the report shows
+// this line where the answer goes
+function reportAnswerMark() {
+  return '(Your answer to "What happened?" below goes here.)';
+}
+
+// The report with the panel's answer under "What happened": in place of the mark (or
+// the prompt), else first under the heading, else at the top
+function withWhatHappened(report, answer) {
+  answer = String(answer || '').replace(/\r\n?/g, '\n').trim();
+  if (!answer) return report;
+  for (const mark of [reportAnswerMark(), reportPrompt()]) {
+    if (report.includes(mark)) return report.replace(mark, () => answer);
+  }
+  const heading = /^#### What happened[ \t]*\n+/m;
+  if (heading.test(report)) return report.replace(heading, () => '#### What happened\n\n' + answer + '\n\n');
+  return '#### What happened\n\n' + answer + '\n\n' + report;
 }
 
 // The page's name for the relay: linker.html is "linker"
@@ -179,12 +199,13 @@ function reportElement(doc, tag, className, text) {
 }
 
 // The "Send report" panel, after the header: what the report is and where it goes, the
-// report to read and edit, an optional address for an answer, Send and Cancel. Nothing
+// report to read and edit, "What happened?" in a box of its own (withWhatHappened()
+// puts it in the report), an optional address for an answer, Send and Cancel. Nothing
 // is sent before Send. Opened again, the panel there is shown.
 function openReportPanel(topbar, build) {
   const doc = topbar.ownerDocument;
   const open = doc.querySelector('.report-panel');
-  if (open) { open.querySelector('textarea').focus(); return open; }
+  if (open) { open.querySelector('.report-what').focus(); return open; }
   let text;
   try { text = build(); } catch (e) {
     text = reportText('report', [['The report could not be made', String((e && e.stack) || e)]], navigator);
@@ -193,12 +214,16 @@ function openReportPanel(topbar, build) {
   panel.setAttribute('aria-labelledby', 'report-panel-title');
   const title = reportElement(doc, 'h2', '', t('Send a problem report'));
   title.id = 'report-panel-title';
-  const about = reportElement(doc, 'p', 'report-about', t('The report goes to the developer\'s private queue on GitHub; no one else sees it. It holds what this page read, shows and did: the record, and the tree persons you paired with their FamilySearch IDs. Read it, write under "What happened" what went wrong, and take out anything about living people.'));
+  const about = reportElement(doc, 'p', 'report-about', t('The report goes to the developer\'s private queue on GitHub; no one else sees it. It holds what this page read, shows and did: the record, and the tree persons you paired with their FamilySearch IDs. Read it and take out anything about living people, then write in the box below what happened.'));
   const area = reportElement(doc, 'textarea', 'report-text');
-  area.value = text;
+  area.value = text.replace(reportPrompt(), () => reportAnswerMark());
   area.rows = 14;
   area.spellcheck = false;
   area.setAttribute('aria-label', t('The report'));
+  const whatLabel = reportElement(doc, 'label', 'report-what-label', t('What happened? What did you do, what did you expect, and what did you see instead?'));
+  const what = reportElement(doc, 'textarea', 'report-what');
+  what.rows = 3;
+  whatLabel.append(what);
   const contactLabel = reportElement(doc, 'label', 'report-contact', t('Your e-mail address, if you would like an answer (optional)'));
   const contact = reportElement(doc, 'input');
   contact.type = 'email';
@@ -213,7 +238,9 @@ function openReportPanel(topbar, build) {
   status.setAttribute('role', 'status');
   const buttons = reportElement(doc, 'div', 'report-actions');
   buttons.append(send, cancel);
-  panel.append(title, about, area, contactLabel, buttons, status);
+  panel.append(title, about, area, whatLabel, contactLabel, buttons, status);
+  // The report as it is sent (and copied for an issue): the answer in its place
+  const finalReport = () => withWhatHappened(area.value.trim(), what.value);
 
   const say = (message, bad) => {
     status.replaceChildren(message);
@@ -228,7 +255,7 @@ function openReportPanel(topbar, build) {
     link.rel = 'noopener';
     link.addEventListener('click', async (e) => {
       e.preventDefault();
-      const ok = await copyText(area.value, doc);
+      const ok = await copyText(finalReport(), doc);
       flash(link, ok ? t('Copied: paste it into the issue') : t('Could not copy the report'), !ok, linkLabel);
       try { chrome.tabs.create({ url: link.href }); } catch (err) { doc.defaultView.open(link.href, '_blank', 'noopener'); }
     });
@@ -236,12 +263,12 @@ function openReportPanel(topbar, build) {
     status.classList.add('bad');
   };
   send.addEventListener('click', async () => {
-    const report = area.value.trim();
     const address = contact.value.trim();
-    if (!report) { say(t('The report is empty.'), true); return; }
-    if (report.includes(reportPrompt())) {
-      say(t('Write what happened under "What happened" first, in place of the line in brackets.'), true);
-      area.focus();
+    if (!area.value.trim()) { say(t('The report is empty.'), true); return; }
+    const report = finalReport();
+    if (report.includes(reportAnswerMark()) || report.includes(reportPrompt())) {
+      say(t('Write what happened first.'), true);
+      what.focus();
       return;
     }
     if (address && !contact.checkValidity()) { say(t('That is not an e-mail address.'), true); contact.focus(); return; }
@@ -260,7 +287,9 @@ function openReportPanel(topbar, build) {
       const number = await sendReport({ report, contact: address, version, browser: browserName(navigator), page: reportPage(doc) }, doc.defaultView.fetch.bind(doc.defaultView));
       say(t('Sent, as report {number}. Thank you!', { number: '#' + number }));
       status.classList.add('ok');
+      area.value = report;
       area.readOnly = true;
+      what.readOnly = true;
       contact.readOnly = true;
       cancel.textContent = t('Close');
     } catch (e) {
@@ -270,7 +299,7 @@ function openReportPanel(topbar, build) {
   });
   cancel.addEventListener('click', () => panel.remove());
   topbar.after(panel);
-  area.focus();
+  what.focus();
   return panel;
 }
 
