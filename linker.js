@@ -904,12 +904,13 @@ function treeFacts(tree, record) {
 // comparison: one side doesn't have it, or it isn't compared, as places and occupations).
 // A name is the same when the given names agree and the record's is no other name
 // than FS's (otherName(), which offers it as an alternate name; with the page read).
-function compareFact(fact, da, fs, person, tree, record) {
+// `name`: the row's name as the user edited it, which the additions use too.
+function compareFact(fact, da, fs, person, tree, record, name) {
   if (!da || !fs) return '';
   if (fact === 'Name') {
-    const fit = givenNameFit(person, tree);
+    const fit = givenNameFit(name ? { ...person, name } : person, tree);
     const full = record && tree && fullTree(tree.pid);
-    if (fit === 2 && full && otherName(person, record, full)) return 'near';
+    if (fit === 2 && full && otherName(person, record, full, name)) return 'near';
     return fit === 2 ? 'same' : fit === 1 ? 'near' : 'differs';
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
@@ -925,13 +926,15 @@ function compareFact(fact, da, fs, person, tree, record) {
 
 const MARKS = { same: '✓', near: '≈', differs: '✗' };
 
-// The facts table of a row: fact | DigitalArkivet | FamilySearch
-function factsTable(person, record, tree, reading) {
+// The facts table of a row: fact | DigitalArkivet | FamilySearch; the name as the row
+// has it (`name`, edited by the user), as the additions take it
+function factsTable(person, record, tree, reading, name) {
   const da = recordFacts(person, record);
+  if (name) da.Name = { text: name };
   const fs = treeFacts(tree, record);
   const head = el('tr', {}, [el('th', {}), el('th', { text: 'DigitalArkivet' }), el('th', { text: 'FamilySearch' })]);
   const rows = FACTS.filter((f) => da[f] || fs[f]).map((f) => {
-    const how = compareFact(f, da[f], fs[f], person, tree, record);
+    const how = compareFact(f, da[f], fs[f], person, tree, record, name);
     const fsCell = el('td', {}, how ? [el('span', { class: 'mark ' + how, text: MARKS[how] + ' ' }), document.createTextNode(fs[f].text)]
       : [document.createTextNode(fs[f] ? fs[f].text : '')]);
     return el('tr', { class: how }, [el('th', { text: t(f) }), el('td', { text: da[f] ? da[f].text : '' }), fsCell]);
@@ -1434,10 +1437,11 @@ function personRow(person, family, suggestion, why) {
     const pid = row.pid();
     const tree = row.tree() || (PID_PATTERN.test(pid) ? { pid, name: '' } : null);
     const reading = !!state.detailsPending && state.detailsPending.has(pid);
-    const list = tree && !reading ? factAdditions(person, state.record, tree, nameInput.value.trim()) : [];
+    const name = nameInput.value.trim();
+    const list = tree && !reading ? factAdditions(person, state.record, tree, name) : [];
     row.offered = list;
     row.additions = () => [];
-    facts.replaceChildren(factsTable(person, state.record, tree, reading), ...(list.length ? [additionsBox(row, person, pid, list)] : []));
+    facts.replaceChildren(factsTable(person, state.record, tree, reading, name), ...(list.length ? [additionsBox(row, person, pid, list)] : []));
     showChanges();
   };
   row.showCheck = () => {
@@ -3312,9 +3316,11 @@ function linkerReport() {
     say('Why', row.why());
     say('FamilySearch', row.status());
     if (tree) {
+      const name = row.name;
       const da = recordFacts(row.person, state.record), fs = treeFacts(tree, state.record);
+      if (name) da.Name = { text: name };
       for (const f of FACTS.filter((f) => da[f] || fs[f])) {
-        const how = compareFact(f, da[f], fs[f], row.person, tree, state.record);
+        const how = compareFact(f, da[f], fs[f], row.person, tree, state.record, name);
         lines.push('  - ' + f + ': ' + (da[f] ? da[f].text : '—') + ' | FS: ' + (fs[f] ? fs[f].text : '—') + (how ? ' ' + MARKS[how] : ''));
       }
       if (!fullTree(tree.pid)) lines.push('  - (the FS person\'s page was not read)');

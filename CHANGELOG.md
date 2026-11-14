@@ -118,7 +118,8 @@ fixes, new features, changes that break what users have).
   ("Lars Ole" for FamilySearch's Lars Ole Halvorsen).
 - In a person's facts, a name is marked ✓ only when it is the name FamilySearch has;
   one the linker offers as an alternate name (a patronymic in another spelling) is
-  marked ≈. The ✓ used to compare only the given names.
+  marked ≈. The ✓ used to compare only the given names. A name you edit in the row
+  is the one shown and marked, as the offer of an alternate name takes it.
 - A hit found by the surname and a relative alone (a mother Johansdatter with the
   husband's name) whose given name isn't the person's now counts against the hit.
   It was taken for a spelling DigitalArkivet had matched, and another woman with the

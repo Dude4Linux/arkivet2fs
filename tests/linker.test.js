@@ -1449,6 +1449,22 @@ test('compareFact(): a name is ≈ when the linker offers it as an alternate nam
   assert.equal(mark(halvor, 'TEST-HAL', 'Ole Larsen'), 'differs');
 });
 
+test('factsTable(): the name as the user edited it, judged as the additions judge it (bug: the record\'s name ≈ beside no alternate name offered)', () => {
+  const { win, state } = checkedPage();
+  const halvor = state.people.find((p) => p.name === 'Halvor Larsen');
+  state.fs = { pid: 'TEST-HAL', name: 'Halvor Lauritsen', gender: 'Male', altNames: [], residences: [], occupations: [] };
+  const tree = { pid: 'TEST-HAL', name: 'Halvor Lauritsen' };
+  const nameRow = (name) => [...win.factsTable(halvor, state.record, tree, false, name).querySelectorAll('tbody tr')]
+    .map((tr) => [...tr.children].map((c) => c.textContent.trim())).find((r) => r[0] === 'Name');
+  const offered = (name) => plain(win.factAdditions(halvor, state.record, tree, name)).filter((a) => a.fact === 'Name').length;
+  // the record's name: offered as an alternate name, so ≈
+  assert.deepEqual(plain(nameRow()), ['Name', 'Halvor Larsen', '≈ Halvor Lauritsen']);
+  assert.equal(offered(), 1);
+  // edited to FS's name: nothing offered, so ✓, and the table shows the edited name
+  assert.deepEqual(plain(nameRow('Halvor Lauritsen')), ['Name', 'Halvor Lauritsen', '✓ Halvor Lauritsen']);
+  assert.equal(offered('Halvor Lauritsen'), 0);
+});
+
 test('factAdditions(): a christening FS lacks; a birth date FS has as a year only', () => {
   const { win, state } = checkedPage();
   const lars = state.people.find((p) => p.name === 'Lars');
