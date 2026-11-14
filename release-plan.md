@@ -1,8 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **Phases 0–5 done**, v1.5.0 is the latest signed release; Phase 6 (1.6.0,
-Firefox) is tested and documented, waiting for its release. The next four
-steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
+Status: **Phases 0–6 done**; v1.6.0 (13 November 2026) is the latest signed release.
+The steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
 folder loaded unpacked to store listings in four browsers, and then to testers:
 
 1. **1.4.1**: clean up and refine the Chrome version (name matching, the host
@@ -20,7 +19,7 @@ No outreach before step 5. Safari is dropped (decision 8). Each phase ends with 
 test and a tagged release (or a test tag), so the next phase starts from something
 that works.
 
-## Where we are (1.6.0)
+## Where we are (1.6.0, released)
 
 - One MV3 extension at the repo root for Chromium and Firefox 140+: Chrome, Brave and
   Opera load the folder unpacked, Firefox and LibreWolf as a temporary add-on, from a
@@ -41,8 +40,7 @@ that works.
 
 ## To do
 
-Release 1.6.0 (`sh tools/release v1.6.0`), then Phase 7 (store listings) and Phase 8
-(testers).
+Phase 7 (store listings), then Phase 8 (testers).
 
 ## What an extension can and can't do about updates
 
