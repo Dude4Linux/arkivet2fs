@@ -293,6 +293,20 @@ test('recordSex(): from a patronymic or a family position', () => {
   assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'brudgommens far', roleEnglish: 'Groom\'s Father' }), 'Male');
 });
 
+// Bug: a compound kin word gave no sex ("hans Søstersøn": Sex —); its last part tells
+test('recordSex(): a compound kin word is the sex of its last part', () => {
+  const y1865 = { recordDate: '1865' };
+  assert.equal(w.recordSex({ name: 'Lars Halvorsen', role: 'hans Søstersøn', roleEnglish: 'hans Søstersøn' }, y1865), 'Male');
+  assert.equal(w.recordSex({ name: 'Lars', role: 'Svigersøn' }), 'Male');
+  assert.equal(w.recordSex({ name: 'Lars', role: 'hans Stedfader' }), 'Male');
+  assert.equal(w.recordSex({ name: 'Eli', role: 'hans Søsterdatter' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli', role: 'Sønnekone' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli', role: 'Bedstemoder' }), 'Female');
+  assert.equal(w.recordSex({ name: 'Eli', role: 'Svigerdatter' }), 'Female');
+  // a kin word's first part says nothing: Søstersøn isn't a sister, Sønnekone isn't a son
+  assert.equal(w.recordSex({ name: 'Lars', role: 'Søsterbarn' }), '');
+});
+
 // Bug: from 1865 on, a town census gives a wife her husband's surname and a daughter
 // her father's, so "Kjersti Halvorsen" (hm) was read as a man and not paired
 test('recordSex(): a -sen from 1865 on says nothing; the position and occupation tell', () => {
@@ -807,7 +821,9 @@ test('recordFacts(): a burial\'s death, age and residence; a census age gives a 
   const c = record('census-1865');
   const lars = w.recordPeople(c).find((p) => p.current);
   const facts = plain(factTexts(w.recordFacts(lars, c)));
-  assert.equal(facts.Birth, 'about 1848 (age 17), Vaage');
+  // The 1865 census was counted on 31 December: DA's page gives age 17 as "1849
+  // (calculated)", and so does the linker (bug: 1848, a year before the search's)
+  assert.equal(facts.Birth, 'about 1849 (age 17), Vaage');
   assert.equal(facts.Residence, '1865, Fjeld nordre, Bryn, Vågå');
   assert.equal(facts.Occupation, 'Tjener');
 });

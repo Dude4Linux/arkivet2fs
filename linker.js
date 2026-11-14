@@ -268,6 +268,10 @@ function givenNameFit(person, tree) {
 // would end in the code d)
 const FEMALE_ROLE = /(?<!\p{L})(kone|hustru|hustrue|hustroe|hustro|datter|dotter|daughter|wife|woman|mother|moder|mor|enke|widow|søster|søstre|sister|pige|tjenestepige|husmor|husmoder|hm|d)(?!\p{L})/iu;
 const MALE_ROLE = /(?<!\p{L})(søn|son|fader|far|father|man|mand|husband|husbond|hosbond|huusbond|husbonde|hosbonde|husfader|hf|enkemand|widower|broder|bror|brother|dreng|tjenestedreng|s)(?!\p{L})/iu;
+// A compound kin word is the sex of its last part: Søstersøn, Svigersøn, Stedfader;
+// Søsterdatter, Sønnekone, Bedstemoder
+const MALE_KIN_END = /(?<=\p{L})(søn|sønn|fader|broder)(?!\p{L})/iu;
+const FEMALE_KIN_END = /(?<=\p{L})(datter|dotter|moder|søster|kone|hustru)(?!\p{L})/iu;
 const FEMALE_WORK = /(pige|inde|inne|erske|kone|enke|jomfru|madame|jordmor|budeie)(?!\p{L})/iu;
 const FAMILY_NAMES_FROM = 1865;
 function recordSex(person, record) {
@@ -277,8 +281,10 @@ function recordSex(person, record) {
   const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
   if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
   const role = foldRole((person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, ''));
-  if (FEMALE_ROLE.test(role) && !MALE_ROLE.test(role)) return 'Female';
-  if (MALE_ROLE.test(role) && !FEMALE_ROLE.test(role)) return 'Male';
+  const female = FEMALE_ROLE.test(role) || FEMALE_KIN_END.test(role);
+  const male = MALE_ROLE.test(role) || MALE_KIN_END.test(role);
+  if (female && !male) return 'Female';
+  if (male && !female) return 'Male';
   if (FEMALE_WORK.test(foldRole(person.position || ''))) return 'Female';
   const year = Number(((record && record.recordDate) || '').slice(0, 4)) || 0;
   if (/(sen|søn|son)(\s|$)/i.test(last) && !(year >= FAMILY_NAMES_FROM)) return 'Male';

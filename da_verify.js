@@ -141,16 +141,26 @@ function grandchildParents(people, grandchild, kind = roleKind) {
 }
 
 // A record person's birth year: "1866", an age in the record's year ("57", "57
-// years"), or for the child of a baptism the baptism's year (seldom a year later)
+// years"), or for the child of a baptism the baptism's year (seldom a year later).
+// The 1865 census was counted on 31 December; DA gives its ages' birth years from
+// 1866 (age 22: "1844 (calculated)", the search hit's "b. 1844*"), and so does this.
 function birthYearOf(person, record) {
   const text = person.birthYear || '';
   const year = text.match(/\b(1[5-9]\d\d)\b/);
   if (year) return Number(year[1]);
   const age = text.match(/^(\d{1,3})\b/);
   const recordYear = ((record.recordDate || '').match(/^\d{4}/) || [])[0];
-  if (age && recordYear) return Number(recordYear) - Number(age[1]);
+  if (age && recordYear) return ageBaseYear(record, Number(recordYear)) - Number(age[1]);
   const baptism = record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd';
   return baptism && recordYear && /^(child|barn)$/i.test(person.roleEnglish || person.role || '') ? Number(recordYear) : null;
+}
+
+// The year a record's ages count from: the record's, but the year after for a census
+// counted on 31 December (1865's), as DA counts them
+const CENSUS_AT_YEAR_END = [1865];
+function ageBaseYear(record, recordYear) {
+  const census = (record.recordTypeInfo || {}).prefix === 'pf' || (record.recordTypeInfo || {}).type === 'census';
+  return census && CENSUS_AT_YEAR_END.includes(recordYear) ? recordYear + 1 : recordYear;
 }
 
 // Does a record person have an FS relative's given name (any of the FS given names

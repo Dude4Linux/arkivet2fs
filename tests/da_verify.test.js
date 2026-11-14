@@ -20,6 +20,22 @@ const lars = (more = {}) => w.profile(criteria({
   ...more
 }));
 
+// Bug: the linker gave age 22 in the 1865 census as about 1843, the search page (DA's
+// hit) 1844: that census was counted on 31 December, and DA counts its ages from 1866
+test('birthYearOf(): a census age gives the year DA calculates on the person\'s own page', () => {
+  for (const name of ['census-1865', 'census-1865-household', 'census-1801-son', 'census-1801-married', 'census-1801-unmarried']) {
+    const r = record(name);
+    const me = r.people.find((p) => p.current);
+    assert.equal(w.birthYearOf(me, r), Number(r.fields['date of birth'].match(/^\d{4}/)[0]), name);
+  }
+  const census = (year) => ({ recordDate: String(year), recordTypeInfo: { prefix: 'pf', type: 'census' } });
+  assert.equal(w.birthYearOf({ birthYear: '22' }, census(1865)), 1844);
+  assert.equal(w.birthYearOf({ birthYear: '22' }, census(1801)), 1779);
+  // a church book's age counts from its own year
+  assert.equal(w.birthYearOf({ birthYear: '22' }, { recordDate: '1865-12-31', recordTypeInfo: { prefix: 'pg', type: 'burial' } }), 1843);
+  assert.equal(w.birthYearOf({ birthYear: '1843' }, census(1865)), 1843);
+});
+
 test('roleKind(): DA roles and census positions, in Norwegian or English', () => {
   const kind = (role, roleEnglish = '') => w.roleKind({ role, roleEnglish });
   assert.equal(kind('barn', 'Child'), 'child');
