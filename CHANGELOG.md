@@ -54,8 +54,8 @@ fixes, new features, changes that break what users have).
   census ends as FamilySearch's census sources do ("Halvor Larsen household, Bakken
   nedre, Nordlien - Vågå - "Norway, Census, 1865""), so one household's censuses
   stay apart. A source made before under the year-first title, or without the date
-  at the end, is still found: updating it gives it the new title instead of making
-  another. Of those, only a source of this record is used (each is read first);
+  at the end, is still found, also for a record dated only by month or by a range
+  of years: updating it gives it the new title instead of making another. Of those, only a source of this record is used (each is read first);
   a brother's of the same name gets a source of his own.
 - A source already in the SourceBox with a date is found again. FamilySearch lists
   a dated source with the date's year in front of its title, which the linker took

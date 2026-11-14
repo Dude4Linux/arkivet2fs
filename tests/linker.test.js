@@ -1845,6 +1845,11 @@ test('formerTitles(): the titles a source got before, the year in front or no da
   assert.deepEqual(plain(w.formerTitles('Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"', '1865')), [
     '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - "Norway, Census, 1865"',  // edited by hand on FS
     '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census']);
+  // a month without a day, and a range of years, as DA dates some records
+  assert.deepEqual(plain(w.formerTitles('Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth, November 1846', '1846')), [
+    'Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth', '1846, Lars, son of Halvor Larsen - Vågå parish (0515P) - Birth']);
+  assert.deepEqual(plain(w.formerTitles('Halvor Larsen - Skifteprotokoll 1740-1743, 1740-1743', '1740')), [
+    'Halvor Larsen - Skifteprotokoll 1740-1743', '1740, Halvor Larsen - Skifteprotokoll 1740-1743']);
   assert.deepEqual(plain(w.formerTitles('1846, Lars Halvorsen - Vågå - Birth', '1846')), []);  // a year in front already
   assert.deepEqual(plain(w.formerTitles('Lars Halvorsen - Vågå - Birth', '')), []);
 });

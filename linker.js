@@ -2467,7 +2467,8 @@ function formerTitles(title, year) {
   if (!title || /^\d{4}, /.test(title)) return [];
   const census = title.match(/^(.+) - "Norway, Census, (\d{4})"$/);
   if (census) return [census[2] + ', ' + title, census[2] + ', ' + census[1] + ' - Census'];
-  const dated = title.match(/^(.+ - .+), (?:\d{1,2} \p{L}+ )?(\d{4})$/u);
+  // the date at the end: a full date, a month, a year or a range of years ("1740-1743")
+  const dated = title.match(/^(.+ - .+), (?:(?:\d{1,2} )?\p{L}+ )?(\d{4})(?:-\d{2,4})?$/u);
   if (dated) return [dated[1], dated[2] + ', ' + dated[1]];
   return year ? [year + ', ' + title] : [];
 }
