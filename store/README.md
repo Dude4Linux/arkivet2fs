@@ -7,7 +7,10 @@ excludes `store/`).
 - `listing.md`: the name, the short and long descriptions in English and Norwegian
   (Bokmål), the category and the links.
 - `review.md`: what the stores ask for besides the description: the single purpose,
-  each permission's reason, the data-use answers, and notes for the reviewers.
+  each permission's reason, the data-use answers, notes for the reviewers, and which
+  screenshot goes where.
+- `screenshots/`: the four 1280×800 screenshots, and `make.sh`, which makes them from
+  the tests' sanitized pages and made-up persons.
 - The privacy policy is `PRIVACY.md` at the root, linked by its GitHub address:
   https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
 

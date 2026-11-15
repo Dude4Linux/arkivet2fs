@@ -471,7 +471,7 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
   - Opera add-ons (addons.opera.com): free; the review can take weeks.
   - Firefox AMO, listed: free.
 - **What every listing needs** (prepared in the repo, `store/` and `PRIVACY.md`, excluded
-  from the package; done but the screenshots):
+  from the package; done):
   - **A privacy policy:** `PRIVACY.md` from SECURITY.md's "What the extension does with
     your data" (the hosts, a problem report sent only by the user's Send, what is kept
     and for how long), linked by its GitHub address, with "not affiliated with
@@ -482,10 +482,10 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
     FS, Rygh, Kartverket).
   - **The single purpose**, Chrome's rule: "make a FamilySearch source from a
     Digitalarkivet record and attach it to the persons it names".
-  - **Screenshots** (1280×800): the search page, the linker and the FS entry, with
-    made-up persons only. search.html and linker.html can be run on the test fixtures
-    (sanitized DA pages, `TEST-` persons) and captured with headless Chrome, as the
-    icons are; no real tree, no real FS page with other users' work.
+  - **Screenshots** (1280×800, `store/screenshots/`): the search page and three of the
+    linker, made by `make.sh` from the test fixtures (sanitized DA pages, `TEST-`
+    persons) with headless Chrome; no real tree, no real FS page with other users' work.
+    No shot of the FS entry: it would show FamilySearch's own page.
   - **Firefox's data collection** (1.7.0): `websiteContent` required, the report's
     `technicalAndInteraction` and `personallyIdentifyingInfo` optional, asked for on
     Send.

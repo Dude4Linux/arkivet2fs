@@ -96,6 +96,16 @@ Source code and docs: https://github.com/Dude4Linux/arkivet2fs
 
 ## Screenshots
 
-1280×800, made-up persons only (the test fixtures' sanitized Digitalarkivet pages and
-`TEST-` persons); never a real tree or a real FamilySearch page. To be made: the search
-page with ranked hits, the linker with a paired record, and the FamilySearch entry.
+`screenshots/`, 1280×800, in the order to upload them:
+
+1. `1-search.png`: the search page, the baptism hits ranked with their reasons.
+2. `2-source.png`: the linker's source, ready to edit (title, citation, notes).
+3. `3-people.png`: the child paired with the tree person, the facts side by side, the
+   christening ticked to add.
+4. `4-changes.png`: the mother (≈ a close name), the changes to the tree, the buttons.
+
+Made-up persons only: the test fixtures' sanitized Digitalarkivet pages and `TEST-`
+persons, never a real tree or a real FamilySearch page (so no shot of the "Digital
+Arkivet" entry on FamilySearch's person page). `sh store/screenshots/make.sh` makes them
+again (after `npm install`; Node and Chrome) when the pages change; `render.js` sets up
+each page in the tests' harness.
