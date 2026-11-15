@@ -17,6 +17,9 @@ fixes, new features, changes that break what users have).
 - Firefox asks before a report is sent, since the extension now declares the data it
   sends: the records' and the tree's content always (that is what a source is made
   of), and with a report, technical data and, if you give it, your e-mail address.
+- A privacy policy, [PRIVACY.md](PRIVACY.md): what the extension reads, keeps and
+  sends. The extension's description in the browser now says what it does: find a
+  FamilySearch person's records in Digitalarkivet and attach them as cited sources.
 - In the 1865 census, the linker gives an age's birth year as DA does: that census was
   counted on 31 December, so age 22 is about 1844, as on DA's page and the search
   page, not 1843.

@@ -470,8 +470,8 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
   - Chrome Web Store: $5 once (decided). Brave and Opera users can install from it too.
   - Opera add-ons (addons.opera.com): free; the review can take weeks.
   - Firefox AMO, listed: free.
-- **What every listing needs** (prepared in the repo, `store/`, excluded from the
-  package):
+- **What every listing needs** (prepared in the repo, `store/` and `PRIVACY.md`, excluded
+  from the package; done but the screenshots):
   - **A privacy policy:** `PRIVACY.md` from SECURITY.md's "What the extension does with
     your data" (the hosts, a problem report sent only by the user's Send, what is kept
     and for how long), linked by its GitHub address, with "not affiliated with

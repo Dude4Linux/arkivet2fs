@@ -17,10 +17,11 @@ test('selectFiles(): the extension ships; docs, tests and tools stay out; anythi
   const shipped = b.selectFiles(['manifest.json', 'background.js', 'search.html', 'search.css', 'LICENSE', 'README.md',
     '_locales/en/messages.json', 'icons/icon16.png', 'icons/icon32.svg', 'icons/icon16.svg', 'icons/banner.png',
     'icons/banner.html', 'tests/harness.js', 'tools/build.mjs', 'keys/release.pub', '.github/workflows/ci.yml',
-    'package.json', 'package-lock.json', 'CLAUDE.md', 'CHANGELOG.md', 'SECURITY.md', '.gitignore', 'docs/guide.md', 'relay/worker.mjs', 'relay/wrangler.toml']);
+    'package.json', 'package-lock.json', 'CLAUDE.md', 'CHANGELOG.md', 'SECURITY.md', '.gitignore', 'docs/guide.md', 'relay/worker.mjs', 'relay/wrangler.toml',
+    'PRIVACY.md', 'store/listing.md', 'store/review.md']);
   assert.deepEqual(shipped, ['LICENSE', 'README.md', '_locales/en/messages.json', 'background.js', 'icons/icon16.png',
     'icons/icon32.svg', 'manifest.json', 'search.css', 'search.html']);
-  assert.throws(() => b.selectFiles(['manifest.json', 'notes.txt', 'store/x.md']), /Neither shipped nor excluded.*notes\.txt, store\/x\.md/);
+  assert.throws(() => b.selectFiles(['manifest.json', 'notes.txt', 'shop/x.md']), /Neither shipped nor excluded.*notes\.txt, shop\/x\.md/);
 });
 
 test('placeholders(): a release tag waits for the relay\'s address', async () => {

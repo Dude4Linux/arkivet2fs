@@ -4,7 +4,7 @@
     "description": "The extension's name"
   },
   "description": {
-    "message": "A tool to extract data from Norwegian DigitalArkivet and format it for FamilySearch.org SourceBox",
+    "message": "Find a FamilySearch person's records in Norway's Digitalarkivet and attach them to the tree as cited sources.",
     "description": "The extension's description"
   }
 }

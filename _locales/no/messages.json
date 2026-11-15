@@ -4,7 +4,7 @@
     "description": "The extension's name"
   },
   "description": {
-    "message": "Et verktøy som henter opplysninger fra Digitalarkivet og lager kilder til kildeboksen i FamilySearch.org",
+    "message": "Finn postene til en person i FamilySearch i Digitalarkivet, og legg dem til i slektstreet som kilder med kildehenvisning.",
     "description": "The extension's description"
   }
 }

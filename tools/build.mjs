@@ -31,11 +31,11 @@ const SHIP = [
   /^(LICENSE|README\.md)$/
 ];
 const EXCLUDE = [
-  /^(tests|tools|platform|keys|docs|relay|\.github)\//,
+  /^(tests|tools|platform|keys|docs|relay|store|\.github)\//,
   /^\.gitignore$/,
   /^package(-lock)?\.json$/,
   /^icons\/(banner\.|icon\d+\.svg$)/, // the SVGs the PNGs are drawn from
-  /^(CLAUDE|plan|release-plan|ai_prompt|citation|SECURITY|CHANGELOG)\.md$/
+  /^(CLAUDE|plan|release-plan|ai_prompt|citation|SECURITY|PRIVACY|CHANGELOG)\.md$/
 ];
 // Shipped without a reference from the code: the browser reads them by convention
 const UNREFERENCED_OK = [/^manifest\.json$/, /^_locales\//, /^(LICENSE|README\.md)$/];
