@@ -51,6 +51,9 @@ test('relay(): files the report as an issue with an installation token for the r
   // The token is kept for the next report
   await w.relay(post(REPORT), ENV, gh.fetch);
   assert.equal(gh.calls.filter((c) => c.url.endsWith('/access_tokens')).length, 1);
+  // Without a contact the issue is the report alone, with no rule above it
+  await w.relay(post({ ...REPORT, contact: '' }), ENV, gh.fetch);
+  assert.match(gh.calls.at(-1).body.body, /^### arkivet2fs problem report/);
 });
 
 test('appJwt(): RS256 by the App\'s PKCS#1 key, issued a minute back, under ten minutes long', async () => {

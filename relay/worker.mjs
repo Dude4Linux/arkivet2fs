@@ -88,7 +88,8 @@ export function issueTitle(r) {
 // comments, each with a line saying which part it is. A report too long for MAX_PARTS
 // is cut, and says so.
 export function issueParts(r) {
-  const head = (r.contact ? `**Contact:** ${quiet(r.contact)}\n\n` : '') + '---\n\n';
+  // The contact, ruled off from the report; without one, the report alone
+  const head = r.contact ? `**Contact:** ${quiet(r.contact)}\n\n---\n\n` : '';
   const text = quiet(r.report);
   const parts = [];
   let rest = text;
