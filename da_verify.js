@@ -155,14 +155,6 @@ function birthYearOf(person, record) {
   return baptism && recordYear && /^(child|barn)$/i.test(person.roleEnglish || person.role || '') ? Number(recordYear) : null;
 }
 
-// The year a record's ages count from: the record's, but the year after for a census
-// counted on 31 December (1865's), as DA counts them
-const CENSUS_AT_YEAR_END = [1865];
-function ageBaseYear(record, recordYear) {
-  const census = (record.recordTypeInfo || {}).prefix === 'pf' || (record.recordTypeInfo || {}).type === 'census';
-  return census && CENSUS_AT_YEAR_END.includes(recordYear) ? recordYear + 1 : recordYear;
-}
-
 // Does a record person have an FS relative's given name (any of the FS given names
 // against any word of the record name)?
 function hasGivenName(person, given) {
@@ -290,6 +282,7 @@ function checkRecord(record, P) {
   };
   parent('father', P.father);
   parent('mother', P.mother);
+  siblingOfParent(record, P, census, add);
 
   if (P.spouses.length && inRecord.spouse.length) {
     const match = inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record)));
@@ -364,6 +357,32 @@ function checkRecord(record, P) {
     if (found) add(2, t('going to {place}', { place: destination }), true);
   }
   return reasons;
+}
+
+// A census's sister's or brother's child ("hans Søstersøn", "Broderdatter") of the
+// household's head (the first resident heading it): the head is a brother of the FS
+// mother (a sister's child) or father (a brother's child), so has their father's
+// patronymic. One with another patronymic (Lars Halvorsen's sister's son, for a mother
+// Astri Larsdatter) ✗ -2. Only with "hans" or no referring word (a man's sister or
+// brother; a wife may carry her husband's name), and when both names have a patronymic.
+const SIBLINGS_CHILD = new RegExp('^(?:hans )?(søster|syster|broder|broders|bror|brors)'
+  + ' ?(søn|sønn|datter|dotter|barn|børn|born)' + WORD_END, 'iu');
+function siblingOfParent(record, P, census, add) {
+  if (!census) return;
+  const people = record.people || [];
+  const me = people.find((p) => p.current);
+  const role = me && foldRole(me.role || '').split(',')[0].trim();
+  const m = role && role.match(SIBLINGS_CHILD);
+  if (!m) return;
+  const head = people.find((p) => roleKind(p) === 'head') || people[0];
+  if (!head || head === me) return;
+  const [key, relative] = /^s/i.test(m[1]) ? ['mother', P.mother] : ['father', P.father];
+  if (!relative || !relative.given || !isPatronymic(relative.surname)) return;
+  if (patronymicDiffers(head, relative.surname)) {
+    add(-2, t('{role} of {name} in the record, who has another patronymic than {relation} {fs}', {
+      role: me.role.split(',')[0].trim(), name: head.name, relation: t(key), fs: [relative.given, relative.surname].join(' ')
+    }), false);
+  }
 }
 
 // The record a hit links to, read with extractRecord() and kept for the session

@@ -147,6 +147,34 @@ function yearPoints(off) {
   return off === 0 ? 2 : off === 1 ? 1 : off <= 3 ? -2 : off <= 9 ? -4 : -6;
 }
 
+// The year a record's ages count from: the record's, but the year after for a census
+// counted on 31 December (1865's), as DA counts them (da_verify.js birthYearOf())
+const CENSUS_AT_YEAR_END = [1865];
+function ageBaseYear(record, recordYear) {
+  const census = (record.recordTypeInfo || {}).prefix === 'pf' || (record.recordTypeInfo || {}).type === 'census';
+  return census && CENSUS_AT_YEAR_END.includes(recordYear) ? recordYear + 1 : recordYear;
+}
+
+// The day a record's ages were counted on: a census's census day (1801: 1 February;
+// 1865 and 1875: 31 December; 1891: 1 January; 1900: 3 December; 1910: 1 December),
+// else the record's date when it is a full one; null when not known.
+// `census`: whether the record is a census; `date`: { year, month, day } or "1865-12-31"
+const CENSUS_DAYS = { 1801: [2, 1], 1865: [12, 31], 1875: [12, 31], 1891: [1, 1], 1900: [12, 3], 1910: [12, 1] };
+function countDay(census, date) {
+  const m = typeof date === 'string' ? date.match(/^(\d{4})(?:-(\d{1,2})-(\d{1,2}))?/) : null;
+  const d = m ? { year: +m[1], month: m[2] ? +m[2] : null, day: m[3] ? +m[3] : null } : date;
+  if (!d || !d.year) return null;
+  const day = census ? CENSUS_DAYS[d.year] : null;
+  if (day) return { year: d.year, month: day[0], day: day[1] };
+  return !census && d.month && d.day ? { year: d.year, month: d.month, day: d.day } : null;
+}
+
+// A person's age on a day (`on`) by their full birth date (`birth`: { year, month, day })
+function ageOn(on, birth) {
+  const before = on.month < birth.month || (on.month === birth.month && on.day < birth.day);
+  return on.year - birth.year - (before ? 1 : 0);
+}
+
 // A record's given name close to FS's, but not one of its forms: the record's is a
 // stem of FS's (Astri for Astrid; nameMatch() the other way round), as
 // church books often write it, or a near spelling (Ingebret for Ingebrigt: nameNear())
@@ -260,10 +288,21 @@ function scoreHit(hit, P) {
   // DA's "1766*" is the year less an age (a census), itself a year uncertain (35 on
   // census day: born 1765 or 1766), so it counts one year closer. The star must be
   // the year's: DA also marks places it couldn't identify ("1844, Vågå herred*").
+  // With FS's full birth date, an age is compared as an age on the day it was counted
+  // (countDay()): the same +2, one off +1 (≈), then as years, with no year to spare
   const born = yearIn(hit.born);
   const fromAge = /\b\d{4}\*/.test(hit.born || '');
   const bornOff = born && P.birthYear ? born - P.birthYear : 0;
-  if (born && P.birthYear) byYear(fromAge && bornOff ? bornOff - Math.sign(bornOff) : bornOff, born, t('b.'));
+  const census = hit.type === 'Census';
+  const counted = fromAge && P.birthYear && P.birthDate && P.birthDate.exact ? countDay(census, hit.date) : null;
+  if (born && counted) {
+    const age = ageBaseYear({ recordTypeInfo: { type: census ? 'census' : '' } }, counted.year) - born;
+    const fs = ageOn(counted, P.birthDate);
+    const a = Math.abs(age - fs);
+    add(yearPoints(a), a === 0 ? t('age {age}, as in FamilySearch', { age })
+      : t('age {age} (FamilySearch: {fs} on {date})', { age, fs, date: formatDate(counted.year, counted.month, counted.day) }),
+    a === 0 ? true : a === 1 ? null : false);
+  } else if (born && P.birthYear) byYear(fromAge && bornOff ? bornOff - Math.sign(bornOff) : bornOff, born, t('b.'));
   else if (born && P.birth) byRange(born, P.birth.from, P.birth.to, t('b.'));
 
   // The event's year, by the person's role in it

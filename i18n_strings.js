@@ -429,6 +429,9 @@ function i18nTable() {
     'Occupation': ['Yrke', 'Yrke'],
     'about {year}': ['omkring {year}', 'omkring {year}'],
     'age {age}': ['alder {age}', 'alder {age}'],
+    'age {age}, as in FamilySearch': ['alder {age}, som i FamilySearch', 'alder {age}, som i FamilySearch'],
+    'age {age} (FamilySearch: {fs} on {date})': ['alder {age} (FamilySearch: {fs} den {date})', 'alder {age} (FamilySearch: {fs} den {date})'],
+    '{role} of {name} in the record, who has another patronymic than {relation} {fs}': ['{role} av {name} i oppføringen, som har et annet patronym enn {relation} {fs}', '{role} av {name} i oppføringa, som har eit anna patronym enn {relation} {fs}'],
     'with {name}': ['med {name}', 'med {name}'],
     '(and {n} more)': ['(og {n} til)', '(og {n} til)'],
     // Adding the record's facts to the tree person (1.5.0)

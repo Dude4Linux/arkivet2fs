@@ -828,6 +828,22 @@ test('recordFacts(): a burial\'s death, age and residence; a census age gives a 
   assert.equal(facts.Occupation, 'Tjener');
 });
 
+// Bug: a census age 22 (b. about 1844) for FS's 16 July 1846 was ≈: with FS's full
+// date, the age on census day is compared, one year off ≈ and more ✗
+test('compareFact(): a census age against FS\'s full birth date is compared as an age on census day', () => {
+  const c = record('census-1865');
+  const lars = w.recordPeople(c).find((p) => p.current);
+  const da = w.recordFacts(lars, c).Birth;  // age 17, counted on 31 December 1865
+  assert.deepEqual([da.age, plain(da.on)], [17, { year: 1865, month: 12, day: 31 }]);
+  const fs = (text) => { const date = w.parseFsDate(text); return { text, date, year: date.year }; };
+  const how = (text) => w.compareFact('Birth', da, fs(text), lars, null, c);
+  assert.equal(how('16 July 1848'), 'same');     // 17 on census day
+  assert.equal(how('2 January 1848'), 'same');
+  assert.equal(how('16 July 1847'), 'near');     // 18
+  assert.equal(how('16 July 1846'), 'differs');  // 19
+  assert.equal(how('1846'), 'near');             // no full date: the years, an age's within three
+});
+
 test('recordFacts(), deathFarm(): without permanent IDs, only the open person gets the record\'s own fields (bug: anyone else did too)', () => {
   const b = record('burial-1854');
   const bare = { ...b, people: b.people.map((p) => ({ ...p, id: '' })), fields: { ...b.fields, 'place of death': 'Sletten' } };

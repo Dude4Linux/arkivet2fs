@@ -22,6 +22,14 @@ fixes, new features, changes that break what users have).
   page, not 1843.
 - The linker reads a person's sex from a compound kin word such as "hans Søstersøn"
   (sister's son) or "Svigerdatter" (daughter-in-law).
+- When FamilySearch has the full birth date, a census age is compared as an age on
+  census day, and only one year off is close: an age three years off no longer counts
+  as close because the census's year less the age is two years off. The search page
+  scores it so, and the linker's facts table marks it ✗. Without a full date, nothing
+  changes.
+- A census's sister's or brother's son ("hans Søstersøn", "Brodersøn") counts against
+  the hit when the head of the household has another patronymic than the FamilySearch
+  mother (or father), whose brother the head would be.
 
 ## 1.6.0 - 2026-11-13
 

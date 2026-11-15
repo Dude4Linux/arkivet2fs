@@ -215,12 +215,49 @@ test('baptisms: of two in the FS birth year, one before the FS birth date is ano
   assert.ok(before.score < hits[0].score);
 });
 
-test('census: a year from an age ("1847*") counts one year closer', () => {
-  const hits = scored('da/search-census.html')[0].hits;
+test('census: without FS\'s full date, a year from an age ("1845*") counts one year closer', () => {
+  const P1846 = w.profile(criteria({
+    name: [{ givenName: 'Lars', surname: 'Halvorsen' }], sex: [{ sex: 'Male' }],
+    birth: [{ birthLikeDate: '1846', 'birthLikeDate.from': '1844', 'birthLikeDate.to': '1848' }]
+  }));
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, w.parseResults(fixture('da/search-census.html')).hits);
+  const hits = plain(w.groupHits(merged, P1846))[0].hits;
   const fromAge = hits.find((h) => h.id === 'pf99000000000235'); // 1847*
   assert.equal(reason(fromAge, /^b\. 1847/).points, 2);
-  const threeOff = hits.find((h) => h.id === 'pf99000000000138'); // 1849*
-  assert.equal(reason(threeOff, /^b\. 1849/).points, -2);
+  const twoOff = hits.find((h) => h.id === 'pf99000000000228'); // 1844*
+  assert.equal(reason(twoOff, /^b\. 1844/).points, 1);
+  const threeOff = hits.find((h) => h.id === 'pf99000000000233'); // 1843*
+  assert.equal(reason(threeOff, /^b\. 1843/).points, -2);
+});
+
+// Bug: an age of 22 in the 1865 census (DA's "1844*") scored ≈ +1 for FS's 16 July
+// 1846, who was 19 on census day; with a full date only one year of age is allowed
+test('census: with FS\'s full date, an age is compared as an age on census day, one year off ≈', () => {
+  const hits = scored('da/search-census.html')[0].hits;
+  const same = hits.find((h) => h.id === 'pf99000000000235'); // 1847*: age 19 on 31 December 1865
+  assert.deepEqual([reason(same, /^age 19/).points, reason(same, /^age 19/).text], [2, 'age 19, as in FamilySearch']);
+  const threeOff = hits.find((h) => h.id === 'pf99000000000228'); // 1844*: age 22
+  assert.deepEqual([reason(threeOff, /^age 22/).points, reason(threeOff, /^age 22/).text],
+    [-2, 'age 22 (FamilySearch: 19 on 31 December 1865)']);
+  assert.equal(reason(hits.find((h) => h.id === 'pf99000000000138'), /^age 17/).points, -2); // 1849*
+  // One year of age off: ≈ +1
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, [{ id: 'pf99000000000999', name: 'Lars Halvorsen', born: '1846*, Vaage', date: '1865-12-31', type: 'Census', role: '', source: '' }]);
+  const oneOff = plain(w.groupHits(merged, P))[0].hits[0];
+  assert.deepEqual([reason(oneOff, /^age 20/).points, reason(oneOff, /^age 20/).ok], [1, null]);
+});
+
+test('countDay() and ageOn(): the census day, else a full date; the age on it', () => {
+  assert.deepEqual(plain(w.countDay(true, '1865')), { year: 1865, month: 12, day: 31 });
+  assert.deepEqual(plain(w.countDay(true, { year: 1801 })), { year: 1801, month: 2, day: 1 });
+  assert.deepEqual(plain(w.countDay(false, '1854-12-04')), { year: 1854, month: 12, day: 4 });
+  assert.equal(w.countDay(false, '1854'), null);
+  assert.equal(w.countDay(true, '1855'), null);
+  const born = { year: 1846, month: 7, day: 16 };
+  assert.equal(w.ageOn({ year: 1865, month: 12, day: 31 }, born), 19);
+  assert.equal(w.ageOn({ year: 1866, month: 7, day: 15 }, born), 19);
+  assert.equal(w.ageOn({ year: 1866, month: 7, day: 16 }, born), 20);
 });
 
 test("census: a star on the place isn't the year's (\"1844, Vågå herred*\")", () => {

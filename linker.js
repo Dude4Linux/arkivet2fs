@@ -812,6 +812,8 @@ function recordFacts(person, record) {
       : fromAge && year ? t('about {year}', { year }) + ' (' + t('age {age}', { age: raw.match(/^\d+/)[0] }) + ')'
         : raw.replace(/\s*\(calculated\)/, '');
     facts.Birth = { text: joined(when, birthPlace), date: born, year, approx: fromAge || /calculated|\*/.test(raw), place: birthPlace };
+    // An age, with the day it was counted on (countDay()), for FS's full date
+    if (fromAge) Object.assign(facts.Birth, { age: Number(raw.match(/^\d+/)[0]), on: countDay(type === 'census', recorded) });
   }
 
   // The record's event, for the one it is about
@@ -927,8 +929,13 @@ function compareFact(fact, da, fs, person, tree, record, name) {
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
   if (!da.year || !fs.year) return '';
-  // Both with a day: the same day; else the years, an age's within one
   const a = da.date || {}, b = fs.date || {};
+  // An age against FS's full birth date: the age on the day it was counted, one off ≈
+  if (fact === 'Birth' && da.age != null && da.on && b.exact) {
+    const off = Math.abs(da.age - ageOn(da.on, b));
+    return off === 0 ? 'same' : off === 1 ? 'near' : 'differs';
+  }
+  // Both with a day: the same day; else the years, an age's within one
   if (a.day && b.day && a.month && b.month && da.year === fs.year) return a.month === b.month && a.day === b.day ? 'same' : 'near';
   const off = Math.abs(da.year - fs.year);
   if (fact === 'Residence') return off === 0 ? 'same' : '';  // FS's nearest residence may be another year's

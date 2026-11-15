@@ -291,3 +291,32 @@ test('readSourcePage(): which of the parish\'s two church books', () => {
   assert.equal(w.readSourcePage(sourcePage('L0010: Klokkerbok B-10', 'AV/SAK-0000-0001/F/Fb/L0010')).series, 'clerk');
   assert.equal(w.readSourcePage(sourcePage('L0002: Dødsfallsprotokoll', 'AV/SAK-0000-0001/F/Fc/L0002')).series, '');
 });
+
+// Bug: a census's "hans Søstersøn" of the head was offered for an FS person whose
+// mother has another father's patronymic: the head is the mother's brother, so has hers
+test("checkRecord(): a sister's or brother's son of a head with another patronymic than the FS mother or father", () => {
+  const census = (role, head = 'Ole Pedersen') => ({
+    recordTypeInfo: { prefix: 'pf', type: 'census' }, recordDate: '1865', fields: {}, others: [],
+    people: [
+      { name: head, role: 'Huusfader', birthYear: '45' },
+      { name: 'Kari Pedersdatter', role: 'hans Kone', birthYear: '40' },
+      { name: 'Lars Halvorsen', role, birthYear: '19', current: true }
+    ]
+  });
+  const against = (r, P) => plain(w.checkRecord(r, P)).filter((x) => /patronymic than/.test(x.text));
+  const sistersSon = against(census('hans Søstersøn'), lars());
+  assert.deepEqual(sistersSon.map((x) => [x.points, x.ok, x.text]),
+    [[-2, false, 'hans Søstersøn of Ole Pedersen in the record, who has another patronymic than mother Astri Larsdatter']]);
+  // A brother's son: the head is the father's brother
+  assert.deepEqual(against(census('Brodersøn'), lars()).map((x) => x.text),
+    ['Brodersøn of Ole Pedersen in the record, who has another patronymic than father Halvor Larsen']);
+  // The mother's brother: no reason against
+  assert.deepEqual(against(census('hans Søstersøn', 'Ole Larsen'), lars()), []);
+  assert.deepEqual(against(census('hans Søstersøn', 'Ole Larssen'), lars()), []);
+  // A head with a farm name, "hendes" (a woman's), another position: nothing told
+  assert.deepEqual(against(census('hans Søstersøn', 'Ole Moen'), lars()), []);
+  assert.deepEqual(against(census('hendes Søstersøn'), lars()), []);
+  assert.deepEqual(against(census('Tjenestedreng'), lars()), []);
+  // The FS mother without a patronymic
+  assert.deepEqual(against(census('hans Søstersøn'), lars({ mother: [{ motherGivenName: 'Astri', motherSurname: 'Moen' }] })), []);
+});
