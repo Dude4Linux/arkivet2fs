@@ -403,10 +403,14 @@ function i18nTable() {
     'patronymic': ['patronym', 'patronym'],
     'another patronymic': ['et annet patronym', 'eit anna patronym'],
     'b. {year}, here b. about {here}': ['f. {year}, her f. ca. {here}', 'f. {year}, her f. ca. {here}'],
+    'age {age} on census day, here {here}': ['{age} år på tellingsdagen, her {here}', '{age} år på teljingsdagen, her {here}'],
     '{fs}, here {here}': ['{fs}, her {here}', '{fs}, her {here}'],
     'the record opened, but FamilySearch {fs} is {what}; paired with {name} instead': [
       'oppføringen som ble åpnet, men {fs} i FamilySearch er {what}; paret med {name} i stedet',
       'oppføringa som vart opna, men {fs} i FamilySearch er {what}; para med {name} i staden'],
+    'the record opened, but FamilySearch {fs} is {what}: not paired; choose them if it\'s the same person': [
+      'oppføringen som ble åpnet, men {fs} i FamilySearch er {what}: ikke paret; velg personen hvis det er samme person',
+      'oppføringa som vart opna, men {fs} i FamilySearch er {what}: ikkje para; vel personen om det er same person'],
 
     // The reason for attaching (the user's words on FamilySearch)
     '{role} in {record}': ['{role} i {record}', '{role} i {record}'],

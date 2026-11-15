@@ -76,6 +76,15 @@ test('displayDate(): DA dates as FS writes them', () => {
   assert.equal(w.displayDate('1845'), '1845');
 });
 
+test("positionText(): a census's kin words with English in the English UI, as written otherwise", () => {
+  const page = (lang) => load([...SHARED, 'search.js'], { html: 'search.html', lang, fast: true });
+  const en = page('en');
+  assert.equal(en.positionText({ position: 'hans Søstersøn ug', type: 'Census' }), "hans Søstersøn [sister's son] ug");
+  assert.equal(en.positionText({ position: 'Gmd.', type: 'Baptism' }), 'Gmd. [farmer]');
+  assert.equal(en.positionText({ position: 'hans Søstersøn', type: 'Baptism' }), 'hans Søstersøn');
+  assert.equal(page('nb').positionText({ position: 'hans Søstersøn ug', type: 'Census' }), 'hans Søstersøn ug');
+});
+
 test('a search: the plan runs strict to wide, and the record checks find the baptism', async () => {
   const { w, asked, status } = await searched();
   const searches = asked.filter((u) => u.pathname.includes('/search/'));

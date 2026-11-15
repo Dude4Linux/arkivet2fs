@@ -332,6 +332,14 @@ function watchDone() {
 }
 
 // One hit in FS's columns: who (name, role, source), events, how it matches, score
+// DA's position as written, with English after the words it knows in the English UI
+// (da_record.js expandAbbreviations(); a census's family words too: "hans
+// Søstersøn [sister's son]")
+function positionText(hit) {
+  if (uiLanguage() !== 'en') return hit.position;
+  return expandAbbreviations(hit.position, hit.type === 'Census' ? positionWords().relatives : []);
+}
+
 function hitRow(hit) {
   const events = [];
   const date = displayDate(hit.date);
@@ -341,7 +349,7 @@ function hitRow(hit) {
     if (hit.domicile) events.push(el('div', { text: hit.domicile }));
   }
   if (hit.born) events.push(eventLine(t('Born'), displayDate(hit.born)));
-  if (hit.position) events.push(eventLine(t('Position'), hit.position));
+  if (hit.position) events.push(eventLine(t('Position'), positionText(hit)));
   const reasons = el('ul', { class: 'reasons' }, hit.reasons.map((r) => el('li', {
     class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : 'near',
     text: (r.ok === true ? '✓ ' : r.ok === false ? '✗ ' : '≈ ') + r.text

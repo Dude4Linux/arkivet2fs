@@ -488,6 +488,18 @@ function residentFit(record, people, from, fromTree, candidate, rel, tree) {
 // (with `household`), `trees` the known tree persons by PID (the FS person's and
 // relatives' families). `need` are paired relatives whose families aren't known yet,
 // while residents are left unpaired.
+// A resident's census age against the age FS's full birth date gives on census day
+// (countDay()): {off, here, fs}, or null without an age or an exact FS date. With
+// them, more than a year off rules the resident out as the FS person
+function ageOff(person, record, tree) {
+  const age = String(person.birthYear || '').trim().match(/^(\d{1,3})\b/);
+  const born = parseFsDate(((tree && tree.birth) || {}).date);
+  const on = countDay(true, record.recordDate);
+  if (!age || !born || !born.exact || !on) return null;
+  const fs = ageOn(on, born), here = Number(age[1]);
+  return { off: Math.abs(here - fs), here, fs };
+}
+
 function suggestResidencePairs(record, people, fs, trees, trusted) {
   const pairs = {}, why = {}, need = [];
   if (!fs) return { pairs, why, need };
@@ -531,24 +543,31 @@ function suggestResidencePairs(record, people, fs, trees, trusted) {
   const fsSex = /^(male|female)$/i.test(fs.gender || '') ? fs.gender : '';
   const fsNames = [fs.name, fs.father ? givenOf(fs.name) + ' ' + patronymicOf(fs.father.name, fsSex) : ''].filter(Boolean);
   const contradicts = (p) => {
-    const y = birthYearOf(p, record), sex = recordSex(p, record);
-    if (year && y && Math.abs(y - year) > 3) return t('b. {year}, here b. about {here}', { year, here: y });
+    const y = birthYearOf(p, record), sex = recordSex(p, record), age = ageOff(p, record, fs);
+    if (age && age.off > 1) return t('age {age} on census day, here {here}', { age: age.fs, here: age.here });
+    if (!age && year && y && Math.abs(y - year) > 3) return t('b. {year}, here b. about {here}', { year, here: y });
     if (sex && fsSex && sex.toLowerCase() !== fsSex.toLowerCase()) return t('{fs}, here {here}', { fs: t(fsSex).toLowerCase(), here: t(sex).toLowerCase() });
     if (fsNames.some((n) => patronymicClash(p.name, n))) return t('another patronymic');
     return '';
   };
   const anchor = people.find((p) => p.current);
   const fits = people.filter((p) => givenNameFit(p, fs) === 2 && !contradicts(p));
-  const candidates = trusted && anchor && (!contradicts(anchor) || !fits.length) ? [anchor] : fits;
+  // A trusted anchor stays when no one else fits, but not when FS's full birth date
+  // makes their age on census day more than a year off
+  const ageRules = (p) => { const age = ageOff(p, record, fs); return !!age && age.off > 1; };
+  const candidates = trusted && anchor && (!contradicts(anchor) || (!fits.length && !ageRules(anchor))) ? [anchor] : fits;
   let self = null, best = -Infinity;
   for (const c of candidates) {
     paired.add(c);
-    const y = birthYearOf(c, record);
-    const n = pairAround(c, fs, true).reduce((s, o) => s + o.score, 0) + (year && y ? 3 - Math.abs(y - year) : 0) + (c.current ? 0.5 : 0);
+    const y = birthYearOf(c, record), age = ageOff(c, record, fs);
+    const n = pairAround(c, fs, true).reduce((s, o) => s + o.score, 0) + (age ? 3 - age.off : year && y ? 3 - Math.abs(y - year) : 0) + (c.current ? 0.5 : 0);
     paired.delete(c);
     if (n > best) { best = n; self = c; }
   }
-  if (!self) return { pairs, why, need };
+  if (!self) {
+    if (trusted && anchor) why[anchor.key] = t('the record opened, but FamilySearch {fs} is {what}: not paired; choose them if it\'s the same person', { fs: stripVariants(fs.name), what: contradicts(anchor) });
+    return { pairs, why, need };
+  }
   take(self, fs, t('the FamilySearch person'));
   // The opened record person, who the search took for the FS person, but isn't
   if (trusted && anchor && self !== anchor) {

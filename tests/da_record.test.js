@@ -124,6 +124,27 @@ test('a census position\'s "Barn" is a child, "Børn" children', () => {
   assert.deepEqual(plain(r.people.map((p) => p.roleEnglish).slice(2)), ['Deres Barn [child]', 'Deres børn [children]', 'Deres børn [children]']);
 });
 
+test("a census position's compound kin words get English: \"hans Søstersøn [sister's son]\"", () => {
+  const file = 'da/census-1801-son.html';
+  const doc = fixtureDoc(w, file);
+  const cell = [...doc.querySelectorAll('#collapse-persons div')].find((d) => d.textContent.trim() === 'Deres børn' && !d.children.length);
+  cell.textContent = 'hans Søstersøn';
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.ok(r.people.some((p) => p.roleEnglish === "hans Søstersøn [sister's son]"));
+  const relatives = w.positionWords().relatives;
+  const english = (text) => w.expandAbbreviations(text, relatives);
+  assert.equal(english('Brodersøn'), "Brodersøn [brother's son]");
+  assert.equal(english('hans Syster datter'), 'hans Syster [sister] datter [daughter]');
+  assert.equal(english('Husbondens Svoger'), 'Husbondens Svoger [brother-in-law]');
+  assert.equal(english('deres Barnebarn'), 'deres Barnebarn [grandchild]');
+  assert.equal(english('Hendes Mand'), 'Hendes Mand [husband]');
+  assert.equal(english('Stedmoder'), 'Stedmoder [stepmother]');
+  assert.equal(english('Søskendebarn'), 'Søskendebarn [cousin]');
+  // the simple words as before, and an occupation's family word in passing is left
+  assert.equal(english('hans Søster'), 'hans Søster [sister]');
+  assert.equal(w.expandAbbreviations('Husmand'), 'Husmand [cottager]');
+});
+
 // 1910 gives each resident's full date of birth, once with the age after it ("@17")
 function withBirthDates(doc) {
   for (const label of doc.querySelectorAll('#collapse-persons .row > div:first-child')) {

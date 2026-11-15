@@ -8,6 +8,139 @@
 // level (it's injected again on each click, and a second `const` would throw). `document` is a parameter, the open page
 // or one fetched and parsed with DOMParser, so use textContent, not innerText.
 
+// --- The words expandAbbreviations() adds English after, made once per injection ---
+function positionWords() {
+  if (positionWords.made) return positionWords.made;
+  // Family words in census positions written out ("Hans Kone" → "Hans Kone [wife]",
+  // "Husmoderens Tante" → "... Tante [aunt]"); only there, since occupations use them
+  // in passing ("Gaar sin Moder tilhaande")
+  const relatives = [
+    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar', 'Familiens overhode', 'Familieoverhode'], 'head of household'],
+    [['Husmoder', 'Husmor', 'Huusmoder'], 'woman of the house'],
+    [['Søn', 'Sønn', 'Sön'], 'son'], [['Datter', 'Dotter', 'Dattér'], 'daughter'],
+    [['Barn'], 'child'], [['Børn', 'Born'], 'children'],
+    [['Fader', 'Far'], 'father'], [['Moder', 'Mor'], 'mother'],
+    [['Broder', 'Bror'], 'brother'], [['Søster', 'Syster'], 'sister'],
+    [['Svigersøn', 'Svigersønn', 'Svigersön'], 'son-in-law'], [['Svigerdatter', 'Sønnekone', 'Sönnekone'], 'daughter-in-law'],
+    [['Svigerfader', 'Svigerfar'], 'father-in-law'], [['Svigermoder', 'Svigermor'], 'mother-in-law'],
+    [['Sønnesøn', 'Sønnesønn', 'Dattersøn', 'Dattersønn', 'Sönnesön', 'Dattersön'], 'grandson'],
+    [['Sønnedatter', 'Datterdatter', 'Sönnedatter'], 'granddaughter'],
+    [['Pleiesøn', 'Plejesøn', 'Fostersøn', 'Fostersønn'], 'foster son'],
+    [['Pleiedatter', 'Plejedatter', 'Fosterdatter'], 'foster daughter'],
+    [['Pleiebarn', 'Fosterbarn', 'Plejebarn'], 'foster child'],
+    [['Stedsøn', 'Stesønn'], 'stepson'], [['Steddatter', 'Stedatter'], 'stepdaughter'],
+    [['Tante', 'Faster', 'Moster'], 'aunt'], [['Onkel', 'Farbroder', 'Morbroder', 'Farbror', 'Morbror'], 'uncle'],
+    [['Søstersøn', 'Søstersønn', 'Systersøn', 'Söstersön'], "sister's son"], [['Søsterdatter', 'Systerdatter', 'Sösterdatter'], "sister's daughter"],
+    [['Søsterbarn', 'Søstersbarn'], "sister's child"],
+    [['Brodersøn', 'Brodersønn', 'Brorsøn', 'Brorsønn', 'Brodersön'], "brother's son"], [['Broderdatter', 'Brodersdatter', 'Brordatter', 'Brorsdatter'], "brother's daughter"],
+    [['Broderbarn', 'Brodersbarn', 'Brorsbarn'], "brother's child"],
+    [['Nevø', 'Nevö'], 'nephew'], [['Niese'], 'niece'],
+    [['Søskendebarn', 'Sødskendebarn', 'Søskenbarn', 'Fætter', 'Fetter', 'Kusine'], 'cousin'],
+    [['Søskende', 'Sødskende', 'Søsken'], 'siblings'],
+    [['Halvbroder', 'Halvbror'], 'half-brother'], [['Halvsøster'], 'half-sister'],
+    [['Svoger'], 'brother-in-law'], [['Svigerinde', 'Svigerinne'], 'sister-in-law'],
+    [['Barnebarn', 'Sønnebarn', 'Datterbarn'], 'grandchild'], [['Barnebørn', 'Børnebørn'], 'grandchildren'],
+    [['Oldebarn'], 'great-grandchild'],
+    [['Bedstefader', 'Bedstefar', 'Bestefar', 'Farfar', 'Morfar'], 'grandfather'],
+    [['Bedstemoder', 'Bedstemor', 'Bestemor', 'Farmor', 'Mormor'], 'grandmother'],
+    [['Forældre', 'Foreldre'], 'parents'],
+    [['Mand', 'Ægtemand', 'Ektemann'], 'husband'],
+    [['Stedfader', 'Stefar'], 'stepfather'], [['Stedmoder', 'Stemor'], 'stepmother'], [['Stedbarn', 'Stebarn'], 'stepchild'],
+    [['Pleiefader', 'Plejefader', 'Fosterfader', 'Fosterfar'], 'foster father'], [['Pleiemoder', 'Plejemoder', 'Fostermoder', 'Fostermor'], 'foster mother'],
+    [['Huslægd', 'Lægd', 'Legd', 'Lægdslem'], 'pauper boarded by the parish']
+  ];
+
+  // --- Abbreviations in church-book positions and census occupations ---
+  // These are transcribed from the original, so they're kept and the English is
+  // added after them: "Gmd." → "Gmd. [farmer]", "... Hj. Søn" → "... Hj. Søn [son living at home]"
+  const abbreviations = [
+    ['Gmd.', 'farmer'], ['Gaardm.', 'farmer'], ['Gdm.', 'farmer'],
+    ['Hmd.', 'cottager'],
+    ['Ugk.', 'bachelor'], ['Ungk.', 'bachelor'],
+    ['Enkem.', 'widower'],
+    ['Hj. Søn', 'son living at home'], ['Hj. Dtr.', 'daughter living at home'],
+    ['Hj. Datter', 'daughter living at home']
+  ];
+  // Whole occupations and positions (any case, old and new spellings): "Murer" →
+  // "Murer [mason]", "Hustru" → "Hustru [wife]", "Pladsfolk under X" → "Pladsfolk
+  // [crofters] under X"
+  const occupations = [
+    [['Gaardmand', 'Gaardmann', 'Gårdmand', 'Gårdmann', 'Gaardbruger', 'Gaardbruker', 'Gårdbruker', 'Bonde', 'Gaardbeboer'], 'farmer'],
+    [['Selveier', 'Selveiende', 'Selvejer', 'Selveiergaardmand'], 'freeholder'],
+    [['Leilænding', 'Leilending', 'Bygselmand', 'Bygselmann'], 'tenant farmer'],
+    [['Husmand', 'Husmann', 'Huusmand', 'Pladsmand', 'Plasmand', 'Plassmann'], 'cottager'],
+    [['Husmandsfolk', 'Pladsfolk', 'Plasfolk', 'Plassfolk'], 'crofters'],
+    [['Husmandskone', 'Pladskone'], "cottager's wife"],
+    [['Strandsidder', 'Strandsitter'], 'shore cottager'],
+    [['Inderst', 'Inderste', 'Innerst', 'Innerste', 'Losjerende', 'Logerende'], 'lodger'],
+    [['Føderaadsmand', 'Føderaadsmann', 'Kaarmand', 'Kårmand', 'Kårmann', 'Kaarmann'], 'retired farmer'],
+    [['Føderaadskone', 'Kaarkone', 'Kårkone'], "retired farmer's wife"],
+    [['Tjenestekarl', 'Tjenestedreng', 'Tjenestegut', 'Dreng', 'Gaardsgut'], 'farmhand'],
+    [['Tjenestepige', 'Tjenestepike', 'Tjenestetøs', 'Tjenestejente', 'Tjenestekvinde', 'Tjenestekone'], 'maidservant'],
+    [['Tjener', 'Tjenestefolk'], 'servant'],
+    [['Arbeider', 'Arbeidsmand', 'Arbeidsmann', 'Arbeiderske'], 'labourer'],
+    [['Dagarbeider', 'Daglønner', 'Dagløner', 'Dagleier'], 'day labourer'],
+    [['Fabrikarbeider', 'Fabrikarbeiderske'], 'factory worker'],
+    [['Sagarbeider'], 'sawmill worker'],
+    [['Bergmand', 'Bergmann', 'Grubearbeider', 'Gruvearbeider'], 'miner'],
+    [['Fisker', 'Fiskar'], 'fisherman'],
+    [['Sømand', 'Sjømand', 'Sjømann', 'Matros', 'Baadsmand', 'Båtsmann'], 'sailor'],
+    [['Styrmand', 'Styrmann'], 'mate'],
+    [['Skibsfører', 'Skibscaptein', 'Skibskaptein', 'Skipsfører'], "ship's master"],
+    [['Murer', 'Muurmester', 'Murmester'], 'mason'],
+    [['Tømmermand', 'Tømmermann', 'Tømmerman'], 'carpenter'],
+    [['Snedker', 'Snekker', 'Snedkermester'], 'joiner'],
+    [['Smed', 'Smid', 'Grovsmed', 'Smedmester'], 'smith'],
+    [['Skomager', 'Skomaker', 'Skomagermester'], 'shoemaker'],
+    [['Skrædder', 'Skræder', 'Skredder', 'Skræddermester'], 'tailor'],
+    [['Møller'], 'miller'],
+    [['Bager', 'Baker', 'Bagermester'], 'baker'],
+    [['Slagter', 'Slakter'], 'butcher'],
+    [['Væver', 'Vever', 'Væverske'], 'weaver'],
+    [['Sadelmager', 'Salmaker'], 'saddler'],
+    [['Garver'], 'tanner'],
+    [['Rørlegger', 'Blikkenslager'], 'plumber'],
+    [['Budeie', 'Budeje', 'Fjøskone'], 'dairymaid'],
+    [['Staldkarl', 'Stallkar'], 'stableman'],
+    [['Kjører', 'Kjørekarl', 'Kjørekar'], 'carter'],
+    [['Artillerist'], 'artilleryman'],
+    [['Kjøbmand', 'Kjøpmand', 'Kjøpmann', 'Kiøbmand'], 'merchant'],
+    [['Handelsmand', 'Handelsmann', 'Handlende'], 'trader'],
+    [['Skolelærer', 'Skoleholder', 'Lærer', 'Lærerinde', 'Lærerinne', 'Omgangsskolelærer'], 'teacher'],
+    [['Klokker', 'Kirkesanger'], 'parish clerk'],
+    [['Sogneprest', 'Sognepræst', 'Prest', 'Præst'], 'priest'],
+    [['Lensmand', 'Lensmann'], 'sheriff'],
+    [['Soldat', 'Dragon', 'Musketeer'], 'soldier'],
+    [['Hustru', 'Hustrue', 'Hustroe', 'Hustro', 'Kone'], 'wife'],
+    [['Enke', 'Enkekone'], 'widow'],
+    [['Enkemand', 'Enkemann'], 'widower'],
+    [['Ungkarl', 'Ungkar'], 'bachelor'],
+    [['Pige', 'Pike', 'Jomfru', 'Jomfrue'], 'unmarried woman'],
+    [['Fattiglem', 'Almisselem', 'Lægdslem', 'Legdslem'], 'pauper'],
+    [['Hjemmeværende', 'Hjemmehørende'], 'living at home']
+  ];
+  positionWords.made = { relatives, abbreviations, occupations };
+  return positionWords.made;
+}
+
+// --- Helper: English after abbreviations and whole words, keeping the text as
+// written. `more`: further [words, English] pairs (positionWords().relatives for
+// census positions). Top-level, as the search page shows DA's positions with it too
+function expandAbbreviations(text, more = []) {
+  let out = text || '';
+  const annotate = (word, english, flags) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Whole words only (\b is ASCII-only, so use Unicode letter classes), and not
+    // again where the English already follows
+    const re = new RegExp('(^|[^\\p{L}])(' + escaped + ')(?![\\p{L}])(?! \\[)', flags);
+    out = out.replace(re, '$1$2 [' + english + ']');
+  };
+  const { abbreviations, occupations } = positionWords();
+  for (const [abbr, english] of abbreviations) annotate(abbr, english, 'gu');
+  for (const [words, english] of [...more, ...occupations]) for (const word of words) annotate(word, english, 'giu');
+  return out;
+}
+
 function extractRecord(document, pageUrl) {
 
   // --- Helper: Validate permanent ID format (2 alpha + 14+ digits) ---
@@ -314,114 +447,8 @@ function extractRecord(document, pageUrl) {
     return position.split(',').map(function(c) {
       const code = c.trim();
       // A code, or the position written out (1801: "Hans Kone", "Deres Søn")
-      return codes[code.toLowerCase()] || expandAbbreviations(code, RELATIVES);
+      return codes[code.toLowerCase()] || expandAbbreviations(code, positionWords().relatives);
     }).join(', ');
-  }
-
-  // Family words in census positions written out ("Hans Kone" → "Hans Kone [wife]",
-  // "Husmoderens Tante" → "... Tante [aunt]"); only there, since occupations use them
-  // in passing ("Gaar sin Moder tilhaande")
-  const RELATIVES = [
-    [['Hosbonde', 'Husbonde', 'Huusbonde', 'Husbond', 'Hosbond', 'Huusbond', 'Husfader', 'Husfar', 'Familiens overhode', 'Familieoverhode'], 'head of household'],
-    [['Husmoder', 'Husmor', 'Huusmoder'], 'woman of the house'],
-    [['Søn', 'Sønn', 'Sön'], 'son'], [['Datter', 'Dotter', 'Dattér'], 'daughter'],
-    [['Barn'], 'child'], [['Børn', 'Born'], 'children'],
-    [['Fader', 'Far'], 'father'], [['Moder', 'Mor'], 'mother'],
-    [['Broder', 'Bror'], 'brother'], [['Søster', 'Syster'], 'sister'],
-    [['Svigersøn', 'Svigersønn', 'Svigersön'], 'son-in-law'], [['Svigerdatter', 'Sønnekone', 'Sönnekone'], 'daughter-in-law'],
-    [['Svigerfader', 'Svigerfar'], 'father-in-law'], [['Svigermoder', 'Svigermor'], 'mother-in-law'],
-    [['Sønnesøn', 'Sønnesønn', 'Dattersøn', 'Dattersønn', 'Sönnesön', 'Dattersön'], 'grandson'],
-    [['Sønnedatter', 'Datterdatter', 'Sönnedatter'], 'granddaughter'],
-    [['Pleiesøn', 'Fostersøn', 'Fostersønn'], 'foster son'],
-    [['Pleiedatter', 'Fosterdatter'], 'foster daughter'],
-    [['Pleiebarn', 'Fosterbarn', 'Plejebarn'], 'foster child'],
-    [['Stedsøn', 'Stesønn'], 'stepson'], [['Steddatter', 'Stedatter'], 'stepdaughter'],
-    [['Tante', 'Faster', 'Moster'], 'aunt'], [['Onkel', 'Farbroder', 'Morbroder', 'Farbror', 'Morbror'], 'uncle'],
-    [['Huslægd', 'Lægd', 'Legd', 'Lægdslem'], 'pauper boarded by the parish']
-  ];
-
-  // --- Abbreviations in church-book positions and census occupations ---
-  // These are transcribed from the original, so they're kept and the English is
-  // added after them: "Gmd." → "Gmd. [farmer]", "... Hj. Søn" → "... Hj. Søn [son living at home]"
-  const ABBREVIATIONS = [
-    ['Gmd.', 'farmer'], ['Gaardm.', 'farmer'], ['Gdm.', 'farmer'],
-    ['Hmd.', 'cottager'],
-    ['Ugk.', 'bachelor'], ['Ungk.', 'bachelor'],
-    ['Enkem.', 'widower'],
-    ['Hj. Søn', 'son living at home'], ['Hj. Dtr.', 'daughter living at home'],
-    ['Hj. Datter', 'daughter living at home']
-  ];
-  // Whole occupations and positions (any case, old and new spellings): "Murer" →
-  // "Murer [mason]", "Hustru" → "Hustru [wife]", "Pladsfolk under X" → "Pladsfolk
-  // [crofters] under X"
-  const OCCUPATIONS = [
-    [['Gaardmand', 'Gaardmann', 'Gårdmand', 'Gårdmann', 'Gaardbruger', 'Gaardbruker', 'Gårdbruker', 'Bonde', 'Gaardbeboer'], 'farmer'],
-    [['Selveier', 'Selveiende', 'Selvejer', 'Selveiergaardmand'], 'freeholder'],
-    [['Leilænding', 'Leilending', 'Bygselmand', 'Bygselmann'], 'tenant farmer'],
-    [['Husmand', 'Husmann', 'Huusmand', 'Pladsmand', 'Plasmand', 'Plassmann'], 'cottager'],
-    [['Husmandsfolk', 'Pladsfolk', 'Plasfolk', 'Plassfolk'], 'crofters'],
-    [['Husmandskone', 'Pladskone'], "cottager's wife"],
-    [['Strandsidder', 'Strandsitter'], 'shore cottager'],
-    [['Inderst', 'Inderste', 'Innerst', 'Innerste', 'Losjerende', 'Logerende'], 'lodger'],
-    [['Føderaadsmand', 'Føderaadsmann', 'Kaarmand', 'Kårmand', 'Kårmann', 'Kaarmann'], 'retired farmer'],
-    [['Føderaadskone', 'Kaarkone', 'Kårkone'], "retired farmer's wife"],
-    [['Tjenestekarl', 'Tjenestedreng', 'Tjenestegut', 'Dreng', 'Gaardsgut'], 'farmhand'],
-    [['Tjenestepige', 'Tjenestepike', 'Tjenestetøs', 'Tjenestejente', 'Tjenestekvinde', 'Tjenestekone'], 'maidservant'],
-    [['Tjener', 'Tjenestefolk'], 'servant'],
-    [['Arbeider', 'Arbeidsmand', 'Arbeidsmann', 'Arbeiderske'], 'labourer'],
-    [['Dagarbeider', 'Daglønner', 'Dagløner', 'Dagleier'], 'day labourer'],
-    [['Fabrikarbeider', 'Fabrikarbeiderske'], 'factory worker'],
-    [['Sagarbeider'], 'sawmill worker'],
-    [['Bergmand', 'Bergmann', 'Grubearbeider', 'Gruvearbeider'], 'miner'],
-    [['Fisker', 'Fiskar'], 'fisherman'],
-    [['Sømand', 'Sjømand', 'Sjømann', 'Matros', 'Baadsmand', 'Båtsmann'], 'sailor'],
-    [['Styrmand', 'Styrmann'], 'mate'],
-    [['Skibsfører', 'Skibscaptein', 'Skibskaptein', 'Skipsfører'], "ship's master"],
-    [['Murer', 'Muurmester', 'Murmester'], 'mason'],
-    [['Tømmermand', 'Tømmermann', 'Tømmerman'], 'carpenter'],
-    [['Snedker', 'Snekker', 'Snedkermester'], 'joiner'],
-    [['Smed', 'Smid', 'Grovsmed', 'Smedmester'], 'smith'],
-    [['Skomager', 'Skomaker', 'Skomagermester'], 'shoemaker'],
-    [['Skrædder', 'Skræder', 'Skredder', 'Skræddermester'], 'tailor'],
-    [['Møller'], 'miller'],
-    [['Bager', 'Baker', 'Bagermester'], 'baker'],
-    [['Slagter', 'Slakter'], 'butcher'],
-    [['Væver', 'Vever', 'Væverske'], 'weaver'],
-    [['Sadelmager', 'Salmaker'], 'saddler'],
-    [['Garver'], 'tanner'],
-    [['Rørlegger', 'Blikkenslager'], 'plumber'],
-    [['Budeie', 'Budeje', 'Fjøskone'], 'dairymaid'],
-    [['Staldkarl', 'Stallkar'], 'stableman'],
-    [['Kjører', 'Kjørekarl', 'Kjørekar'], 'carter'],
-    [['Artillerist'], 'artilleryman'],
-    [['Kjøbmand', 'Kjøpmand', 'Kjøpmann', 'Kiøbmand'], 'merchant'],
-    [['Handelsmand', 'Handelsmann', 'Handlende'], 'trader'],
-    [['Skolelærer', 'Skoleholder', 'Lærer', 'Lærerinde', 'Lærerinne', 'Omgangsskolelærer'], 'teacher'],
-    [['Klokker', 'Kirkesanger'], 'parish clerk'],
-    [['Sogneprest', 'Sognepræst', 'Prest', 'Præst'], 'priest'],
-    [['Lensmand', 'Lensmann'], 'sheriff'],
-    [['Soldat', 'Dragon', 'Musketeer'], 'soldier'],
-    [['Hustru', 'Hustrue', 'Hustroe', 'Hustro', 'Kone'], 'wife'],
-    [['Enke', 'Enkekone'], 'widow'],
-    [['Enkemand', 'Enkemann'], 'widower'],
-    [['Ungkarl', 'Ungkar'], 'bachelor'],
-    [['Pige', 'Pike', 'Jomfru', 'Jomfrue'], 'unmarried woman'],
-    [['Fattiglem', 'Almisselem', 'Lægdslem', 'Legdslem'], 'pauper'],
-    [['Hjemmeværende', 'Hjemmehørende'], 'living at home']
-  ];
-  // `more`: further [words, English] pairs (RELATIVES for census positions)
-  function expandAbbreviations(text, more = []) {
-    let out = text || '';
-    const annotate = (word, english, flags) => {
-      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Whole words only (\b is ASCII-only, so use Unicode letter classes), and not
-      // again where the English already follows
-      const re = new RegExp('(^|[^\\p{L}])(' + escaped + ')(?![\\p{L}])(?! \\[)', flags);
-      out = out.replace(re, '$1$2 [' + english + ']');
-    };
-    for (const [abbr, english] of ABBREVIATIONS) annotate(abbr, english, 'gu');
-    for (const [words, english] of [...more, ...OCCUPATIONS]) for (const word of words) annotate(word, english, 'giu');
-    return out;
   }
 
   // --- Helper: English for a field's coded value, e.g. Gender "m" → "Male" ---

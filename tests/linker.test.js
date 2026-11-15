@@ -239,6 +239,22 @@ test('suggestResidencePairs(): opened from either son Lars, only the younger fit
   assert.deepEqual(byHousehold(people, pairs), {});
 });
 
+test("suggestResidencePairs(): with FS's full birth date, the anchor's age on census day may be a year off, not two", () => {
+  const r = record('census-1865-household');  // Halvor Larsen, the open person, is 44 on 31 December 1865
+  const head = (fs) => { const people = w.recordPeople(r); const out = w.suggestResidencePairs(r, people, fs, {}, true); return { pairs: out.pairs, why: out.why, people }; };
+  const halvor = (people) => people.find((p) => p.current);
+  for (const date of ['2 January 1821', '30 December 1821', '10 April 1820', '1819']) {
+    const { pairs, people } = head({ ...HALVOR, birth: { date } });
+    assert.equal(pairs[halvor(people).key], 'TEST-HAL', date);
+  }
+  // 46 on census day: two years off, though the year (1819 against about 1822) is within three
+  const { pairs, why, people } = head({ ...HALVOR, birth: { date: '10 April 1819' } });
+  assert.ok(!pairs[halvor(people).key]);
+  assert.ok(!Object.values(pairs).includes('TEST-HAL'));
+  assert.match(why[halvor(people).key] || '', /age 46 on census day, here 44/);
+  assert.equal(w.ageOff(halvor(people), r, { birth: { date: '1819' } }), null);
+});
+
 test('renames carry into the title, the citation and the notes', () => {
   assert.equal(w.renamePhrase('Lars, son of Halvor Larsen - Vågå', 'Lars', 'Lars Halvorsen'), 'Lars Halvorsen, son of Halvor Larsen - Vågå');
   assert.equal(w.renamePhrase('baptism of Lars, 23 August 1846', 'Lars', 'Lars Halvorsen'), 'baptism of Lars Halvorsen, 23 August 1846');

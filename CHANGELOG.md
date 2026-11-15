@@ -30,6 +30,15 @@ fixes, new features, changes that break what users have).
 - A census's sister's or brother's son ("hans Søstersøn", "Brodersøn") counts against
   the hit when the head of the household has another patronymic than the FamilySearch
   mother (or father), whose brother the head would be.
+- In a census, the linker uses the same one-year rule for the person you opened: when
+  FamilySearch has the full birth date and the age on census day is more than a year
+  off, the linker doesn't pair that person with your tree person, even when nobody else
+  at the residence fits. The row says why, and you can still choose the person by hand.
+- More family words in census positions get English after them in the English UI:
+  "hans Søstersøn [sister's son]", "Brodersøn [brother's son]", "Svoger
+  [brother-in-law]", "Barnebarn [grandchild]", "Stedmoder [stepmother]",
+  "Søskendebarn [cousin]", "Mand [husband]" and others. The search page's Position
+  line gets them too.
 
 ## 1.6.0 - 2026-11-13
 
