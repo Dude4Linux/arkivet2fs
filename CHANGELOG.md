@@ -4,7 +4,7 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
-## 1.8.0 - not released yet
+## 1.8.0 - 2026-11-16
 
 - **One package for every browser and store:** the release's download is now
   `arkivet2fs-X.Y.Z.zip` (no more "chromium" in the name), with the extension's files
