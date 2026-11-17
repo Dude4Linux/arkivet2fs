@@ -227,6 +227,9 @@ function openReportPanel(topbar, build) {
   const contactLabel = reportElement(doc, 'label', 'report-contact', t('Your e-mail address, if you would like an answer (optional)'));
   const contact = reportElement(doc, 'input');
   contact.type = 'email';
+  // a name: Chromium's autofill (Brave) offers its saved addresses for a nameless
+  // field but doesn't fill the one chosen; a <form> makes no difference
+  contact.name = 'email';
   contact.maxLength = 200;
   contact.autocomplete = 'email';
   contactLabel.append(contact);

@@ -131,6 +131,11 @@ test('reportButton(): "Send report" before "Copy report"; the panel shows the re
   assert.ok(what);
   assert.match(what.closest('label').textContent, /^What happened\?/);
   assert.equal(what.closest('label').nextElementSibling, panel.querySelector('.report-contact'));
+  // the address has a name, without which Brave's autofill didn't fill it (report #6)
+  const address = panel.querySelector('.report-contact input');
+  assert.equal(address.type, 'email');
+  assert.equal(address.name, 'email');
+  assert.equal(address.autocomplete, 'email');
   assert.equal(p.page.document.activeElement, what);
   assert.match(panel.querySelector('.report-text').value, /#### What happened\n\n\(Your answer to "What happened\?" below goes here\.\)/);
   assert.ok(!panel.querySelector('.report-text').value.includes(p.page.reportPrompt()));
