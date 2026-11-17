@@ -24,7 +24,9 @@ Halvor Larsen and Astri Larsdatter, who emigrated to America.
 
 ## 1. Before you start
 
-- **Install the extension** as the README says for your browser, and pin its icon to
+- **Install the extension**: in Chrome, Brave and Opera from the
+  [Chrome Web Store](https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm); in Firefox and LibreWolf, until it's on Firefox Add-ons, as
+  the [README](https://github.com/Dude4Linux/arkivet2fs#install) says. Pin its icon to
   the toolbar.
 - **Sign in to FamilySearch** in the same browser. The extension works in your
   FamilySearch pages as you would; it never sees your password.

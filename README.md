@@ -20,11 +20,29 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 
 ## Install
 
-There's no build step: the extension is its source files, and one package serves
-every browser below. It's waiting for approval in the Chrome Web Store and on Firefox Add-ons;
-until then each browser loads it from a folder on your computer. You need to be signed in to FamilySearch;
-Digitalarkivet needs no account. A step-by-step guide to using it is in
+You need to be signed in to FamilySearch; Digitalarkivet needs no account. A
+step-by-step guide to using it is in
 [`docs/guide.md`](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md).
+
+### From the Chrome Web Store (Chrome, Brave, Opera)
+
+1. Open [the extension's listing](https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm) on the Chrome Web Store.
+2. Click **Add to Chrome** (in Brave, **Add to Brave**). Opera first offers its own
+   **Install Chrome Extensions** helper: add it, then the extension.
+3. Pin the extension's icon to the toolbar (the puzzle piece, then the pin; in Opera,
+   the cube).
+
+The store keeps it up to date. If one of its pages shows **Allow access**, click it once.
+
+Firefox Add-ons is still reviewing it; until it's there, Firefox and LibreWolf load it
+from a folder, as below.
+
+### From GitHub, loaded from a folder
+
+There's no build step: the extension is its source files, and one package serves every
+browser below. Any of them can load it from a folder on your computer, as developers
+do: for Firefox until it's on Firefox Add-ons, or for a new release before the stores
+have it. Such a copy doesn't update itself; it tells you when there's a new release.
 
 First, in every browser:
 
@@ -52,7 +70,7 @@ First, in every browser:
    from it each time it starts, and Chrome keeps your stored persons and records by the
    folder's path.
 
-### Chrome and Brave
+#### Chrome and Brave
 
 1. Open `chrome://extensions` (in Brave, `brave://extensions`) and turn on **Developer
    mode** at the top right.
@@ -64,13 +82,13 @@ Chrome may show an **Errors** button on the extension's card with a warning abou
 If you've set the extension's **Site access** to "On click", its pages ask for
 Digitalarkivet and FamilySearch with an **Allow access** button the first time.
 
-### Opera
+#### Opera
 
 1. Open `opera://extensions` and turn on **Developer mode** at the top right.
 2. Click **Load unpacked** and choose the `arkivet2fs` folder.
 3. Pin the icon from the extensions button (the cube) on the toolbar.
 
-### Firefox and LibreWolf
+#### Firefox and LibreWolf
 
 Firefox 140 or later. Until the extension is on Mozilla's add-ons site, Firefox loads
 it as a temporary add-on, which it keeps until it closes:
@@ -97,8 +115,8 @@ Microsoft Edge isn't supported, and Safari isn't either. Other Chromium browsers
 
 ### Updating
 
-Close the extension's search pages and linkers first: reloading the extension closes
-them. Then unzip the new release into the same `arkivet2fs` folder, replacing its
+A copy from a store updates itself. For a copy loaded from a folder, close the
+extension's search pages and linkers first: reloading the extension closes them. Then unzip the new release into the same `arkivet2fs` folder, replacing its
 files (the command above, with the new version in the file's name), and:
 
 - **Chrome, Brave, Opera:** click the reload button on the extension's card on the
@@ -119,6 +137,11 @@ click **Allow the check** on the Updates page, which asks the browser for GitHub
 hosts. It then runs once a day and sends one request to GitHub (`api.github.com`),
 which sees your IP address and nothing else; turn it off on the Updates page. A copy
 installed from a store isn't checked: the store updates it.
+
+To move from a copy loaded from a folder to the store's, remove the folder's copy on
+the extensions page first, or you'll have two. The store's copy starts with an empty
+list of recent people and attached records (in Chrome, Brave and Opera they're kept per
+copy); nothing on FamilySearch changes.
 
 ### Checking a download
 
