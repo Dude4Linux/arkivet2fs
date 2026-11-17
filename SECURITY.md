@@ -29,7 +29,8 @@ issue for those.
 
 ## What the extension does with your data
 
-The privacy policy, `PRIVACY.md`, says the same for users.
+The [privacy policy](https://dude4linux.github.io/arkivet2fs/privacy.html) (`PRIVACY.md`)
+says the same for users.
 
 - It talks only to `www.digitalarkivet.no` and `www.familysearch.org`, and, to check farm
   names, to `dokpro.uio.no` (Rygh's *Norske Gaardnavne*) and `ws.geonorge.no`
