@@ -232,6 +232,8 @@ did. Then:
 
 Then click **Send**. The report goes to a private queue that only the developer reads;
 the panel gives its number. Firefox asks once whether the extension may send it.
+The [privacy policy](https://dude4linux.github.io/arkivet2fs/privacy.html) says what a
+report holds, who reads it and how long it is kept.
 
 If it can't be sent, the panel offers to copy it and open an issue on GitHub instead.
 **Copy report** only copies it, for an e-mail, a message or a GitHub issue. Issues on
