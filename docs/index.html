@@ -130,12 +130,12 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
     </div>
     <p class="tagline">A free genealogy extension for your browser that finds your Norwegian ancestors' records in <strong>Digitalarkivet</strong>, the National Archives of Norway's online archive, and attaches them to your <strong>FamilySearch</strong> tree as cited sources.</p>
     <div class="buttons">
-      <!-- When the listings are live: replace each .soon with href="<store address>" and drop the class -->
-      <a class="button soon" aria-disabled="true">Chrome Web Store<small>coming soon · Chrome, Brave, Opera</small></a>
+      <!-- When AMO's listing is live: replace the .soon with href="<store address>" and drop the class -->
+      <a class="button" href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store<small>Chrome, Brave, Opera</small></a>
       <a class="button soon" aria-disabled="true">Firefox Add-ons<small>coming soon · Firefox, LibreWolf</small></a>
       <a href="#install">How to install</a>
     </div>
-    <p class="note">Submitted to the Chrome Web Store and Firefox Add-ons on 16 November 2026 and waiting for their approval. Can't wait? <a href="#unpacked">Install it from GitHub</a> now.</p>
+    <p class="note">On the Chrome Web Store now; Firefox Add-ons is still reviewing it. Using Firefox and can't wait? <a href="#unpacked">Install it from GitHub</a>.</p>
     <ul class="facts">
       <li>Free and open source</li>
       <li>No account, no tracking</li>
@@ -182,14 +182,14 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
 
     <section id="install">
       <h2>Install</h2>
-      <p class="prose">The extension is waiting for the stores' approval; the store links will be here as soon as they are. Until then, if you're comfortable with a few technical steps, you can <a href="#unpacked">install it from GitHub</a> below.</p>
+      <p class="prose">Chrome, Brave and Opera install it from the Chrome Web Store. Firefox Add-ons is still reviewing it; until it's there, if you're comfortable with a few technical steps, you can <a href="#unpacked">install it from GitHub</a> below.</p>
       <div class="table">
         <table>
           <thead><tr><th>Browser</th><th>Where</th><th>How</th></tr></thead>
           <tbody>
-            <tr><td>Chrome</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Chrome</strong>.</td></tr>
-            <tr><td>Brave</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Brave</strong>.</td></tr>
-            <tr><td>Opera</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Opera first offers its own <strong>Install Chrome Extensions</strong> helper: add it, then the extension.</td></tr>
+            <tr><td>Chrome</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Click <strong>Add to Chrome</strong>.</td></tr>
+            <tr><td>Brave</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Click <strong>Add to Brave</strong>.</td></tr>
+            <tr><td>Opera</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Opera first offers its own <strong>Install Chrome Extensions</strong> helper: add it, then the extension.</td></tr>
             <tr><td>Firefox</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Firefox 140 or later. Click <strong>Add to Firefox</strong>.</td></tr>
             <tr><td>LibreWolf</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Firefox</strong>. LibreWolf signs you out of every site when it closes; to stay signed in to FamilySearch, go to Settings → Privacy &amp; Security → Cookies and Site Data → Manage Exceptions, and allow <code>https://www.familysearch.org</code>.</td></tr>
           </tbody>
@@ -200,7 +200,7 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
 
     <section id="unpacked">
       <h2>Install now, from GitHub</h2>
-      <p class="prose">For the technically inclined who'd rather not wait. You load the extension from a folder on your computer, as developers do. It's the same extension the stores will have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
+      <p class="prose">For the technically inclined who'd rather not wait for Firefox Add-ons, or want a new release before the stores have it. You load the extension from a folder on your computer, as developers do. It's the same extension the stores have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
       <ol class="prose">
         <li>Download <code>arkivet2fs-X.Y.Z.zip</code> (1.8.0 or later) from the <a href="https://github.com/Dude4Linux/arkivet2fs/releases/latest">latest release</a>. The same file works in every browser.</li>
         <li>Unzip it into a folder named just <code>arkivet2fs</code>, with no version in the name, somewhere it can stay, such as your home folder. On Linux or macOS, in a terminal:
@@ -230,7 +230,7 @@ Either one makes the folder if it isn't there and replaces its files if it is. W
           <p class="note">Firefox removes a temporary add-on when it closes, so load it again after each restart (what you searched and attached is kept). In LibreWolf, also allow FamilySearch's cookies as in the table above.</p>
         </div>
       </div>
-      <p class="note">To update, unzip the new release into the same <code>arkivet2fs</code> folder with the same command (with the new version in the file's name), then click the reload button on the extension's card (Firefox: <strong>Reload</strong> in <code>about:debugging</code>). The extension's <strong>Updates</strong> page, from the version number at the top of its pages, can download the new release for you and checks its signature first. When the store version is out, you can remove this copy and install that one instead (remove it first, or you'll have two). In Chrome, Brave and Opera the store copy starts with an empty list of recent people and attached records; nothing on FamilySearch changes. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has more detail.</p>
+      <p class="note">To update, unzip the new release into the same <code>arkivet2fs</code> folder with the same command (with the new version in the file's name), then click the reload button on the extension's card (Firefox: <strong>Reload</strong> in <code>about:debugging</code>). The extension's <strong>Updates</strong> page, from the version number at the top of its pages, can download the new release for you and checks its signature first. When your browser's store has it, you can remove this copy and install that one instead (remove it first, or you'll have two). In Chrome, Brave and Opera the store copy starts with an empty list of recent people and attached records; nothing on FamilySearch changes. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has more detail.</p>
     </section>
 
     <section>
