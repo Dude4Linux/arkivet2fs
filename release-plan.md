@@ -1,6 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **Phases 0–6 done**; v1.6.0 (13 November 2026) is the latest signed release.
+Status: **Phases 0–6 done**; v1.7.0 (16 November 2026) is the latest signed release.
+Phase 7 is next: the Chrome Web Store and Firefox AMO (Opera add-ons later).
 The steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
 folder loaded unpacked to store listings in three stores, and then to testers:
 
@@ -19,13 +20,13 @@ No outreach before step 5. Safari is dropped (decision 8). Each phase ends with 
 test and a tagged release (or a test tag), so the next phase starts from something
 that works.
 
-## Where we are (1.6.0, released)
+## Where we are (1.7.0, released)
 
 - One MV3 extension at the repo root for Chromium and Firefox 140+: Chrome, Brave and
   Opera load the folder unpacked, Firefox and LibreWolf as a temporary add-on, from a
   signed zip on GitHub's releases or a clone. Edge isn't supported. There's no build
   step for the extension; `tools/build.mjs` zips a git ref. The tests are in the repo
-  (`tests/`, `npm test`: 323 tests, jsdom, offline; a dev-only `package.json`), and CI
+  (`tests/`, `npm test`: 346 tests, jsdom, offline; a dev-only `package.json`), and CI
   runs `web-ext lint` on the package.
 - The repo is public on GitHub, `Dude4Linux/arkivet2fs`; git-server is a read-only
   pull mirror of it.
@@ -35,17 +36,16 @@ that works.
   `windows`, `notifications`, `permissions`, `management.getSelf`, `runtime`, `i18n`.
   The service worker (Firefox: the event page) loads its helpers with
   `importScripts()`.
-- Problems are reported with the pages' **Report on GitHub** (a public issue the user
-  pastes the report into). 1.7.0 replaces it with **Send report**, to a private queue
+- Problems are reported with the pages' **Send report**, to a private queue
   (`relay/`: a Cloudflare Worker filing issues in a private repository through a
-  GitHub App), and declares Firefox's data collection.
+  GitHub App), or **Copy report** for a public issue; Firefox's data collection is
+  declared in the manifest (1.7.0).
 
 ## To do
 
-1.7.0: the report relay (in the code; the Worker, the App and the reports repository
-are set up by the maintainer, relay/README.md, and `relayUrl()` filled in before the
-tag). Then Phase 7 (store listings: Chrome Web Store, Opera add-ons, Firefox AMO),
-then Phase 8 (testers).
+Phase 7: submit 1.7.0 to the Chrome Web Store and Firefox AMO (the accounts are
+ready; the texts and screenshots are in `store/`). Opera add-ons later. Then Phase 8
+(testers).
 
 ## What an extension can and can't do about updates
 
@@ -466,9 +466,11 @@ checker stays quiet there (it runs only in an unpacked copy). The self-hosted Fi
 route (`web-ext sign --channel=unlisted`, `update_url`, `updates.json`) is dropped:
 AMO's listed channel updates Firefox and LibreWolf users by itself.
 
-- **Your accounts:** you create them and submit the listings yourself:
+- **Your accounts:** you create them and submit the listings yourself (Chrome Web
+  Store and AMO ready, 16 November 2026):
   - Chrome Web Store: $5 once (decided). Brave and Opera users can install from it too.
-  - Opera add-ons (addons.opera.com): free; the review can take weeks.
+  - Opera add-ons (addons.opera.com): free; the review can take weeks. Skipped for
+    now (16 November 2026); Opera users can install from the Chrome Web Store.
   - Firefox AMO, listed: free.
 - **What every listing needs** (prepared in the repo, `store/` and `PRIVACY.md`, excluded
   from the package; done):
