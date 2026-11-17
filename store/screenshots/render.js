@@ -1,13 +1,16 @@
 // Renders the search page or the linker on the tests' sanitized DA pages and
 // made-up TEST- persons, and writes it as a static page for a screenshot:
-//   node store/screenshots/render.js search|linker OUT.html [SCROLL]
-// SCROLL moves the page up by that many pixels. make.sh runs it for each shot.
+//   node store/screenshots/render.js search|linker OUT.html [SCROLL] [LANG]
+// SCROLL moves the page up by that many pixels; LANG is the UI language (en, nb, nn).
+// make.sh runs it for each shot.
 const path = require('path');
 const fs = require('fs');
 const ROOT = path.resolve(__dirname, '../..');
 const { load, value, fixture, fixtureDoc, fixtureUrl, SHARED } = require(path.join(ROOT, 'tests/harness.js'));
 
-const [page, out, scroll = '0'] = process.argv.slice(2);
+const [page, out, scroll = '0', lang = 'en'] = process.argv.slice(2);
+// The start of a text as the page shows it, before any {placeholder}
+const shown = (w, text) => w.t(text).split('{')[0];
 const area = { get: async () => ({}), set: async () => {}, remove: async () => {} };
 const runtime = { getManifest: () => JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8')), getURL: (p) => p, id: 'x' };
 
@@ -49,18 +52,21 @@ async function search() {
     return new Response('Not found', { status: 404 });
   };
   const chrome = { runtime, storage: { local: area, session: area, onChanged: { addListener() {} } }, permissions: { contains: async () => true } };
-  const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html?' + query, fetch, fast: true, chrome });
+  const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html?' + query, fetch, fast: true, chrome, lang });
   const doc = w.document;
   const status = () => (doc.querySelector('.check-status') || {}).textContent || '';
   const start = Date.now();
-  while (!/^Checked/.test(status())) {
+  const checked = shown(w, 'Checked the records of the best {n} hits against the FamilySearch relatives.');
+  while (!status().startsWith(checked)) {
     if (Date.now() - start > 20000) throw new Error('timed out: ' + status());
     await new Promise((r) => setTimeout(r, 20));
   }
   // The fake DA has only one record page: leave out the others' "record not read",
   // and the record kinds turned off
-  [...doc.querySelectorAll('*')].filter((e) => !e.children.length && /^record not read/.test(e.textContent.trim())).forEach((e) => e.remove());
-  [...doc.querySelectorAll('tr, li, .query')].filter((r) => /Turned off under Record kinds/.test(r.textContent) && !r.querySelector('tr, li, .query')).forEach((r) => r.remove());
+  const notRead = shown(w, 'record not read: {error}');
+  const off = shown(w, 'Turned off under Record kinds.');
+  [...doc.querySelectorAll('*')].filter((e) => !e.children.length && e.textContent.trim().startsWith(notRead)).forEach((e) => e.remove());
+  [...doc.querySelectorAll('tr, li, .query')].filter((r) => r.textContent.includes(off) && !r.querySelector('tr, li, .query')).forEach((r) => r.remove());
   write(doc);
 }
 
@@ -77,7 +83,7 @@ async function linker() {
   };
   // No storage while loading, so main() doesn't start
   const chrome = { runtime };
-  const w = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  const w = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true, lang });
   w.Element.prototype.scrollIntoView = () => {};
   chrome.storage = { local: area, session: area, onChanged: { addListener() {} } };
   const doc = w.document;
@@ -99,7 +105,7 @@ async function linker() {
   w.showFsCheck();
   const child = state.rows.find((row) => row.person.name === 'Lars');
   child.showFacts();
-  const item = [...child.node.querySelectorAll('.additions li')].find((li) => /Add the christening/.test(li.textContent));
+  const item = [...child.node.querySelectorAll('.additions li')].find((li) => li.textContent.includes(w.t('Add the {fact}', { fact: w.t('Christening').toLowerCase() })));
   const tick = item.querySelector('input[type=checkbox]');
   tick.checked = true;
   tick.dispatchEvent(new w.Event('change'));

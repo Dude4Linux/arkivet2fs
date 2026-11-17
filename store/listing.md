@@ -121,9 +121,16 @@ Kildekode (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 
 ## Screenshot captions
 
-The four screenshots are in `screenshots/` (1280×800). Upload them in this order. AMO
-asks for a **caption** under each one, in each language; the Chrome Web Store and
-Opera have no captions.
+The four screenshots are in `screenshots/` (1280×800, the pages in English), and the
+same four in Bokmål in `screenshots/nb/`. Upload them in this order.
+
+- **AMO:** one set for every language, so upload the English set. It asks for a
+  **caption** under each one: the English captions below, then, with the page switched
+  to Norwegian Bokmål, the Norwegian ones.
+- **Chrome Web Store:** each language can have its own screenshots. Upload the English
+  set under the default (Global) language and the Bokmål set under Norwegian. No
+  captions.
+- **Opera:** the English set, no captions.
 
 **1. `1-search.png`**, English:
 
@@ -228,8 +235,8 @@ privacy, permission and review questions are in `review.md`.
 
 1. Package: upload `arkivet2fs-X.Y.Z.zip` from the GitHub release.
 2. Store listing: [Description](#description) (English, then add Norwegian), Category
-   Tools, Language, icon, the four screenshots, Homepage, Support site, Official URL
-   None.
+   Tools, Language, icon, the four [screenshots](#screenshot-captions) (English under
+   Global, Bokmål under Norwegian), Homepage, Support site, Official URL None.
 3. Privacy practices: the [privacy policy address](#category-tags-and-links), and
    `review.md`'s single purpose, permission reasons and data use.
 4. Test instructions: `review.md`'s notes for the reviewers.

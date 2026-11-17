@@ -9,19 +9,26 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 chrome=${CHROME:-google-chrome}
 
-# shot NAME PAGE SCROLL
+# shot NAME PAGE SCROLL LANG: the English set in screenshots/, the Bokmål set in nb/
 shot() {
-  node "$dir/render.js" "$2" "$tmp/$1.html" "$3"
+  out=$dir; [ "$4" = en ] || out=$dir/$4
+  mkdir -p "$out"
+  node "$dir/render.js" "$2" "$tmp/$1.html" "$3" "$4"
   "$chrome" --headless=new --hide-scrollbars --allow-file-access-from-files \
     --window-size=1280,800 --screenshot="$tmp/$1.png" "file://$tmp/$1.html" 2>/dev/null
-  mv "$tmp/$1.png" "$dir/$1.png"
-  echo "$dir/$1.png"
+  mv "$tmp/$1.png" "$out/$1.png"
+  echo "$out/$1.png"
 }
 
-shot 1-search search 0
-shot 2-source linker 0
-shot 3-people linker 645
-shot 4-changes linker 1615
+shot 1-search search 0 en
+shot 2-source linker 0 en
+shot 3-people linker 645 en
+shot 4-changes linker 1615 en
+
+shot 1-search search 0 nb
+shot 2-source linker 0 nb
+shot 3-people linker 645 nb
+shot 4-changes linker 1615 nb
 
 # The website (docs/index.html) shows two of them
 cp "$dir/1-search.png" docs/images/search.png
