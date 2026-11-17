@@ -134,6 +134,7 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
       <a class="button soon" aria-disabled="true">Firefox Add-ons<small>coming soon · Firefox, LibreWolf</small></a>
       <a href="#install">How to install</a>
     </div>
+    <p class="note">Submitted to the Chrome Web Store and Firefox Add-ons on 16 November 2026 and waiting for their approval. Can't wait? <a href="#unpacked">Install it from GitHub</a> now.</p>
     <ul class="facts">
       <li>Free and open source</li>
       <li>No account, no tracking</li>
@@ -180,6 +181,7 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
 
     <section id="install">
       <h2>Install</h2>
+      <p class="prose">The extension is waiting for the stores' approval; the store links will be here as soon as they are. Until then, if you're comfortable with a few technical steps, you can <a href="#unpacked">install it from GitHub</a> below.</p>
       <div class="table">
         <table>
           <thead><tr><th>Browser</th><th>Where</th><th>How</th></tr></thead>
@@ -192,7 +194,38 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
           </tbody>
         </table>
       </div>
-      <p class="note">Then pin the extension's icon, the blue book, from the puzzle-piece button on the toolbar. If one of its pages shows <strong>Allow access</strong>, click it once. Until the store listings are live, the extension can be installed from its <a href="https://github.com/Dude4Linux/arkivet2fs/releases">GitHub releases</a>; the <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has the steps for each browser.</p>
+      <p class="note">Then pin the extension's icon, the blue book, from the puzzle-piece button on the toolbar. If one of its pages shows <strong>Allow access</strong>, click it once.</p>
+    </section>
+
+    <section id="unpacked">
+      <h2>Install now, from GitHub</h2>
+      <p class="prose">For the technically inclined who'd rather not wait. You load the extension from a folder on your computer, as developers do. It's the same extension the stores will have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
+      <ol class="prose">
+        <li>Download <code>arkivet2fs-X.Y.Z-chromium.zip</code> from the <a href="https://github.com/Dude4Linux/arkivet2fs/releases/latest">latest release</a> (X.Y.Z is the version). The name says "chromium", but the same file works in Firefox.</li>
+        <li>Unzip it somewhere it can stay, such as your home or Documents folder. It makes a folder named <code>arkivet2fs</code>. Don't move or delete the folder afterwards: the browser loads the extension from it.</li>
+      </ol>
+      <div class="two">
+        <div class="box">
+          <h3>Chrome, Brave, Opera</h3>
+          <ol>
+            <li>Open <code>chrome://extensions</code> (Brave: <code>brave://extensions</code>, Opera: <code>opera://extensions</code>).</li>
+            <li>Turn on <strong>Developer mode</strong>, at the top right.</li>
+            <li>Click <strong>Load unpacked</strong> and choose the <code>arkivet2fs</code> folder.</li>
+            <li>Pin the icon from the puzzle-piece (Opera: cube) button on the toolbar.</li>
+          </ol>
+          <p class="note">An <strong>Errors</strong> button on the extension's card about <code>background.scripts</code> can be ignored: that line is for Firefox.</p>
+        </div>
+        <div class="box">
+          <h3>Firefox 140+, LibreWolf</h3>
+          <ol>
+            <li>Open <code>about:debugging</code> and choose <strong>This Firefox</strong>.</li>
+            <li>Click <strong>Load Temporary Add-on…</strong> and pick <code>manifest.json</code> in the <code>arkivet2fs</code> folder.</li>
+            <li>Pin the icon from the puzzle-piece button on the toolbar.</li>
+          </ol>
+          <p class="note">Firefox removes a temporary add-on when it closes, so load it again after each restart (what you searched and attached is kept). In LibreWolf, also allow FamilySearch's cookies as in the table above.</p>
+        </div>
+      </div>
+      <p class="note">To update, unzip the new release over the same folder, then click the reload button on the extension's card (Firefox: <strong>Reload</strong> in <code>about:debugging</code>). The extension's <strong>Updates</strong> page, from the version number at the top of its pages, can download the new release for you and checks its signature first. When the store version is out, you can remove this copy and install that one instead (remove it first, or you'll have two). In Chrome, Brave and Opera the store copy starts with an empty list of recent people and attached records; nothing on FamilySearch changes. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has more detail.</p>
     </section>
 
     <section>
