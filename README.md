@@ -7,6 +7,8 @@ A browser extension (Chrome, Brave, Opera, Firefox and LibreWolf) that connects 
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
 citation, and attaches it to the tree persons the record names.
 
+Website, with the install steps for each browser: https://dude4linux.github.io/arkivet2fs/
+
 ```
 FS person page ──(1: "Digital Arkivet" in Search Records)──▶ search page
      ▲                                                          │ 2: searches DA,
@@ -19,8 +21,8 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 ## Install
 
 There's no build step: the extension is its source files, and one package serves
-every browser below. It isn't in the browsers' add-on stores yet, so each browser loads
-it from a folder on your computer. You need to be signed in to FamilySearch;
+every browser below. It's waiting for approval in the Chrome Web Store and on Firefox Add-ons;
+until then each browser loads it from a folder on your computer. You need to be signed in to FamilySearch;
 Digitalarkivet needs no account. A step-by-step guide to using it is in
 [`docs/guide.md`](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md).
 
