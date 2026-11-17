@@ -73,6 +73,7 @@ Kildekode (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 | Category | Tools (else Education) | Productivity | Search Tools, Other |
 | Languages | English, Norwegian | English, Norwegian | English, Norwegian (Bokmål) |
 | Homepage | https://github.com/Dude4Linux/arkivet2fs | the same | the same |
+| Official URL | leave as **None** (only a site verified in Google Search Console can go there; github.com can't be) | | |
 | Support | https://github.com/Dude4Linux/arkivet2fs/issues | the same | Support website: the same; Support email: leave empty |
 | Privacy policy | the PRIVACY.md address above | the same | paste `PRIVACY.md`'s text in the Privacy Policy field |
 | License | | | GPL-3.0-or-later ("GNU General Public License v3.0") |

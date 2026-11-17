@@ -29,7 +29,8 @@ First, in every browser:
 1. Download `arkivet2fs-X.Y.Z-chromium.zip` from the latest release:
    https://github.com/Dude4Linux/arkivet2fs/releases/latest (or clone the repository,
    or **Code** → **Download ZIP**, for the newest code). The name says "chromium", but
-   the same package works in Firefox.
+   the same package works in Firefox. (The release's `-store.zip` holds the same files
+   for the browser stores' uploads; it doesn't unpack to a folder of its own.)
 2. Unzip it where it can stay, for instance in your home folder. It unpacks to a folder
    named `arkivet2fs`. Keep the folder where it is: the browser loads the extension
    from it each time it starts.

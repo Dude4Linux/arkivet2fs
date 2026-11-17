@@ -205,8 +205,8 @@ export function placeholders(text) {
   return [...new Set(text.match(/\bREPLACE-[A-Z-]+/g) || [])];
 }
 
-// {name, data, version, files} of the chromium package of a ref
-export function buildChromium(ref) {
+// {version, commit, files, shipped, mtime}: the shipped files of a ref, checked
+function shippedFiles(ref) {
   const commit = git(['rev-parse', '--verify', `${ref}^{commit}`]).toString().trim();
   const tree = treeFiles(commit);
   const odd = tree.filter((f) => f.type !== 'blob' || !/^100(644|755)$/.test(f.mode));
@@ -217,13 +217,31 @@ export function buildChromium(ref) {
   checkReferences(files);
   const v = version(commit);
   const mtime = Number(git(['show', '-s', '--format=%ct', commit]).toString().trim());
-  const data = makeZip(shipped.map((p) => ({ name: `${TOP}/${p}`, data: files.get(p) })), mtime);
-  return { name: `arkivet2fs-${v}-chromium.zip`, data, version: v, commit, files: shipped };
+  return { version: v, commit, files, shipped, mtime };
 }
 
-// Every package of a ref (one for now; Firefox and others come later)
+// A package of the shipped files, each under the folder `top` (none: at the zip's root)
+function packageOf(s, name, top) {
+  const data = makeZip(s.shipped.map((p) => ({ name: top ? `${top}/${p}` : p, data: s.files.get(p) })), s.mtime);
+  return { name, data, version: s.version, commit: s.commit, files: s.shipped };
+}
+
+// {name, data, version, commit, files} of the chromium package of a ref: unpacks to
+// arkivet2fs/, for loading unpacked (the README's steps, update.html's download)
+export function buildChromium(ref, s = shippedFiles(ref)) {
+  return packageOf(s, `arkivet2fs-${s.version}-chromium.zip`, TOP);
+}
+
+// The stores' package (Chrome Web Store, AMO, Opera): the same files with
+// manifest.json at the zip's root, which AMO requires
+export function buildStore(ref, s = shippedFiles(ref)) {
+  return packageOf(s, `arkivet2fs-${s.version}-store.zip`, '');
+}
+
+// Every package of a ref, each signed and attached to the release
 export function buildAll(ref) {
-  return [buildChromium(ref)];
+  const s = shippedFiles(ref);
+  return [buildChromium(ref, s), buildStore(ref, s)];
 }
 
 // The "## X.Y.Z" section of CHANGELOG.md at a ref, without its heading

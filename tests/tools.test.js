@@ -80,6 +80,22 @@ test('buildChromium(): HEAD builds, unpacks to arkivet2fs/, holds the committed 
   assert.ok(manifest.equals(execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: ROOT })));
 });
 
+test('buildStore(): the stores\' package, the same files with manifest.json at the zip\'s root; buildAll() makes both', async () => {
+  const [b] = await tools;
+  const version = JSON.parse(execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: ROOT })).version;
+  const store = b.buildStore('HEAD');
+  assert.equal(store.name, `arkivet2fs-${version}-store.zip`);
+  assert.ok(store.data.equals(b.buildStore('HEAD').data));
+  const entries = b.readZip(store.data);
+  // AMO refuses a zip whose manifest.json is inside a folder
+  assert.ok(entries.some((e) => e.name === 'manifest.json'));
+  assert.ok(entries.every((e) => !e.name.startsWith('arkivet2fs/')));
+  const chromium = b.readZip(b.buildChromium('HEAD').data);
+  assert.deepEqual(entries.map((e) => e.name), chromium.map((e) => e.name.slice('arkivet2fs/'.length)));
+  entries.forEach((e, i) => assert.ok(e.data.equals(chromium[i].data), e.name));
+  assert.deepEqual(b.buildAll('HEAD').map((p) => p.name), [`arkivet2fs-${version}-chromium.zip`, `arkivet2fs-${version}-store.zip`]);
+});
+
 test('changelogSection(): a version\'s notes; CHANGELOG.md has the manifest\'s version', async () => {
   const [b] = await tools;
   const text = '# Changelog\n\n## 1.2.0 - 2026-12-01\n\n- New\n\n## 1.1.9\n\n- Old\n';

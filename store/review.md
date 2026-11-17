@@ -79,8 +79,9 @@ AMO's other questions:
 
 ## Notes for the reviewers
 
-Paste into the Chrome Web Store's and Opera's "notes for the reviewer" and AMO's
-"Notes to Reviewer":
+Paste into the Chrome Web Store's **Test instructions** page (the item's left-hand
+menu; "Additional instructions", the username and password left empty), Opera's
+"notes for the reviewer" and AMO's "Notes to Reviewer":
 
 ```
 The extension works with two sites: Digitalarkivet (www.digitalarkivet.no, free, no account) and FamilySearch (www.familysearch.org, needs a free account).

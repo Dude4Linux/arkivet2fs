@@ -14,8 +14,9 @@ excludes `store/`).
 - The privacy policy is `PRIVACY.md` at the root, linked by its GitHub address:
   https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
 
-All three stores take the same zip, `arkivet2fs-X.Y.Z-chromium.zip` from the GitHub
-release, after `tools/release`. Each store signs its own copy and updates it; the
+All three stores take the same zip, `arkivet2fs-X.Y.Z-store.zip` from the GitHub
+release, after `tools/release`: the chromium zip's files with `manifest.json` at the
+zip's root (AMO refuses the chromium zip, whose files are in an `arkivet2fs/` folder). Each store signs its own copy and updates it; the
 update check stays off there, since it runs only in a copy loaded unpacked.
 
 When a release changes what the extension reads, keeps or sends, update `PRIVACY.md`,

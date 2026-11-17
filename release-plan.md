@@ -102,7 +102,8 @@ package.json              dev-only tools (jsdom, web-ext); nothing ships from np
 
 | File | For |
 |---|---|
-| `arkivet2fs-X.Y.Z-chromium.zip` | every browser: unpacked in Chromium browsers, and the upload to all three stores (the name stays, since copies from 1.2.0 on look for it) |
+| `arkivet2fs-X.Y.Z-chromium.zip` | every browser, loaded unpacked: it unzips to `arkivet2fs/` (the name stays, since copies from 1.2.0 on look for it) |
+| `arkivet2fs-X.Y.Z-store.zip` | the upload to the stores: the same files with `manifest.json` at the zip's root, which AMO requires (from the release after 1.7.0, whose was made by hand from the chromium zip) |
 | `*.sig` next to each package | a detached signature of that file |
 | `SHA256SUMS`, `SHA256SUMS.sig` | checksums of everything, signed |
 
