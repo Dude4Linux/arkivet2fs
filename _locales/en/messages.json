@@ -4,7 +4,7 @@
     "description": "The extension's name"
   },
   "description": {
-    "message": "Find a FamilySearch person's records in Norway's Digitalarkivet and attach them to the tree as cited sources.",
+    "message": "Genealogy: find a FamilySearch person's records in Norway's Digitalarkivet and attach them to the tree as cited sources.",
     "description": "The extension's description"
   }
 }

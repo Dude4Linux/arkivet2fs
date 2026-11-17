@@ -2,8 +2,8 @@
 
 <img src="icons/banner.png" alt="arkivet2fs: find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch" width="100%">
 
-A browser extension (Chrome, Brave, Opera, Firefox and LibreWolf) that connects FamilySearch (FS) with Norway's Digitalarkivet
-(DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
+A genealogy extension for the browser (Chrome, Brave, Opera, Firefox and LibreWolf) that connects FamilySearch (FS)
+with Norway's Digitalarkivet (DA). It finds a FamilySearch person's records in Digitalarkivet. It also turns a
 Digitalarkivet record into a FamilySearch source, with an Evidence Explained–style
 citation, and attaches it to the tree persons the record names.
 

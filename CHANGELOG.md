@@ -9,6 +9,8 @@ fixes, new features, changes that break what users have).
 - **Send report:** choosing one of your browser's saved e-mail addresses now fills in
   the address box. In Brave (and other Chromium browsers) the suggestion was shown but
   picking it left the box empty.
+- The extension's description (in the browser's extensions page and the Chrome Web
+  Store) now says it is for genealogy.
 
 ## 1.8.0 - 2026-11-16
 
