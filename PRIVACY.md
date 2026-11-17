@@ -8,7 +8,7 @@ or endorsed by FamilySearch International or the National Archives of Norway
 (Arkivverket), which runs Digitalarkivet.
 
 This policy covers the extension as published on the Chrome Web Store, Opera add-ons,
-Firefox Add-ons and GitHub. Last changed: 14 November 2026.
+Firefox Add-ons and GitHub. Last changed: 17 November 2026.
 
 ## In short
 
@@ -90,7 +90,8 @@ choose, such as a public GitHub issue.
 
 ## Changes and contact
 
-Changes to this policy are made in this file, in the extension's public repository
+This policy is published at https://dude4linux.github.io/arkivet2fs/privacy.html.
+Changes to it are made in the file `PRIVACY.md` in the extension's public repository
 (https://github.com/Dude4Linux/arkivet2fs), whose history shows every change.
 
 Questions go to the repository's issues

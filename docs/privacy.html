@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacy policy · DigitalArkivet to FamilySearch</title>
+<meta name="description" content="The privacy policy of DigitalArkivet to FamilySearch (arkivet2fs), a free genealogy extension for the browser.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="images/icon.svg" type="image/svg+xml">
+<!-- Made from PRIVACY.md by tools/privacy-page.mjs: edit PRIVACY.md and run it again. -->
+<style>
+:root {
+  --paper: #ffffff; --ink: #1f2a36; --muted: #546273; --deep: #2e547a;
+  --parchment: #f4ecdc; --copper: #b0621f; --rule: #d9dee5;
+  --serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --sans: "Noto Sans", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --deep: #a9c7e6;
+    --parchment: #222c37; --copper: #e09a5c; --rule: #33404e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --deep: #a9c7e6;
+  --parchment: #222c37; --copper: #e09a5c; --rule: #33404e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 var(--sans); }
+.wrap {
+  max-width: 46rem; margin: 0 auto; padding-block: 24px 64px; display: grid; gap: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.home { font-size: .95rem; }
+h1, h2 { font-family: var(--serif); color: var(--deep); margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(1.8rem, 4.5vw, 2.4rem); }
+h2 { font-size: 1.4rem; margin-top: 20px; }
+p { margin: 0; }
+a { color: var(--deep); text-underline-offset: 2px; overflow-wrap: anywhere; }
+a:focus-visible { outline: 3px solid var(--copper); outline-offset: 2px; }
+strong { font-weight: 600; }
+code { font-size: .9em; background: var(--parchment); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+ul { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--rule); }
+td code { overflow-wrap: normal; white-space: nowrap; }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+@media (max-width: 700px) { body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+<p class="home"><a href="./">← DigitalArkivet to FamilySearch</a></p>
+
+<h1>Privacy policy</h1>
+
+<p><strong>arkivet2fs</strong> ("DigitalArkivet to FamilySearch") is a browser extension that finds a FamilySearch person's records in Norway's Digitalarkivet and turns a record you choose into a FamilySearch source, attached to the tree persons it names. It is free software (GPL-3.0-or-later) by an independent developer, Dude4Linux. It is not affiliated with or endorsed by FamilySearch International or the National Archives of Norway (Arkivverket), which runs Digitalarkivet.</p>
+
+<p>This policy covers the extension as published on the Chrome Web Store, Opera add-ons, Firefox Add-ons and GitHub. Last changed: 17 November 2026.</p>
+
+<h2>In short</h2>
+
+<ul>
+<li>The extension has no account, no analytics, no advertising and no tracking. The developer gets nothing from it unless you send a problem report yourself.</li>
+<li>It works in your browser, on the sites it was made for, as you would by hand. What it reads there stays in your browser, except what it puts on FamilySearch when you click to do so.</li>
+<li>Nothing is sold or shared with anyone, and nothing is used for any other purpose than the ones below.</li>
+</ul>
+
+<h2>The sites it talks to</h2>
+
+<div class="table"><table>
+<thead><tr><th>Site</th><th>What is sent</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><code>www.digitalarkivet.no</code></td><td>Search requests (the names, years, places and relatives of the FamilySearch person you search for) and requests for record and source pages</td><td>To find and read the records, as Digitalarkivet's own search does</td></tr>
+<tr><td><code>www.familysearch.org</code></td><td>What FamilySearch's own pages send when the extension fills in and clicks them for you</td><td>To read your tree person and SourceBox, and, when you click, to create or update the source, attach it, tag it and add facts</td></tr>
+<tr><td><code>www.dokpro.uio.no</code> (Rygh's <em>Norske Gaardnavne</em>) and <code>ws.geonorge.no</code> (Kartverket)</td><td>A farm name only</td><td>To tell whether a last name is a farm</td></tr>
+<tr><td><code>report.arkivet2fs-relay.workers.dev</code> (the report relay)</td><td>A problem report, only when you click <strong>Send</strong></td><td>See "Problem reports" below</td></tr>
+<tr><td><code>api.github.com</code>, <code>release-assets.githubusercontent.com</code></td><td>A request for the latest release, nothing about you</td><td>The update check, only in a copy loaded from GitHub (not a store's), and only after you allow it on the Updates page</td></tr>
+</tbody>
+</table></div>
+
+<p>Each site sees your IP address, as with any web page you open. The extension never reads or keeps your FamilySearch password or session, and doesn't use FamilySearch's API.</p>
+
+<h2>What it reads on FamilySearch</h2>
+
+<p>On FamilySearch the extension reads the person page you start from (names, events, places and family), your SourceBox (whether a source is there and who it is attached to), and the pages of the tree persons a record names and of their relatives, to pair the record's people with them. These pages can name living people. Some of the reading happens in a window of its own, kept behind the extension's page, which it closes when done.</p>
+
+<p>Nothing is saved, attached, tagged or changed on FamilySearch before you click <strong>Create source and attach</strong> (or <strong>Update source…</strong>, <strong>Create source only</strong>) on the linker page, or <strong>Create person</strong> or <strong>Use this person</strong> in its new-person panel.</p>
+
+<h2>What it keeps in your browser</h2>
+
+<p>All of this stays in your browser's storage for the extension; none of it is sent anywhere:</p>
+
+<ul>
+<li><strong>For the browser session only:</strong> search results, the record pages read, the records you opened in the linker, and the families read from FamilySearch.</li>
+<li><strong>Until you remove the extension:</strong> the last 30 FamilySearch persons you searched for (name, events and family, with their FamilySearch IDs), so the linker can pair a record with them; the last 300 records you attached (the record's Digitalarkivet IDs, the FamilySearch source's ID and title, the IDs and names of the people who have it, and the facts added), so the search page can mark them; your language choice; and the update check's state and settings.</li>
+</ul>
+
+<p>Removing the extension removes all of it.</p>
+
+<h2>Problem reports</h2>
+
+<p>The search page and the linker have <strong>Send report</strong>. It opens a panel with the report to read and edit before anything is sent; nothing leaves your browser before you click <strong>Send</strong>, and only what the panel holds is sent.</p>
+
+<p>A report holds what the page read, showed and did: the Digitalarkivet record or search, the tree persons you paired (names and FamilySearch IDs), the extension's version, the browser and system, the page's language, any error messages, what you wrote under <strong>What happened?</strong>, and an e-mail address if you choose to give one. The panel asks you to take out living people first. Firefox asks your permission before the first report is sent.</p>
+
+<p>The report goes to the report relay, a Cloudflare Worker run by the developer, which files it as an issue in the developer's private repository on GitHub. Only the developer can read it there. The relay stores nothing; when GitHub refuses a report, it logs GitHub's error, not the report. Cloudflare and GitHub see the request's IP address. The developer uses a report only to fix the problem it describes, and the e-mail address only to answer it. A report is kept until the problem is dealt with. To have one deleted, send another report giving its number ("Sent, as report #N").</p>
+
+<p><strong>Copy report</strong> only copies the report to your clipboard, for you to paste where you choose, such as a public GitHub issue.</p>
+
+<h2>Changes and contact</h2>
+
+<p>This policy is published at <a href="https://dude4linux.github.io/arkivet2fs/privacy.html.">https://dude4linux.github.io/arkivet2fs/privacy.html.</a> Changes to it are made in the file <code>PRIVACY.md</code> in the extension's public repository (<a href="https://github.com/Dude4Linux/arkivet2fs">https://github.com/Dude4Linux/arkivet2fs</a>), whose history shows every change.</p>
+
+<p>Questions go to the repository's issues (<a href="https://github.com/Dude4Linux/arkivet2fs/issues">https://github.com/Dude4Linux/arkivet2fs/issues</a>), or privately through <strong>Send report</strong>. Security problems go through GitHub's private reporting, as <code>SECURITY.md</code> says.</p>
+</main>
+</body>
+</html>

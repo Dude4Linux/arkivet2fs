@@ -12,8 +12,10 @@ excludes `store/`).
 - `screenshots/`: the four 1280×800 screenshots in English, `screenshots/nb/` the same
   four in Bokmål, and `make.sh`, which makes both sets from the tests' sanitized pages
   and made-up persons (`render.js` takes the UI language).
-- The privacy policy is `PRIVACY.md` at the root, linked by its GitHub address:
-  https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
+- The privacy policy is `PRIVACY.md` at the root, published on the website as
+  https://dude4linux.github.io/arkivet2fs/privacy.html (`docs/privacy.html`, made by
+  `node tools/privacy-page.mjs`; the stores can't read GitHub's file pages, which
+  answer their fetch with 503).
 
 All three stores take the release's package, `arkivet2fs-X.Y.Z.zip` from the GitHub
 release, after `tools/release`, with `manifest.json` at the zip's root (since 1.8.0 the
@@ -22,6 +24,7 @@ one package, the same zip people load unpacked; 1.7.0's upload was
 `arkivet2fs/` folder, AMO refuses). Each store signs its own copy and updates it; the
 update check stays off there, since it runs only in a copy loaded unpacked.
 
-When a release changes what the extension reads, keeps or sends, update `PRIVACY.md`,
+When a release changes what the extension reads, keeps or sends, update `PRIVACY.md`
+(then `node tools/privacy-page.mjs` for the website's copy),
 `SECURITY.md`'s "What the extension does with your data", `review.md`, and each
 store's data form. When it adds a permission, add its reason to `review.md`.

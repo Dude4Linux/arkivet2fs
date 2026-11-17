@@ -89,7 +89,7 @@ This extension connects FamilySearch's Family Tree with Digitalarkivet, the Nati
 
 You need a FamilySearch account (free). The extension works in FamilySearch's own pages in your browser, as you would; it never reads your password and saves nothing on FamilySearch before you click. Always check the record, and the scanned image when there is one, before you attach it: transcriptions vary.
 
-Privacy: no account, no tracking, no analytics. Searches and records stay in your browser. A problem report is sent only when you click Send, after you've read it. The privacy policy: https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
+Privacy: no account, no tracking, no analytics. Searches and records stay in your browser. A problem report is sent only when you click Send, after you've read it. The privacy policy: https://dude4linux.github.io/arkivet2fs/privacy.html
 
 User guide: https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md
 Source code (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
@@ -113,7 +113,7 @@ Utvidelsen kobler slektstreet i FamilySearch sammen med Digitalarkivet, Arkivver
 
 Du trenger en konto i FamilySearch (gratis). Utvidelsen arbeider i FamilySearchs egne sider i nettleseren din, slik du selv ville gjort; den leser aldri passordet ditt og lagrer ingenting i FamilySearch før du klikker. Kontroller alltid posten, og det skannede bildet når det finnes, før du legger den til: transkripsjonene varierer.
 
-Personvern: ingen konto, ingen sporing, ingen analyse. Søk og poster blir i nettleseren din. En feilrapport sendes bare når du klikker Send, etter at du har lest den. Personvernerklæringen (engelsk): https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
+Personvern: ingen konto, ingen sporing, ingen analyse. Søk og poster blir i nettleseren din. En feilrapport sendes bare når du klikker Send, etter at du har lest den. Personvernerklæringen (engelsk): https://dude4linux.github.io/arkivet2fs/privacy.html
 
 Brukerveiledning (engelsk): https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md
 Kildekode (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
@@ -206,7 +206,7 @@ https://github.com/Dude4Linux/arkivet2fs/issues
 Privacy policy):
 
 ```text
-https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md
+https://dude4linux.github.io/arkivet2fs/privacy.html
 ```
 
 AMO wants the policy's text instead: open `PRIVACY.md` on GitHub, click **Raw**, select

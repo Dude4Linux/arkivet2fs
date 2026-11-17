@@ -174,3 +174,19 @@ test('tools/release: a published release is downloaded to a temporary folder, ch
   assert.throws(() => run('v1'), (e) => /unknown argument v1/.test(e.stderr.toString()));
   fs.rmSync(dir, { recursive: true });
 });
+
+test('privacy-page.mjs: docs/privacy.html is PRIVACY.md as made by the tool; the Markdown it reads', async () => {
+  const { privacyPage, policyHtml, inline } = await import('../tools/privacy-page.mjs');
+  const markdown = fs.readFileSync(path.join(ROOT, 'PRIVACY.md'), 'utf8');
+  // after a change to PRIVACY.md: node tools/privacy-page.mjs
+  assert.equal(fs.readFileSync(path.join(ROOT, 'docs/privacy.html'), 'utf8'), privacyPage(markdown));
+  assert.equal(inline('**Send** a `<b>` *Norske* (https://example.org/a?b=1&c)'),
+    '<strong>Send</strong> a <code>&lt;b&gt;</code> <em>Norske</em> (<a href="https://example.org/a?b=1&amp;c">https://example.org/a?b=1&amp;c</a>)');
+  assert.equal(policyHtml('## In short\n\n- one\n  two\n- three\n\nA\nparagraph.'),
+    '<h2>In short</h2>\n\n<ul>\n<li>one two</li>\n<li>three</li>\n</ul>\n\n<p>A paragraph.</p>');
+  // every word of the policy is on the page
+  const words = (text) => text.replace(/<\/?(a|strong|em|code)\b[^>]*>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/^\s*- |-{3,}/gm, ' ').replace(/[*`]/g, '').replace(/[|#]/g, ' ').split(/\s+/).filter(Boolean);
+  const page = fs.readFileSync(path.join(ROOT, 'docs/privacy.html'), 'utf8');
+  const body = page.slice(page.indexOf('<h1>'), page.indexOf('</main>'));
+  assert.deepEqual(words(body), words(markdown));
+});
