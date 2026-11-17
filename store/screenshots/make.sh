@@ -22,3 +22,7 @@ shot 1-search search 0
 shot 2-source linker 0
 shot 3-people linker 645
 shot 4-changes linker 1615
+
+# The website (docs/index.html) shows two of them
+cp "$dir/1-search.png" docs/images/search.png
+cp "$dir/3-people.png" docs/images/people.png

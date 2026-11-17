@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DigitalArkivet to FamilySearch</title>
+<meta name="description" content="A free browser extension that finds your Norwegian ancestors' records in Digitalarkivet and attaches them to your FamilySearch tree as cited sources.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="images/icon.svg" type="image/svg+xml">
+<!-- The website, published by GitHub Pages from master's docs/ (.nojekyll: served as is).
+     No fonts, scripts or anything else from other sites: a visit is seen by GitHub only. -->
+<style>
+/* Layout: one centred column; a parchment hero with the install buttons, then how it works, needs, install per browser, privacy, help */
+:root {
+  --paper: #ffffff;
+  --ink: #1f2a36;
+  --muted: #546273;
+  --sky: #4a88c4;
+  --deep: #2e547a;
+  --parchment: #f4ecdc;
+  --copper: #b0621f;
+  --rule: #d9dee5;
+  --button-ink: #ffffff;
+  --shadow: 0 1px 3px rgb(31 42 54 / 0.18);
+  --serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --sans: "Noto Sans", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --sky: #7fb0e0; --deep: #a9c7e6;
+    --parchment: #222c37; --copper: #e09a5c; --rule: #33404e; --button-ink: #10202f;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --sky: #7fb0e0; --deep: #a9c7e6;
+  --parchment: #222c37; --copper: #e09a5c; --rule: #33404e; --button-ink: #10202f;
+  --shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper); color: var(--ink);
+  font: 17px/1.6 var(--sans);
+}
+.wrap {
+  max-width: 60rem; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--serif); color: var(--deep); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.8rem); }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.1rem; }
+p { margin: 0; }
+a { color: var(--deep); text-underline-offset: 2px; }
+a:focus-visible, .button:focus-visible { outline: 3px solid var(--copper); outline-offset: 2px; }
+strong { font-weight: 600; }
+ul, ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
+.prose { max-width: 40rem; }
+
+.hero { background: var(--parchment); border-bottom: 3px solid var(--sky); }
+.hero .wrap { padding-block: 48px 40px; display: grid; gap: 22px; }
+.brand { display: flex; gap: 18px; align-items: center; }
+.brand img { width: 84px; height: 84px; flex: none; }
+.tagline { font-size: 1.2rem; max-width: 40rem; }
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.button {
+  display: inline-flex; flex-direction: column; padding: 10px 18px; border-radius: 8px;
+  background: var(--deep); color: var(--button-ink); text-decoration: none; font-weight: 600;
+  box-shadow: var(--shadow); line-height: 1.3;
+}
+.button small { font-weight: 400; font-size: .8rem; opacity: .9; }
+.button.soon { background: transparent; color: var(--deep); border: 2px dashed var(--deep); box-shadow: none; cursor: default; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: .95rem; list-style: none; padding: 0; }
+.facts li::before { content: "✓ "; color: var(--copper); font-weight: 700; }
+
+main .wrap { padding-block: 48px 64px; display: grid; gap: 56px; }
+section { display: grid; gap: 16px; }
+
+.shot { margin: 0; display: grid; gap: 8px; }
+.shot img { width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 8px; box-shadow: var(--shadow); }
+.shot figcaption { color: var(--muted); font-size: .9rem; }
+
+.steps { list-style: none; padding: 0; counter-reset: s; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.steps li { counter-increment: s; background: var(--parchment); border-radius: 8px; padding: 18px; display: grid; gap: 6px; align-content: start; }
+.steps li::before {
+  content: counter(s); display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%;
+  background: var(--sky); color: var(--button-ink); font-weight: 700;
+}
+
+.needs { list-style: none; padding: 0; gap: 10px; }
+.needs li { padding-left: 2rem; position: relative; }
+.needs li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 1.4rem; text-align: center; color: var(--copper); font-weight: 700; }
+
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .97rem; }
+th, td { text-align: left; vertical-align: top; padding: 12px 10px; border-bottom: 1px solid var(--rule); }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.soon-text { color: var(--copper); font-style: italic; }
+.note { color: var(--muted); font-size: .95rem; }
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.two > * { min-width: 0; }
+.box { background: var(--parchment); border-left: 4px solid var(--copper); border-radius: 0 8px 8px 0; padding: 18px 20px; display: grid; gap: 10px; }
+
+footer { border-top: 1px solid var(--rule); color: var(--muted); font-size: .9rem; }
+footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
+
+@media (max-width: 700px) {
+  body { font-size: 16px; }
+  .steps, .two { grid-template-columns: 1fr; }
+  .brand img { width: 60px; height: 60px; }
+  .hero .wrap { padding-block: 32px 28px; }
+  main .wrap { gap: 40px; padding-block: 32px 48px; }
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <img src="images/icon.svg" alt="" width="84" height="84">
+      <h1>DigitalArkivet to FamilySearch</h1>
+    </div>
+    <p class="tagline">A free browser extension that finds your Norwegian ancestors' records in <strong>Digitalarkivet</strong>, the National Archives of Norway's online archive, and attaches them to your <strong>FamilySearch</strong> tree as cited sources.</p>
+    <div class="buttons">
+      <!-- When the listings are live: replace each .soon with href="<store address>" and drop the class -->
+      <a class="button soon" aria-disabled="true">Chrome Web Store<small>coming soon · Chrome, Brave, Opera</small></a>
+      <a class="button soon" aria-disabled="true">Firefox Add-ons<small>coming soon · Firefox, LibreWolf</small></a>
+      <a href="#install">How to install</a>
+    </div>
+    <ul class="facts">
+      <li>Free and open source</li>
+      <li>No account, no tracking</li>
+      <li>English, Bokmål and Nynorsk</li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <section class="prose">
+      <h2>Why it helps</h2>
+      <p>Norway's church books, censuses and emigrant lists are online, free, at Digitalarkivet. Finding one ancestor there is slow work: the records are in old Norwegian, a name can be spelled a dozen ways (Pedersdatter, Pedersdtr., Persdatter), and a family took the name of each farm it lived on. This extension does the searching from the person in your tree, and writes the source for you.</p>
+    </section>
+
+    <section>
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li><h3>Search from your tree</h3><p>On a person's page in FamilySearch, click <strong>Digital Arkivet</strong> under Search Records. It looks for their baptism, confirmation, marriages, children's baptisms, censuses, emigration and burial.</p></li>
+        <li><h3>See the best matches</h3><p>Every hit says why it matches: ✓ agrees with your tree, ≈ close (another spelling, a year off), ✗ disagrees. The best hits are checked against the people in the record itself.</p></li>
+        <li><h3>Review, then attach</h3><p><strong>Review &amp; Attach</strong> shows the record, a source with a full citation, and the record's people paired with your tree. One click adds the source and attaches it to each of them.</p></li>
+      </ol>
+      <figure class="shot">
+        <img src="images/search.png" alt="The search page: baptism hits for Lars Halvorsen, the best scoring 15 with the father, the mother and the birth date matching the tree" width="1280" height="800" loading="lazy">
+        <figcaption>The search page ranks the hits and says why each one matches. (The people in these pictures are made up.)</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="images/people.png" alt="The review page: the child in a baptism paired with the tree person, the record's facts beside FamilySearch's, the christening ticked to be added" width="1280" height="800" loading="lazy">
+        <figcaption>The review page pairs the record's people with your tree and shows their facts side by side, as FamilySearch's Source Linker does.</figcaption>
+      </figure>
+      <p class="note">Nothing is saved on FamilySearch until you click to save it. Always look at the record, and the scanned page when there is one, before you attach it: old handwriting is hard to read, and transcriptions vary.</p>
+    </section>
+
+    <section>
+      <h2>What you need</h2>
+      <ul class="needs">
+        <li>A free <a href="https://www.familysearch.org">FamilySearch</a> account, and ancestors in its Family Tree who were born or lived in Norway</li>
+        <li>A desktop or laptop computer (Windows, Mac or Linux): phones and tablets can't run browser extensions</li>
+        <li>Chrome, Brave, Opera, Firefox or LibreWolf (Safari and Microsoft Edge aren't supported)</li>
+      </ul>
+      <p class="note">Digitalarkivet needs no account.</p>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <div class="table">
+        <table>
+          <thead><tr><th>Browser</th><th>Where</th><th>How</th></tr></thead>
+          <tbody>
+            <tr><td>Chrome</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Chrome</strong>.</td></tr>
+            <tr><td>Brave</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Brave</strong>.</td></tr>
+            <tr><td>Opera</td><td>Chrome Web Store <span class="soon-text">(coming soon)</span></td><td>Opera first offers its own <strong>Install Chrome Extensions</strong> helper: add it, then the extension.</td></tr>
+            <tr><td>Firefox</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Firefox 140 or later. Click <strong>Add to Firefox</strong>.</td></tr>
+            <tr><td>LibreWolf</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Firefox</strong>. LibreWolf signs you out of every site when it closes; to stay signed in to FamilySearch, go to Settings → Privacy &amp; Security → Cookies and Site Data → Manage Exceptions, and allow <code>https://www.familysearch.org</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Then pin the extension's icon, the blue book, from the puzzle-piece button on the toolbar. If one of its pages shows <strong>Allow access</strong>, click it once. Until the store listings are live, the extension can be installed from its <a href="https://github.com/Dude4Linux/arkivet2fs/releases">GitHub releases</a>; the <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has the steps for each browser.</p>
+    </section>
+
+    <section>
+      <h2>Your first record</h2>
+      <ol class="prose">
+        <li>Sign in to FamilySearch in the same browser.</li>
+        <li>Open an ancestor born in Norway in the Family Tree.</li>
+        <li>In the <strong>Search Records</strong> panel on the right, below Google, click <strong>Digital Arkivet</strong>.</li>
+        <li>Wait while it searches; the best matches come first.</li>
+        <li>Click <strong>Review &amp; Attach</strong> on a hit and read the record. Every field can be corrected first: the source's title, citation and notes, a person's name, which tree person each one is paired with, and the facts to add. When it's right, click <strong>Create source and attach</strong>.</li>
+      </ol>
+      <p class="note">The <a href="https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md">user guide</a> goes through each task: census households, entries in two church books, adding facts to the tree, people not in the tree yet.</p>
+    </section>
+
+    <div class="two">
+      <section>
+        <h2>Your privacy</h2>
+        <p>No account, no tracking, no analytics. The extension works in your own browser, on Digitalarkivet and FamilySearch, as you would by hand, and never sees your FamilySearch password. Your searches and records stay in your browser. Nothing goes to the developer unless you send a report yourself.</p>
+        <p><a href="https://github.com/Dude4Linux/arkivet2fs/blob/master/PRIVACY.md">The privacy policy</a></p>
+      </section>
+      <section>
+        <h2>Questions and feedback</h2>
+        <p>The extension's pages have a <strong>Send report</strong> button at the top. Write what happened and send it, privately, to the developer: something that went wrong, something confusing, or an idea. You can read and edit the whole report first; add your e-mail address only if you'd like an answer.</p>
+        <p>Or open an <a href="https://github.com/Dude4Linux/arkivet2fs/issues">issue on GitHub</a> (public).</p>
+      </section>
+    </div>
+
+    <div class="box">
+      <h2>Testers wanted</h2>
+      <p>The extension is new. If you have Norwegian ancestors in FamilySearch's tree, try it on your own family and tell us what works and what doesn't, with <strong>Send report</strong>. Every report is read.</p>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>DigitalArkivet to FamilySearch (arkivet2fs) is a free, independent project, not affiliated with or endorsed by FamilySearch or the National Archives of Norway.</p>
+    <p>Free software under the GPL-3.0-or-later. <a href="https://github.com/Dude4Linux/arkivet2fs">Source code on GitHub</a> · <a href="https://github.com/Dude4Linux/arkivet2fs/blob/master/CHANGELOG.md">What's new</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
