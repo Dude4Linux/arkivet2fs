@@ -449,7 +449,7 @@ use that language.
   last 30 FS persons you searched for (name, events and family), so the linker can
   pair a record with them. They stay in the browser's extension storage.
   A problem report leaves your browser only when you click **Send** (see below). The
-  [privacy policy](PRIVACY.md) has the details.
+  [privacy policy](https://dude4linux.github.io/arkivet2fs/privacy.html) has the details.
 
 ## Files
 
@@ -484,7 +484,7 @@ use that language.
 | `docs/guide.md` | The user guide, task by task |
 | `CHANGELOG.md` | What changed in each version |
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |
-| `PRIVACY.md` | The privacy policy: what the extension reads, keeps and sends |
+| `PRIVACY.md` | The privacy policy: what the extension reads, keeps and sends (on the website as `docs/privacy.html`, made by `tools/privacy-page.mjs`) |
 | `store/` | The texts for the store listings |
 | `LICENSE` | The GNU General Public License, version 3 |
 
