@@ -18,10 +18,20 @@ At most 132 characters (Chrome); AMO allows 250.
 - Norwegian: Finn postene til en person i FamilySearch i Digitalarkivet, og legg dem
   til i slektstreet som kilder med kildehenvisning.
 
+AMO's summary has a field of its own: use the longer one there, which names genealogy
+(AMO's search reads the name, summary and description; its tags have no genealogy).
+
+- English: Genealogy tool for Norwegian family history: find a FamilySearch person's
+  records in Digitalarkivet (church books, censuses, emigrant protocols) and attach them
+  as cited sources.
+- Norwegian: Verktøy for slektsforskning: finn postene til en person i FamilySearch i
+  Digitalarkivet (kirkebøker, folketellinger, emigrantprotokoller) og legg dem til i
+  slektstreet som kilder med kildehenvisning.
+
 ## Description, English
 
 ```
-Find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch.
+Find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch. A genealogy and family-history tool for Norwegian research.
 
 This extension connects FamilySearch's Family Tree with Digitalarkivet, the National Archives of Norway's online archive of church books, censuses and emigrant protocols. It is an independent, free project, not affiliated with or endorsed by FamilySearch or the National Archives of Norway.
 
@@ -45,7 +55,7 @@ Source code (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 ## Description, Norwegian (Bokmål)
 
 ```
-Finn dine norske aner i Digitalarkivet og bruk dem som kilder i FamilySearch.
+Finn dine norske aner i Digitalarkivet og bruk dem som kilder i FamilySearch. Et verktøy for slektsforskning i norske kilder.
 
 Utvidelsen kobler slektstreet i FamilySearch sammen med Digitalarkivet, Arkivverkets nettarkiv med kirkebøker, folketellinger og emigrantprotokoller. Den er et uavhengig og gratis prosjekt, uten tilknytning til FamilySearch eller Arkivverket.
 
@@ -71,13 +81,31 @@ Kildekode (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 | Field | Chrome Web Store | Opera add-ons | Firefox AMO |
 |---|---|---|---|
 | Category | Tools (else Education) | Productivity | Search Tools, Other |
+| Tags | | | search (AMO's fixed list has no genealogy tag) |
 | Languages | English, Norwegian | English, Norwegian | English, Norwegian (Bokmål) |
 | Homepage | https://github.com/Dude4Linux/arkivet2fs | the same | the same |
 | Official URL | leave as **None** (only a site verified in Google Search Console can go there; github.com can't be) | | |
 | Support | https://github.com/Dude4Linux/arkivet2fs/issues | the same | Support website: the same; Support email: leave empty |
 | Privacy policy | the PRIVACY.md address above | the same | paste `PRIVACY.md`'s text in the Privacy Policy field |
 | License | | | GPL-3.0-or-later ("GNU General Public License v3.0") |
-| Icon | `icons/icon128.png` | the same | from the package |
+| Icon | `icons/icon128.png` | the same | upload `icons/icon128.png` too |
+
+## Screenshot captions
+
+AMO asks for a caption for each screenshot (`screenshots/`, in this order).
+
+1. `1-search.png`
+   - The search page: a FamilySearch person's records found in Digitalarkivet, ranked by how well they match, with the reasons shown for each hit.
+   - Søkesiden: en FamilySearch-persons kilder funnet i Digitalarkivet, rangert etter hvor godt de passer, med begrunnelsen for hvert treff.
+2. `2-source.png`
+   - Review the source before anything is saved: the title, an Evidence Explained–style citation and the record's notes, all editable.
+   - Se over kilden før noe lagres: tittel, kildehenvisning og notater fra kilden, alt kan redigeres.
+3. `3-people.png`
+   - Pair the people in the record with tree persons and compare the record's facts with FamilySearch's side by side. Facts the tree lacks, such as a christening, can be added.
+   - Koble personene i kilden til personer i slektstreet, og sammenlign kildens opplysninger med FamilySearch side om side. Opplysninger treet mangler, som en dåp, kan legges til.
+4. `4-changes.png`
+   - Close names are flagged (≈), the changes to the tree are listed, and nothing is saved on FamilySearch until you click "Create source and attach".
+   - Navn som ligner flagges (≈), endringene i slektstreet listes opp, og ingenting lagres på FamilySearch før du klikker «Opprett kilde og knytt til».
 
 The Chrome Web Store shows the account's contact e-mail on every listing; use an
 address you don't mind being public.
