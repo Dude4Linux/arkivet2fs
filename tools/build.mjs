@@ -19,10 +19,6 @@ import { crc32 } from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// The folder the zip unpacks to. Chrome keeps an unpacked extension's data by its
-// folder, so an update replaces this folder's contents in place.
-export const TOP = 'arkivet2fs';
-
 const SHIP = [
   /^manifest\.json$/,
   /^_locales\/[a-z_A-Z]+\/messages\.json$/,
@@ -220,28 +216,22 @@ function shippedFiles(ref) {
   return { version: v, commit, files, shipped, mtime };
 }
 
-// A package of the shipped files, each under the folder `top` (none: at the zip's root)
-function packageOf(s, name, top) {
-  const data = makeZip(s.shipped.map((p) => ({ name: top ? `${top}/${p}` : p, data: s.files.get(p) })), s.mtime);
-  return { name, data, version: s.version, commit: s.commit, files: s.shipped };
-}
-
-// {name, data, version, commit, files} of the chromium package of a ref: unpacks to
-// arkivet2fs/, for loading unpacked (the README's steps, update.html's download)
-export function buildChromium(ref, s = shippedFiles(ref)) {
-  return packageOf(s, `arkivet2fs-${s.version}-chromium.zip`, TOP);
-}
-
-// The stores' package (Chrome Web Store, AMO, Opera): the same files with
-// manifest.json at the zip's root, which AMO requires
-export function buildStore(ref, s = shippedFiles(ref)) {
-  return packageOf(s, `arkivet2fs-${s.version}-store.zip`, '');
-}
-
-// Every package of a ref, each signed and attached to the release
-export function buildAll(ref) {
+// {name, data, version, commit, files} of the package of a ref, arkivet2fs-X.Y.Z.zip,
+// with manifest.json at the zip's root: the stores' upload (Chrome Web Store, AMO, Opera;
+// AMO refuses a manifest inside a folder) and the unpacked install (unzipped into a
+// folder named arkivet2fs; the README's steps, update.html's download). Up to 1.7.0
+// the release had arkivet2fs-X.Y.Z-chromium.zip, unpacking to arkivet2fs/, instead.
+// Chrome keeps an unpacked extension's data by its folder, so an update is unzipped
+// into the same folder, replacing its files.
+export function buildPackage(ref) {
   const s = shippedFiles(ref);
-  return [buildChromium(ref, s), buildStore(ref, s)];
+  const data = makeZip(s.shipped.map((p) => ({ name: p, data: s.files.get(p) })), s.mtime);
+  return { name: `arkivet2fs-${s.version}.zip`, data, version: s.version, commit: s.commit, files: s.shipped };
+}
+
+// Every package of a ref, each signed and attached to the release: the one
+export function buildAll(ref) {
+  return [buildPackage(ref)];
 }
 
 // The "## X.Y.Z" section of CHANGELOG.md at a ref, without its heading

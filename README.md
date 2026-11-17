@@ -28,14 +28,29 @@ Digitalarkivet needs no account. A step-by-step guide to using it is in
 
 First, in every browser:
 
-1. Download `arkivet2fs-X.Y.Z-chromium.zip` from the latest release:
+1. Download `arkivet2fs-X.Y.Z.zip` (1.8.0 or later) from the latest release:
    https://github.com/Dude4Linux/arkivet2fs/releases/latest (or clone the repository,
-   or **Code** → **Download ZIP**, for the newest code). The name says "chromium", but
-   the same package works in Firefox. (The release's `-store.zip` holds the same files
-   for the browser stores' uploads; it doesn't unpack to a folder of its own.)
-2. Unzip it where it can stay, for instance in your home folder. It unpacks to a folder
-   named `arkivet2fs`. Keep the folder where it is: the browser loads the extension
-   from it each time it starts.
+   or **Code** → **Download ZIP**, for the newest code). The same file works in every
+   browser.
+2. Unzip it into a folder named just `arkivet2fs`, with no version in the name, where it
+   can stay, for instance in your home folder. On Linux or macOS, in a terminal:
+
+   ```sh
+   unzip -o ~/Downloads/arkivet2fs-1.8.0.zip -d ~/arkivet2fs
+   ```
+
+   On Windows, in PowerShell:
+
+   ```powershell
+   Expand-Archive -Force "$HOME\Downloads\arkivet2fs-1.8.0.zip" "$HOME\arkivet2fs"
+   ```
+
+   Either one makes the folder if it isn't there and replaces its files if it is
+   (`manifest.json` ends up right inside `arkivet2fs`). With a file manager instead,
+   change the folder it suggests (`arkivet2fs-1.8.0`) to `arkivet2fs`. Use the same
+   folder for every update and keep it where it is: the browser loads the extension
+   from it each time it starts, and Chrome keeps your stored persons and records by the
+   folder's path.
 
 ### Chrome and Brave
 
@@ -83,7 +98,8 @@ Microsoft Edge isn't supported, and Safari isn't either. Other Chromium browsers
 ### Updating
 
 Close the extension's search pages and linkers first: reloading the extension closes
-them. Then unzip the new release over the same folder, replacing its files, and:
+them. Then unzip the new release into the same `arkivet2fs` folder, replacing its
+files (the command above, with the new version in the file's name), and:
 
 - **Chrome, Brave, Opera:** click the reload button on the extension's card on the
   extensions page. The browser keeps an unpacked extension's stored persons and records
@@ -96,8 +112,8 @@ icon, a notification, and "v. X.Y.Z is out" at the top of its pages. Click the v
 there (or the icon with the arrow, on a page other than Digitalarkivet) for the
 **Updates** page: what's new, and a **Download** button that saves the package only
 after checking it (its size and SHA-256 as the release gives them, and the signature
-against the maintainer's key below; a file that fails is not saved). Unzip it over the
-folder, then click **Reload the extension** there. **Remind me later** waits three days;
+against the maintainer's key below; a file that fails is not saved). Unzip it into the
+folder, replacing its files, then click **Reload the extension** there. **Remind me later** waits three days;
 **Skip this version** waits for the next one. From 1.6.0 the check is off until you
 click **Allow the check** on the Updates page, which asks the browser for GitHub's two
 hosts. It then runs once a day and sends one request to GitHub (`api.github.com`),
@@ -128,7 +144,7 @@ draft release.)
 
 To check a package you downloaded yourself, put it in one folder with its `.sig`,
 `SHA256SUMS` and `SHA256SUMS.sig` (all from the release's **Assets**) and run
-`sh ~/path/to/the/clone/tools/verify.sh arkivet2fs-X.Y.Z-chromium.zip` there. Both
+`sh ~/path/to/the/clone/tools/verify.sh arkivet2fs-X.Y.Z.zip` there. Both
 scripts take the key from their clone (`keys/release.pub`); a copy elsewhere needs the
 key's path (`verify.sh`: after the package; `release`: `--key`).
 

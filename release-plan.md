@@ -102,8 +102,7 @@ package.json              dev-only tools (jsdom, web-ext); nothing ships from np
 
 | File | For |
 |---|---|
-| `arkivet2fs-X.Y.Z-chromium.zip` | every browser, loaded unpacked: it unzips to `arkivet2fs/` (the name stays, since copies from 1.2.0 on look for it) |
-| `arkivet2fs-X.Y.Z-store.zip` | the upload to the stores: the same files with `manifest.json` at the zip's root, which AMO requires (from the release after 1.7.0, whose was made by hand from the chromium zip) |
+| `arkivet2fs-X.Y.Z.zip` | the one package (from 1.8.0): `manifest.json` at the zip's root, for every browser loaded unpacked (unzipped into a folder named `arkivet2fs`) and the upload to every store (AMO requires the manifest at the root); the Updates page downloads it. Up to 1.7.0 the package was `arkivet2fs-X.Y.Z-chromium.zip`, unpacking to `arkivet2fs/` (1.7.0 also had a `-store.zip` for the stores); copies of 1.7.0 and older don't see 1.8.0's package and are updated by hand (only the maintainer had one) |
 | `*.sig` next to each package | a detached signature of that file |
 | `SHA256SUMS`, `SHA256SUMS.sig` | checksums of everything, signed |
 
@@ -198,9 +197,11 @@ Done.
     stored uncompressed in name order with the commit's time. `sign.mjs` rebuilds the
     tag locally and signs CI's zip only when the two are byte for byte the same, so a
     signature vouches for both the source and the build.
-  - The zip unpacks to a folder `arkivet2fs/`. Chrome keeps an unpacked extension's
+  - The zip unpacked to a folder `arkivet2fs/`. Chrome keeps an unpacked extension's
     data by its folder, so an update is unzipped over the same folder. A store upload
-    (3b) wants the manifest at the zip's root and gets its own zip then.
+    (3b) wants the manifest at the zip's root and got its own zip in 1.7.0; from 1.8.0
+    the one package has the manifest at the root, unzipped into a folder `arkivet2fs`
+    the user makes (the README says so, with the `unzip -d` command).
   - Every file in the tree is either shipped or excluded by a rule; a new file with
     neither stops the build, as does a shipped file nothing refers to (the SVG sources
     of the icons are left out that way) or a reference to one that isn't shipped.

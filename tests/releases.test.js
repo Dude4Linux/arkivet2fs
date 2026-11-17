@@ -28,16 +28,16 @@ const testPub = testKey.publicKey.export({ type: 'spki', format: 'der' }).toStri
 // (stored as tools/build.mjs stores them, with the version in its manifest)
 const { makeZip } = require('../tools/build.mjs');
 const packageOf = (version, more = []) => makeZip([
-  { name: 'arkivet2fs/README.md', data: Buffer.from('A package of arkivet2fs, made up for the tests\n') },
+  { name: 'README.md', data: Buffer.from('A package of arkivet2fs, made up for the tests\n') },
   ...more,
-  { name: 'arkivet2fs/manifest.json', data: Buffer.from(JSON.stringify({ manifest_version: 3, version }, null, 2)) }
+  { name: 'manifest.json', data: Buffer.from(JSON.stringify({ manifest_version: 3, version }, null, 2)) }
 ], Date.parse('2026-11-07T12:00:00Z') / 1000);
 const zip = packageOf('1.2.0');
 const zipSig = crypto.sign(null, zip, testKey.privateKey).toString('base64') + '\n';
 const zipSha = crypto.createHash('sha256').update(zip).digest('hex');
 
 function releaseJson(version = '1.2.0', more = {}) {
-  const name = 'arkivet2fs-' + version + '-chromium.zip';
+  const name = 'arkivet2fs-' + version + '.zip';
   return {
     tag_name: 'v' + version,
     html_url: 'https://github.com/' + REPO + '/releases/tag/v' + version,
@@ -165,11 +165,11 @@ test('versions: MAJOR.MINOR.PATCH, compared by number; anything else is no versi
   assert.equal(w.currentVersionOf({ version: 'old' }, '1.2.0'), '1.2.0');
 });
 
-test('readRelease(): the chromium package and its signature; drafts, pre-releases and odd assets are none', () => {
+test('readRelease(): the package and its signature; drafts, pre-releases and odd assets are none', () => {
   const w = releasesWindow();
   const r = plain(w.readRelease(releaseJson(), REPO));
   assert.equal(r.version, '1.2.0');
-  assert.equal(r.zip.name, 'arkivet2fs-1.2.0-chromium.zip');
+  assert.equal(r.zip.name, 'arkivet2fs-1.2.0.zip');
   assert.equal(r.zip.size, zip.length);
   assert.equal(r.zip.digest, zipSha);
   assert.equal(r.sig.url, API + '/releases/assets/2');
@@ -186,6 +186,17 @@ test('readRelease(): the chromium package and its signature; drafts, pre-release
   elsewhere.assets[0].url = 'https://evil.example/arkivet2fs.zip';
   assert.equal(w.readRelease(elsewhere, REPO), null);
   assert.equal(w.readRelease(releaseJson(), 'someone/fork'), null);
+  // the -chromium.zip of releases up to 1.7.0 isn't taken: it unpacks to a folder of its own
+  const both = releaseJson();
+  both.assets = [
+    { name: 'arkivet2fs-1.2.0-chromium.zip', size: 9, url: API + '/releases/assets/7', digest: '' },
+    { name: 'arkivet2fs-1.2.0-chromium.zip.sig', size: 9, url: API + '/releases/assets/8', digest: '' },
+    ...both.assets
+  ];
+  assert.equal(plain(w.readRelease(both, REPO)).zip.url, API + '/releases/assets/1');
+  const legacyOnly = releaseJson();
+  legacyOnly.assets = both.assets.slice(0, 2);
+  assert.equal(w.readRelease(legacyOnly, REPO), null);
 });
 
 test('fetchLatestRelease(): the release with its ETag; an unchanged one is a 304; failures keep what was known', async () => {
@@ -395,13 +406,13 @@ test('update.html: the newer release, a checked download, then how to install it
   assert.ok(!p.$('release').hidden);
   assert.equal(p.$('release-title').textContent, 'v. 1.2.0, published 20 November 2026');
   assert.equal(p.$('notes').querySelectorAll('li').length, 3);
-  assert.equal(p.$('download').textContent, 'Download arkivet2fs-1.2.0-chromium.zip');
+  assert.equal(p.$('download').textContent, 'Download arkivet2fs-1.2.0.zip');
   assert.match(p.$('key-note').textContent, /fingerprint 7642e107/);
 
   p.$('download').click();
   await settle();
   assert.equal(p.saved.length, 1);
-  assert.equal(p.saved[0].name, 'arkivet2fs-1.2.0-chromium.zip');
+  assert.equal(p.saved[0].name, 'arkivet2fs-1.2.0.zip');
   assert.equal(p.saved[0].blob.size, zip.length);
   assert.match(p.$('download-status').textContent, /Checked and saved/);
   assert.ok(!p.$('install').hidden);
@@ -565,4 +576,8 @@ test('checkPackage(): an older signed package offered as a newer release is not 
   // a package whose manifest can't be read has no version
   assert.equal(w.packageVersion(Buffer.from('PK\u0003\u0004 not a package')), '');
   assert.equal(w.packageVersion(Buffer.alloc(0)), '');
+  // the version is the manifest's at the zip's root, as the one package has it; the old
+  // layout under arkivet2fs/ has none
+  const legacy = makeZip([{ name: 'arkivet2fs/manifest.json', data: Buffer.from('{"version": "1.2.0"}') }], 1762470000);
+  assert.equal(w.packageVersion(legacy), '');
 });

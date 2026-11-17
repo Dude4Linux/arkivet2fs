@@ -102,6 +102,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 td:first-child { font-weight: 600; white-space: nowrap; }
 .soon-text { color: var(--copper); font-style: italic; }
 .note { color: var(--muted); font-size: .95rem; }
+pre { background: var(--parchment); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: .9rem; line-height: 1.45; margin: 8px 0; }
 
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
 .two > * { min-width: 0; }
@@ -201,8 +202,12 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
       <h2>Install now, from GitHub</h2>
       <p class="prose">For the technically inclined who'd rather not wait. You load the extension from a folder on your computer, as developers do. It's the same extension the stores will have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
       <ol class="prose">
-        <li>Download <code>arkivet2fs-X.Y.Z-chromium.zip</code> from the <a href="https://github.com/Dude4Linux/arkivet2fs/releases/latest">latest release</a> (X.Y.Z is the version). The name says "chromium", but the same file works in Firefox.</li>
-        <li>Unzip it somewhere it can stay, such as your home or Documents folder. It makes a folder named <code>arkivet2fs</code>. Don't move or delete the folder afterwards: the browser loads the extension from it.</li>
+        <li>Download <code>arkivet2fs-X.Y.Z.zip</code> (1.8.0 or later) from the <a href="https://github.com/Dude4Linux/arkivet2fs/releases/latest">latest release</a>. The same file works in every browser.</li>
+        <li>Unzip it into a folder named just <code>arkivet2fs</code>, with no version in the name, somewhere it can stay, such as your home folder. On Linux or macOS, in a terminal:
+<pre>unzip -o ~/Downloads/arkivet2fs-1.8.0.zip -d ~/arkivet2fs</pre>
+On Windows, in PowerShell:
+<pre>Expand-Archive -Force "$HOME\Downloads\arkivet2fs-1.8.0.zip" "$HOME\arkivet2fs"</pre>
+Either one makes the folder if it isn't there and replaces its files if it is. With your file manager instead, change the folder it suggests (<code>arkivet2fs-1.8.0</code>) to <code>arkivet2fs</code>. Use the same folder for every update and don't move it: the browser loads the extension from it and keeps your data by its place.</li>
       </ol>
       <div class="two">
         <div class="box">
@@ -225,7 +230,7 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
           <p class="note">Firefox removes a temporary add-on when it closes, so load it again after each restart (what you searched and attached is kept). In LibreWolf, also allow FamilySearch's cookies as in the table above.</p>
         </div>
       </div>
-      <p class="note">To update, unzip the new release over the same folder, then click the reload button on the extension's card (Firefox: <strong>Reload</strong> in <code>about:debugging</code>). The extension's <strong>Updates</strong> page, from the version number at the top of its pages, can download the new release for you and checks its signature first. When the store version is out, you can remove this copy and install that one instead (remove it first, or you'll have two). In Chrome, Brave and Opera the store copy starts with an empty list of recent people and attached records; nothing on FamilySearch changes. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has more detail.</p>
+      <p class="note">To update, unzip the new release into the same <code>arkivet2fs</code> folder with the same command (with the new version in the file's name), then click the reload button on the extension's card (Firefox: <strong>Reload</strong> in <code>about:debugging</code>). The extension's <strong>Updates</strong> page, from the version number at the top of its pages, can download the new release for you and checks its signature first. When the store version is out, you can remove this copy and install that one instead (remove it first, or you'll have two). In Chrome, Brave and Opera the store copy starts with an empty list of recent people and attached records; nothing on FamilySearch changes. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has more detail.</p>
     </section>
 
     <section>

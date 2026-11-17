@@ -4,6 +4,18 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.8.0 - not released yet
+
+- **One package for every browser and store:** the release's download is now
+  `arkivet2fs-X.Y.Z.zip` (no more "chromium" in the name), with the extension's files
+  right inside it. Unzip it into a folder named just `arkivet2fs`, replacing its files,
+  for instance `unzip -o ~/Downloads/arkivet2fs-1.8.0.zip -d ~/arkivet2fs`; keep using
+  the same folder, since the browser keeps your stored persons and records by its
+  place. The Updates page's steps say so.
+- A copy of 1.7.0 or older doesn't offer this update (it looks for the old file name):
+  download 1.8.0 from the release page and unzip it into the folder that copy was loaded
+  from.
+
 ## 1.7.0 - 2026-11-16
 
 - **Send report**, at the top of the search page and the linker, sends a problem

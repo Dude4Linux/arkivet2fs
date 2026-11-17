@@ -3,7 +3,7 @@
 # maintainer's Ed25519 key. Needs OpenSSL 3 (macOS's own openssl is LibreSSL, which
 # can't; install OpenSSL 3, e.g. with Homebrew, and put it first in PATH).
 #
-#   sh verify.sh arkivet2fs-X.Y.Z-chromium.zip [release.pub]
+#   sh verify.sh arkivet2fs-X.Y.Z.zip [release.pub]
 #
 # The package's .sig must be next to it. With SHA256SUMS and SHA256SUMS.sig there too,
 # those are checked as well. The public key defaults to keys/release.pub of the

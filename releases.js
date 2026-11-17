@@ -73,9 +73,10 @@ function compareVersions(a, b) {
   return 0;
 }
 
-// The Chromium package of a version, as tools/build.mjs names it
+// The package of a version, as tools/build.mjs names it (up to 1.7.0 it was
+// -chromium.zip, unpacking to arkivet2fs/)
 function packageName(version) {
-  return 'arkivet2fs-' + version + '-chromium.zip';
+  return 'arkivet2fs-' + version + '.zip';
 }
 
 // GitHub's release JSON → {version, tag, url, notes, published, zip, sig}, or null for
@@ -209,7 +210,7 @@ async function checkPackage(data, sigText, asset, key, version) {
   return { ok: true, problem: '', sha256 };
 }
 
-// The version in a package's arkivet2fs/manifest.json, '' when it can't be read. The
+// The version in the manifest.json at a package's root, '' when it can't be read. The
 // packages store their files uncompressed (tools/build.mjs makeZip()), so the local
 // file headers are read in turn; anything else (compressed, sizes after the data) is ''.
 function packageVersion(bytes) {
@@ -222,7 +223,7 @@ function packageVersion(bytes) {
     const nameEnd = at + 30 + view.getUint16(at + 26, true);
     const start = nameEnd + view.getUint16(at + 28, true);
     if ((flags & 8) || start + size > bytes.length) return '';
-    if (decoder.decode(bytes.subarray(at + 30, nameEnd)) === 'arkivet2fs/manifest.json') {
+    if (decoder.decode(bytes.subarray(at + 30, nameEnd)) === 'manifest.json') {
       if (method !== 0) return '';
       try {
         const v = JSON.parse(decoder.decode(bytes.subarray(start, start + size))).version;

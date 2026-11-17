@@ -63,37 +63,30 @@ test('makeZip(): other zip readers read it', async (t) => {
   fs.rmSync(dir, { recursive: true });
 });
 
-test('buildChromium(): HEAD builds, unpacks to arkivet2fs/, holds the committed files, the same twice', async () => {
+test('buildPackage(): the one package, manifest.json at the zip\'s root, the committed files, the same twice', async () => {
   const [b] = await tools;
-  const pkg = b.buildChromium('HEAD');
+  const pkg = b.buildPackage('HEAD');
   const version = JSON.parse(execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: ROOT })).version;
-  assert.equal(pkg.name, `arkivet2fs-${version}-chromium.zip`);
-  assert.ok(pkg.data.equals(b.buildChromium('HEAD').data));
+  assert.equal(pkg.name, `arkivet2fs-${version}.zip`);
+  assert.ok(pkg.data.equals(b.buildPackage('HEAD').data));
   const entries = b.readZip(pkg.data);
-  assert.ok(entries.every((e) => e.name.startsWith('arkivet2fs/')));
-  const names = entries.map((e) => e.name.slice('arkivet2fs/'.length));
+  // the stores' upload (AMO refuses a manifest.json inside a folder) and the unpacked install
+  assert.ok(entries.every((e) => !e.name.startsWith('arkivet2fs/')));
+  const names = entries.map((e) => e.name);
   for (const f of ['manifest.json', 'background.js', 'search.html', 'linker.html', 'da_record.js', 'fs_attach.js', 'icons/icon128.png', 'LICENSE']) {
     assert.ok(names.includes(f), f);
   }
   for (const f of names) assert.ok(!/^(tests|tools|\.github)\//.test(f) && !/package|banner/.test(f), f);
-  const manifest = entries.find((e) => e.name === 'arkivet2fs/manifest.json').data;
+  const manifest = entries.find((e) => e.name === 'manifest.json').data;
   assert.ok(manifest.equals(execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: ROOT })));
 });
 
-test('buildStore(): the stores\' package, the same files with manifest.json at the zip\'s root; buildAll() makes both', async () => {
+test('buildAll(): one package for the stores and the unpacked install', async () => {
   const [b] = await tools;
   const version = JSON.parse(execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: ROOT })).version;
-  const store = b.buildStore('HEAD');
-  assert.equal(store.name, `arkivet2fs-${version}-store.zip`);
-  assert.ok(store.data.equals(b.buildStore('HEAD').data));
-  const entries = b.readZip(store.data);
-  // AMO refuses a zip whose manifest.json is inside a folder
-  assert.ok(entries.some((e) => e.name === 'manifest.json'));
-  assert.ok(entries.every((e) => !e.name.startsWith('arkivet2fs/')));
-  const chromium = b.readZip(b.buildChromium('HEAD').data);
-  assert.deepEqual(entries.map((e) => e.name), chromium.map((e) => e.name.slice('arkivet2fs/'.length)));
-  entries.forEach((e, i) => assert.ok(e.data.equals(chromium[i].data), e.name));
-  assert.deepEqual(b.buildAll('HEAD').map((p) => p.name), [`arkivet2fs-${version}-chromium.zip`, `arkivet2fs-${version}-store.zip`]);
+  const all = b.buildAll('HEAD');
+  assert.deepEqual(all.map((p) => p.name), [`arkivet2fs-${version}.zip`]);
+  assert.ok(all[0].data.equals(b.buildPackage('HEAD').data));
 });
 
 test('changelogSection(): a version\'s notes; CHANGELOG.md has the manifest\'s version', async () => {
@@ -112,7 +105,7 @@ test('changelogSection(): a version\'s notes; CHANGELOG.md has the manifest\'s v
 test('signatureFiles(): a .sig per package, SHA256SUMS of all, all verifying; a changed byte doesn\'t', async () => {
   const [, s] = await tools;
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
-  const pkg = { name: 'arkivet2fs-9.9.9-chromium.zip', data: Buffer.from('a package') };
+  const pkg = { name: 'arkivet2fs-9.9.9.zip', data: Buffer.from('a package') };
   const out = Object.fromEntries(s.signatureFiles([pkg], privateKey).map((f) => [f.name, f.data]));
   assert.deepEqual(Object.keys(out), [pkg.name + '.sig', 'SHA256SUMS', 'SHA256SUMS.sig']);
   assert.ok(s.verify(pkg.data, out[pkg.name + '.sig'], publicKey));
@@ -132,7 +125,7 @@ test('tools/verify.sh: accepts a signed package, refuses a changed one', async (
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arkivet2fs-verify-'));
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
   fs.writeFileSync(path.join(dir, 'test.pub'), publicKey.export({ type: 'spki', format: 'pem' }));
-  const pkg = { name: 'arkivet2fs-9.9.9-chromium.zip', data: crypto.randomBytes(5000) };
+  const pkg = { name: 'arkivet2fs-9.9.9.zip', data: crypto.randomBytes(5000) };
   fs.writeFileSync(path.join(dir, pkg.name), pkg.data);
   for (const f of s.signatureFiles([pkg], privateKey)) fs.writeFileSync(path.join(dir, f.name), f.data);
   const run = () => execFileSync('sh', [path.join(ROOT, 'tools', 'verify.sh'), path.join(dir, pkg.name), path.join(dir, 'test.pub')], { stdio: 'pipe' }).toString();
@@ -157,7 +150,7 @@ test('tools/release: a published release is downloaded to a temporary folder, ch
   fs.mkdirSync(tmp);
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
   fs.writeFileSync(path.join(dir, 'test.pub'), publicKey.export({ type: 'spki', format: 'pem' }));
-  const pkg = { name: 'arkivet2fs-9.9.9-chromium.zip', data: crypto.randomBytes(5000) };
+  const pkg = { name: 'arkivet2fs-9.9.9.zip', data: crypto.randomBytes(5000) };
   fs.writeFileSync(path.join(files, pkg.name), pkg.data);
   for (const f of s.signatureFiles([pkg], privateKey)) fs.writeFileSync(path.join(files, f.name), f.data);
   // without gh (ARKIVET2FS_RELEASES), only a published release is seen: the check alone

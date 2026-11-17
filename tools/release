@@ -134,12 +134,13 @@ echo
 echo "== 2. Test: downloading the draft to $tmp"
 check draft gh
 command -v unzip >/dev/null || die "needs unzip for the load test"
-for name in $packages; do
-  case $name in
-    *-chromium.zip) mkdir "$tmp/test"; unzip -q "$tmp/draft/$name" -d "$tmp/test" ;;
-  esac
-done
-[ -d "$tmp/test/arkivet2fs" ] || die "no chromium package to test"
+# the package (manifest.json at its root) unzipped into a folder named arkivet2fs, as
+# the README says
+pkg=arkivet2fs-${tag#v}.zip
+[ -f "$tmp/draft/$pkg" ] || die "the draft has no $pkg to test"
+mkdir -p "$tmp/test/arkivet2fs"
+unzip -q "$tmp/draft/$pkg" -d "$tmp/test/arkivet2fs"
+[ -f "$tmp/test/arkivet2fs/manifest.json" ] || die "$pkg has no manifest.json at its root"
 cat <<EOF
 
 Load the package in Chrome and in Brave: on chrome://extensions (brave://extensions),
