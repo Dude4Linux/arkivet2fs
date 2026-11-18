@@ -135,6 +135,35 @@ test('findSource(): Home\'s rows aren\'t taken for the hits when one has the tit
   assert.deepEqual(plain(answer.sources.map((s) => s.id)), ['TEST-S01', 'TEST-S03']);  // the copy in another folder too
 });
 
+test('findSource(): a search clicked before a fresh SourceBox is ready, which shows Home\'s rows instead, is clicked again (report #7)', async () => {
+  const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox',
+    '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button><div id="list"></div>',
+    { clock: true });
+  const { w } = page;
+  const list = w.document.getElementById('list');
+  const loaded = w.Date.now();
+  const ready = () => w.Date.now() - loaded >= 900;
+  // On the test's clock: the page's own first load puts Home's rows in the list after
+  // 900 ms; a click before then does nothing; after it, the search shows "No sources
+  // found." 300 ms later
+  const load = () => { if (ready()) list.innerHTML = row('TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"'); else w.setTimeout(load, 0); };
+  w.setTimeout(load, 0);
+  let clicks = 0, searches = 0;
+  w.document.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
+    clicks++;
+    if (!ready()) return;
+    searches++;
+    const at = w.Date.now();
+    list.innerHTML = '';
+    const answer = () => { if (w.Date.now() - at >= 300) list.innerHTML = '<p>No sources found.</p>'; else w.setTimeout(answer, 0); };
+    w.setTimeout(answer, 0);
+  });
+  const answer = await page.step('findSource', { title: TITLE });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.sources), []);
+  assert.deepEqual([clicks, searches], [2, 1]);
+});
+
 test('findSource(): none when the search finds nothing', async () => {
   const { step } = sourceBox([['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']], [['TEST-S04', 'Ola Nordmann - Vågå - "Norway, Census, 1850"']]);
   assert.deepEqual(plain((await step('findSource', { title: TITLE })).sources), []);

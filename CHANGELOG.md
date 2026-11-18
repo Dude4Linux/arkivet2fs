@@ -9,6 +9,9 @@ fixes, new features, changes that break what users have).
 - **Send report:** choosing one of your browser's saved e-mail addresses now fills in
   the address box. In Brave (and other Chromium browsers) the suggestion was shown but
   picking it left the box empty.
+- **Create source and attach** no longer says "The SourceBox could not be searched for
+  the title" when the source isn't in your SourceBox yet. On a SourceBox just opened,
+  FamilySearch could ignore the first search; the extension now searches again.
 - The extension's description (in the browser's extensions page and the Chrome Web
   Store) now says it is for genealogy.
 

@@ -120,9 +120,13 @@ if (!window.__arkivet2fsAttach) {
       const f = byTestId('source-box-filter-field');
       return f && (f.matches('input') ? f : f.querySelector('input'));
     }, 'the SourceBox search');
-    setValue(field, text);
-    await sleep(200);
-    (await waitFor(() => byTestId('source-box-search-button'), 'the SourceBox search')).click();
+    const search = async () => {
+      setValue(field, text);
+      await sleep(200);
+      (await waitFor(() => byTestId('source-box-search-button'), 'the SourceBox search')).click();
+      // the list emptying to load, when it does so in time
+      try { await waitFor(() => !sourceRows().length, 'the SourceBox search', 3000); } catch (e) { /* already loaded */ }
+    };
     const wanted = clean(text).toLowerCase();
     const none = () => /No sources found/i.test(document.body.textContent);
     const has = (r) => r.title.toLowerCase().includes(wanted);
@@ -137,12 +141,22 @@ if (!window.__arkivet2fsAttach) {
         if (!done(false)) throw e;
       }
     };
-    // the list emptying to load, when it does so in time
-    try { await waitFor(() => !sourceRows().length, 'the SourceBox search', 3000); } catch (e) { /* already loaded */ }
-    await hits(15000);
-    // Still so a moment later: the list didn't only empty to load
-    await sleep(700);
-    if (!done()) await hits(10000);
+    const answer = async (first, again) => {
+      await hits(first);
+      // Still so a moment later: the list didn't only empty to load
+      await sleep(700);
+      if (!done()) await hits(again);
+    };
+    await search();
+    try {
+      await answer(10000, 5000);
+    } catch (e) {
+      if (!e.timeout) throw e;
+      // On a SourceBox just opened, FS can take the first click before its page is
+      // ready and show Home's rows instead (report #7): search again
+      await search();
+      await answer(15000, 10000);
+    }
     return sourceRows();
   }
 
