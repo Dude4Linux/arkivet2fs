@@ -4,7 +4,7 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
-## 1.8.1 - not released yet
+## 1.8.1 - 2026-11-17
 
 - **Send report:** choosing one of your browser's saved e-mail addresses now fills in
   the address box. In Brave (and other Chromium browsers) the suggestion was shown but
