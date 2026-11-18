@@ -190,10 +190,11 @@ Navn som ligner flagges (≈), endringene i slektstreet listes opp, og ingenting
 
 **Tags** (AMO only, chosen from its fixed list): **search**. It has no genealogy tag.
 
-**Homepage** (all three stores; AMO: Homepage):
+**Homepage** (all three stores; AMO: Homepage): the website, which links the
+repository, the guide and the privacy policy.
 
 ```text
-https://github.com/Dude4Linux/arkivet2fs
+https://dude4linux.github.io/arkivet2fs/
 ```
 
 **Support site** (all three; AMO: Support website; leave AMO's Support email empty):
