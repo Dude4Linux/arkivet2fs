@@ -175,15 +175,27 @@ test('tools/release: a published release is downloaded to a temporary folder, ch
   fs.rmSync(dir, { recursive: true });
 });
 
-test('privacy-page.mjs: docs/privacy.html is PRIVACY.md as made by the tool; the Markdown it reads', async () => {
-  const { privacyPage, policyHtml, inline } = await import('../tools/privacy-page.mjs');
+test('site-pages.mjs: docs/privacy.html and docs/guide.html are their Markdown as made by the tool; the Markdown it reads', async () => {
+  const { privacyPage, guidePage, policyHtml, inline, anchor } = await import('../tools/site-pages.mjs');
   const markdown = fs.readFileSync(path.join(ROOT, 'PRIVACY.md'), 'utf8');
-  // after a change to PRIVACY.md: node tools/privacy-page.mjs
+  // after a change to PRIVACY.md or docs/guide.md: node tools/site-pages.mjs
   assert.equal(fs.readFileSync(path.join(ROOT, 'docs/privacy.html'), 'utf8'), privacyPage(markdown));
+  const guide = fs.readFileSync(path.join(ROOT, 'docs/guide.md'), 'utf8');
+  const guideHtml = fs.readFileSync(path.join(ROOT, 'docs/guide.html'), 'utf8');
+  assert.equal(guideHtml, guidePage(guide));
+  // the contents' links lead to the headings, as on GitHub
+  const targets = [...guideHtml.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(targets.length >= 10);
+  for (const id of targets) assert.ok(guideHtml.includes(`id="${id}"`), id);
+  assert.equal(anchor("7. Add the record's facts to the tree"), '7-add-the-records-facts-to-the-tree');
+  assert.equal(anchor('Søk på «Vågå»'), 'søk-på-vågå');
+  assert.equal(inline('See [the **README**](https://example.org/#install?a=1&b), https://example.org/x and [b](#2-two).'),
+    'See <a href="https://example.org/#install?a=1&amp;b">the <strong>README</strong></a>, <a href="https://example.org/x">https://example.org/x</a> and <a href="#2-two">b</a>.');
+  assert.equal(policyHtml('1. one\n   more\n2. two'), '<ol>\n<li>one more</li>\n<li>two</li>\n</ol>');
   assert.equal(inline('**Send** a `<b>` *Norske* (https://example.org/a?b=1&c)'),
     '<strong>Send</strong> a <code>&lt;b&gt;</code> <em>Norske</em> (<a href="https://example.org/a?b=1&amp;c">https://example.org/a?b=1&amp;c</a>)');
   assert.equal(policyHtml('## In short\n\n- one\n  two\n- three\n\nA\nparagraph.'),
-    '<h2>In short</h2>\n\n<ul>\n<li>one two</li>\n<li>three</li>\n</ul>\n\n<p>A paragraph.</p>');
+    '<h2 id="in-short">In short</h2>\n\n<ul>\n<li>one two</li>\n<li>three</li>\n</ul>\n\n<p>A paragraph.</p>');
   // every word of the policy is on the page
   const words = (text) => text.replace(/<\/?(a|strong|em|code)\b[^>]*>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/^\s*- |-{3,}/gm, ' ').replace(/[*`]/g, '').replace(/[|#]/g, ' ').split(/\s+/).filter(Boolean);
   const page = fs.readFileSync(path.join(ROOT, 'docs/privacy.html'), 'utf8');

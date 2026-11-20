@@ -91,7 +91,7 @@ You need a FamilySearch account (free). The extension works in FamilySearch's ow
 
 Privacy: no account, no tracking, no analytics. Searches and records stay in your browser. A problem report is sent only when you click Send, after you've read it. The privacy policy: https://dude4linux.github.io/arkivet2fs/privacy.html
 
-User guide: https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md
+User guide: https://dude4linux.github.io/arkivet2fs/guide.html
 Source code (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 ```
 
@@ -115,7 +115,7 @@ Du trenger en konto i FamilySearch (gratis). Utvidelsen arbeider i FamilySearchs
 
 Personvern: ingen konto, ingen sporing, ingen analyse. Søk og poster blir i nettleseren din. En feilrapport sendes bare når du klikker Send, etter at du har lest den. Personvernerklæringen (engelsk): https://dude4linux.github.io/arkivet2fs/privacy.html
 
-Brukerveiledning (engelsk): https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md
+Brukerveiledning (engelsk): https://dude4linux.github.io/arkivet2fs/guide.html
 Kildekode (GPL-3.0-or-later): https://github.com/Dude4Linux/arkivet2fs
 ```
 

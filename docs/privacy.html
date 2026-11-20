@@ -8,7 +8,7 @@
 <meta name="color-scheme" content="light dark">
 <link rel="canonical" href="https://dude4linux.github.io/arkivet2fs/privacy.html">
 <link rel="icon" href="images/icon.svg" type="image/svg+xml">
-<!-- Made from PRIVACY.md by tools/privacy-page.mjs: edit PRIVACY.md and run it again. -->
+<!-- Made from PRIVACY.md by tools/site-pages.mjs: edit PRIVACY.md and run it again. -->
 <style>
 :root {
   --paper: #ffffff; --ink: #1f2a36; --muted: #546273; --deep: #2e547a;
@@ -38,13 +38,13 @@ body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 va
 .home { font-size: .95rem; }
 h1, h2 { font-family: var(--serif); color: var(--deep); margin: 0; line-height: 1.2; text-wrap: balance; }
 h1 { font-size: clamp(1.8rem, 4.5vw, 2.4rem); }
-h2 { font-size: 1.4rem; margin-top: 20px; }
+h2 { font-size: 1.4rem; margin-top: 20px; scroll-margin-top: 16px; }
 p { margin: 0; }
 a { color: var(--deep); text-underline-offset: 2px; overflow-wrap: anywhere; }
 a:focus-visible { outline: 3px solid var(--copper); outline-offset: 2px; }
 strong { font-weight: 600; }
 code { font-size: .9em; background: var(--parchment); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
-ul { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
+ul, ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
 .table { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .95rem; }
 th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--rule); }
@@ -63,7 +63,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 
 <p>This policy covers the extension as published on the Chrome Web Store, Opera add-ons, Firefox Add-ons and GitHub. Last changed: 17 November 2026.</p>
 
-<h2>In short</h2>
+<h2 id="in-short">In short</h2>
 
 <ul>
 <li>The extension has no account, no analytics, no advertising and no tracking. The developer gets nothing from it unless you send a problem report yourself.</li>
@@ -71,7 +71,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 <li>Nothing is sold or shared with anyone, and nothing is used for any other purpose than the ones below.</li>
 </ul>
 
-<h2>The sites it talks to</h2>
+<h2 id="the-sites-it-talks-to">The sites it talks to</h2>
 
 <div class="table"><table>
 <thead><tr><th>Site</th><th>What is sent</th><th>Why</th></tr></thead>
@@ -86,13 +86,13 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 
 <p>Each site sees your IP address, as with any web page you open. The extension never reads or keeps your FamilySearch password or session, and doesn't use FamilySearch's API.</p>
 
-<h2>What it reads on FamilySearch</h2>
+<h2 id="what-it-reads-on-familysearch">What it reads on FamilySearch</h2>
 
 <p>On FamilySearch the extension reads the person page you start from (names, events, places and family), your SourceBox (whether a source is there and who it is attached to), and the pages of the tree persons a record names and of their relatives, to pair the record's people with them. These pages can name living people. Some of the reading happens in a window of its own, kept behind the extension's page, which it closes when done.</p>
 
 <p>Nothing is saved, attached, tagged or changed on FamilySearch before you click <strong>Create source and attach</strong> (or <strong>Update source…</strong>, <strong>Create source only</strong>) on the linker page, or <strong>Create person</strong> or <strong>Use this person</strong> in its new-person panel.</p>
 
-<h2>What it keeps in your browser</h2>
+<h2 id="what-it-keeps-in-your-browser">What it keeps in your browser</h2>
 
 <p>All of this stays in your browser's storage for the extension; none of it is sent anywhere:</p>
 
@@ -103,7 +103,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 
 <p>Removing the extension removes all of it.</p>
 
-<h2>Problem reports</h2>
+<h2 id="problem-reports">Problem reports</h2>
 
 <p>The search page and the linker have <strong>Send report</strong>. It opens a panel with the report to read and edit before anything is sent; nothing leaves your browser before you click <strong>Send</strong>, and only what the panel holds is sent.</p>
 
@@ -113,7 +113,7 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color:
 
 <p><strong>Copy report</strong> only copies the report to your clipboard, for you to paste where you choose, such as a public GitHub issue.</p>
 
-<h2>Changes and contact</h2>
+<h2 id="changes-and-contact">Changes and contact</h2>
 
 <p>This policy is published at <a href="https://dude4linux.github.io/arkivet2fs/privacy.html.">https://dude4linux.github.io/arkivet2fs/privacy.html.</a> Changes to it are made in the file <code>PRIVACY.md</code> in the extension's public repository (<a href="https://github.com/Dude4Linux/arkivet2fs">https://github.com/Dude4Linux/arkivet2fs</a>), whose history shows every change.</p>
 

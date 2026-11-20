@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>User guide · DigitalArkivet to FamilySearch: Norwegian records as FamilySearch sources</title>
+<meta name="description" content="How to use DigitalArkivet to FamilySearch (arkivet2fs), step by step: search Digitalarkivet for a Norwegian ancestor in your FamilySearch tree, review a church book or census record, attach it as a cited source, add its facts to the tree, and what to do when something goes wrong.">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://dude4linux.github.io/arkivet2fs/guide.html">
+<link rel="icon" href="images/icon.svg" type="image/svg+xml">
+<!-- Made from docs/guide.md by tools/site-pages.mjs: edit docs/guide.md and run it again. -->
+<style>
+:root {
+  --paper: #ffffff; --ink: #1f2a36; --muted: #546273; --deep: #2e547a;
+  --parchment: #f4ecdc; --copper: #b0621f; --rule: #d9dee5;
+  --serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --sans: "Noto Sans", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --deep: #a9c7e6;
+    --parchment: #222c37; --copper: #e09a5c; --rule: #33404e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141b23; --ink: #e6ebf1; --muted: #a3b0bf; --deep: #a9c7e6;
+  --parchment: #222c37; --copper: #e09a5c; --rule: #33404e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 var(--sans); }
+.wrap {
+  max-width: 46rem; margin: 0 auto; padding-block: 24px 64px; display: grid; gap: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.home { font-size: .95rem; }
+h1, h2 { font-family: var(--serif); color: var(--deep); margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(1.8rem, 4.5vw, 2.4rem); }
+h2 { font-size: 1.4rem; margin-top: 20px; scroll-margin-top: 16px; }
+p { margin: 0; }
+a { color: var(--deep); text-underline-offset: 2px; overflow-wrap: anywhere; }
+a:focus-visible { outline: 3px solid var(--copper); outline-offset: 2px; }
+strong { font-weight: 600; }
+code { font-size: .9em; background: var(--parchment); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+ul, ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--rule); }
+td code { overflow-wrap: normal; white-space: nowrap; }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+@media (max-width: 700px) { body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+<p class="home"><a href="./">← DigitalArkivet to FamilySearch</a></p>
+
+<h1>DigitalArkivet to FamilySearch: user guide</h1>
+
+<p>This guide walks through the extension one task at a time, from a FamilySearch person to a source attached to the family. The README has the details of each page and how to install the extension in each browser; this guide is how to use it.</p>
+
+<p>The people in the examples are made up: Lars Halvorsen, born 1846 in Vågå, son of Halvor Larsen and Astri Larsdatter, who emigrated to America.</p>
+
+<p><strong>Contents</strong></p>
+
+<ol>
+<li><a href="#1-before-you-start">Before you start</a></li>
+<li><a href="#2-find-a-persons-records">Find a person's records</a></li>
+<li><a href="#3-review-a-record">Review a record</a></li>
+<li><a href="#4-attach-the-source">Attach the source</a></li>
+<li><a href="#5-a-census-household">A census household</a></li>
+<li><a href="#6-one-entry-in-two-church-books">One entry in two church books</a></li>
+<li><a href="#7-add-the-records-facts-to-the-tree">Add the record's facts to the tree</a></li>
+<li><a href="#8-someone-not-in-the-tree-yet">Someone not in the tree yet</a></li>
+<li><a href="#9-start-from-a-record-on-digitalarkivet">Start from a record on Digitalarkivet</a></li>
+<li><a href="#10-when-something-goes-wrong">When something goes wrong</a></li>
+<li><a href="#11-report-a-problem">Report a problem</a></li>
+<li><a href="#12-good-habits">Good habits</a></li>
+</ol>
+
+<h2 id="1-before-you-start">1. Before you start</h2>
+
+<ul>
+<li><strong>Install the extension</strong>: in Chrome, Brave and Opera from the <a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a>, in Firefox and LibreWolf from <a href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons</a>. Pin its icon to the toolbar. The <a href="https://github.com/Dude4Linux/arkivet2fs#install">README</a> has the details.</li>
+<li><strong>Sign in to FamilySearch</strong> in the same browser. The extension works in your FamilySearch pages as you would; it never sees your password.</li>
+<li><strong>Choose a language</strong> if you like: the menu at the top right of the search page and the linker has English, Bokmål and Nynorsk. The sources themselves are always in English, since the tree is shared worldwide.</li>
+<li><strong>Nothing is saved without your click.</strong> Searching and reviewing only read Digitalarkivet and FamilySearch. Only <strong>Create source and attach</strong> (or <strong>Update source and attach</strong>), <strong>Create source only</strong>, and in the new-person panel <strong>Create person</strong> and <strong>Use this person</strong>, change anything on FamilySearch.</li>
+</ul>
+
+<h2 id="2-find-a-persons-records">2. Find a person's records</h2>
+
+<ol>
+<li>Open the person's details page in the FamilySearch tree.</li>
+<li>In the <strong>Search Records</strong> panel on the right, below Google, click <strong>Digital Arkivet</strong>. The search page opens in a new tab.</li>
+</ol>
+
+<p>The page searches Digitalarkivet for each event of the person's life in turn: the baptism, confirmation, marriages, the children's baptisms, censuses, emigration, moving away, burial, and everything under the name. Each search starts in the person's own municipalities and widens to the county and then all of Norway only when it finds nothing. The hits come in as the searches run.</p>
+
+<p><strong>Reading the hits.</strong> Each hit is a row with the person's name and role, the record's events, why it matches, and a score. The reasons are what to look at:</p>
+
+<ul>
+<li>✓ agrees with FamilySearch: a name, a year, a place, a farm, a relative</li>
+<li>≈ close: another spelling (Astri for Astrid), a year one off</li>
+<li>✗ disagrees: a year far off, another given name for a parent, too young for the role</li>
+</ul>
+
+<p>After the searches, the page opens the best hits' records and checks the people in them against the family: the parents in a baptism, the couple in a marriage, the household in a census. "record checked" under a hit means its reasons include what the record itself says. That's what tells apart three men of the same name in one parish. Hits below 0 are dimmed: usually someone else.</p>
+
+<p><strong>Adjusting the search.</strong> The sidebar holds the criteria, filled in from FamilySearch. Change a name or a year and click <strong>Search</strong>. Untick a relative who leads the searches astray, add a parish under <strong>Where to search</strong> to look somewhere the tree doesn't mention, or turn off a kind of record under <strong>Record kinds</strong>. <strong>Open on DA</strong> under each search opens the same search on Digitalarkivet, to look for yourself.</p>
+
+<p><strong>What you've done already.</strong> A record you've attached says so on its hit, "✓ Attached … to Lars Halvorsen, Halvor Larsen", in every later search too, with <strong>Review again</strong> instead of <strong>Review &amp; Attach</strong>.</p>
+
+<h2 id="3-review-a-record">3. Review a record</h2>
+
+<p>Click <strong>Review &amp; Attach</strong> on a hit. The linker opens in a new tab. While it loads, the top of the page says what it's doing: reading the record, pairing the people with the family, checking your SourceBox. To check the SourceBox and read the family, it opens FamilySearch in a window of its own, behind the linker, and closes it again; in Firefox that window comes to the front for a moment. Leave it: it closes by itself.</p>
+
+<p><strong>The source.</strong> At the top are the fields the source will have on FamilySearch:</p>
+
+<ul>
+<li><strong>Title</strong>: "Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth, 23 August 1846". The date at the end keeps apart two records of one name, such as two brothers both named after their grandfather.</li>
+<li><strong>Date</strong>, <strong>Web page</strong> (the record's permanent link on Digitalarkivet), <strong>Citation</strong> and <strong>Notes</strong> (everyone in the record with their roles, in English).</li>
+</ul>
+
+<p>You can edit them all. Read the citation and notes against the record, and look at the scanned image (the citation links to it) when there is one: transcriptions have errors.</p>
+
+<p>If the source is already in your SourceBox, its box is green, with an <strong>Attached To</strong> link to who has it on FamilySearch. Where FamilySearch's copy differs from the record's, both are shown under the source with a choice of which to keep.</p>
+
+<p><strong>The people.</strong> Each person in the record has a row:</p>
+
+<ul>
+<li><strong>Name</strong>: as the record gives it; you can edit it. A baptized child with no surname gets suggestions, such as the father's patronymic (Lars Halvorsen).</li>
+<li><strong>Tree person</strong>: who in the tree the row is. The linker pairs the person you searched for, and relatives whose names and years fit. A relative with another name in the record (a second wife, perhaps) is mentioned above the rows but not paired: pair them yourself if it's them. Choose <strong>— don't attach —</strong> for someone you don't want the source on, or <strong>Another person (PID)…</strong> to type a FamilySearch ID.</li>
+<li><strong>The table</strong>: what the record says of the person beside what the tree has, fact by fact: ✓ agrees, ≈ close, ✗ differs (highlighted). A ✗ is a reason to look twice before attaching.</li>
+<li><strong>Tags</strong> (Name, Sex, Birth, Christening, Death, Burial, Residence) and the <strong>reason</strong> for attaching, both filled in by the person's role.</li>
+</ul>
+
+<p>A person who already has the source is green, as in FamilySearch's own Source Linker.</p>
+
+<h2 id="4-attach-the-source">4. Attach the source</h2>
+
+<p>Click <strong>Create source and attach</strong> (it reads <strong>Update source and attach</strong> when the source is in your SourceBox already). A FamilySearch tab opens and the linker works in it step by step, listing each step at the bottom of the page:</p>
+
+<ol>
+<li>It creates the source in your SourceBox, or updates the one there.</li>
+<li>It attaches it to each paired person, with your reason. Someone who has it already is left as they are.</li>
+<li>It adds the ticked tags.</li>
+<li>It makes the changes you ticked under <strong>Add to FamilySearch</strong> (section 7).</li>
+</ol>
+
+<p>When all went through, the tab closes and you're back on the linker. If a step failed, the tab stays open where it stopped, and the step's line says why: see section 10.</p>
+
+<p><strong>Create source only</strong> puts the source in your SourceBox without attaching it.</p>
+
+<h2 id="5-a-census-household">5. A census household</h2>
+
+<p>A census lists everyone at a residence, often several households: the farmer's family, his old parents, a married son, a lodger. The linker shows a row for each resident, under a heading per household.</p>
+
+<p>It pairs from the person you searched for outward through the tree: their wife and children first, then their parents, wherever they live at the residence, then each paired relative's own family. For that it reads those relatives' FamilySearch pages in its background window; a line above the rows says how many it paired. The census's own words count too: someone the census calls "hans Fader" isn't paired as a son.</p>
+
+<p>Households with no one from the tree, and not linked to the person's own by the census, are hidden; the <strong>Show the … other households</strong> link under the rows shows them. If you opened a namesake's household by mistake, the linker moves to the household where the person fits and says so.</p>
+
+<p>Look over the pairs before you attach: the linker can only pair people the tree has.</p>
+
+<h2 id="6-one-entry-in-two-church-books">6. One entry in two church books</h2>
+
+<p>Many parishes kept two church books, the priest's (ministerialbok) and the clerk's (klokkerbok), and Digitalarkivet transcribed both. The search page shows such a pair as one hit, "Also in the other church book". <strong>Review &amp; Attach</strong> opens both: the two entries side by side with their differences marked, and a source for each book. You pair the people once, and both sources go to them; the tags go on the ministerialbok's source. Each source's notes say where the two books differ.</p>
+
+<h2 id="7-add-the-records-facts-to-the-tree">7. Add the record's facts to the tree</h2>
+
+<p>Under each person's table, <strong>Add to FamilySearch</strong> lists what the record could add:</p>
+
+<ul>
+<li>a christening, death, burial, residence or occupation the tree doesn't have</li>
+<li>an emigration (as a custom event titled Emigration)</li>
+<li>a name the tree doesn't have, as an alternate name</li>
+<li>a birth, christening, death or burial that differs from the tree's, combined: the record's "23 August 1846" with the tree's "Vågå, Oppland, Norway", say</li>
+</ul>
+
+<p>Everything starts unticked. Tick what you want and look at the boxes: you can edit the date, the place and the reason. Not every suggestion is right: an alternate name from a misspelled transcription is better left out. Ticking a fact also ticks its tag.</p>
+
+<p><strong>Check with FamilySearch</strong> fills each ticked change in FamilySearch's own form in the background window, takes FamilySearch's standard date and place, and cancels, so the boxes show what FamilySearch would save. Nothing is saved then.</p>
+
+<p>The ticked changes are made when you attach (step 4), only for people who then have the source, and each new or changed fact is tagged with the source. A couple's marriage can't be added yet.</p>
+
+<h2 id="8-someone-not-in-the-tree-yet">8. Someone not in the tree yet</h2>
+
+<p>A baptism names a child the tree doesn't have, say. In that row's tree person list, choose <strong>New person on FamilySearch…</strong>. A panel opens at the side, filled in from the record: name, sex, birth and death, and the relationship (a child of the paired father and mother). Check it and click <strong>Find on FamilySearch</strong>: the linker fills in FamilySearch's Add Child form on the father's page in a tab, and lists the people FamilySearch thinks may be the same.</p>
+
+<ul>
+<li><strong>Use this person</strong> links one of them into the family and pairs the row with them.</li>
+<li><strong>Create person</strong> creates the person on FamilySearch and pairs the row with them.</li>
+<li><strong>Cancel</strong> closes the panel and FamilySearch's form; nothing is saved.</li>
+</ul>
+
+<p>FamilySearch's form takes no christening or burial; tick those under <strong>Add to FamilySearch</strong> once the new person is paired, or add them on their page.</p>
+
+<h2 id="9-start-from-a-record-on-digitalarkivet">9. Start from a record on Digitalarkivet</h2>
+
+<p>On any record page on Digitalarkivet (in English, Bokmål or Nynorsk), click the extension's toolbar icon. The linker opens with that record. It doesn't matter whose page in the record you have open: on a baptism, the source still describes the child.</p>
+
+<p>The linker pairs the record with the last person you searched for from FamilySearch, when their name is in the record. Otherwise, type the person's FamilySearch ID in the box at the top.</p>
+
+<h2 id="10-when-something-goes-wrong">10. When something goes wrong</h2>
+
+<div class="table"><table>
+<thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td>A bar: "The extension may not read … yet", with <strong>Allow access</strong></td><td>Click it and allow the sites. Firefox, and Chrome with site access "On click", ask once.</td></tr>
+<tr><td>"Digital Arkivet refused requests …" or "… is not answering"</td><td>Digitalarkivet limits how fast it may be asked, and is sometimes down. The extension waits (15 minutes after a refusal, 5 after an outage); <strong>Try again now</strong> asks at once.</td></tr>
+<tr><td>"… perhaps the sign-in page. Please sign in to FamilySearch and try again."</td><td>Sign in to FamilySearch in a tab of this browser, then try again.</td></tr>
+<tr><td>"FamilySearch's security service blocked the page …"</td><td>Open FamilySearch in a tab of this browser; its page says what to do. Then try again.</td></tr>
+<tr><td>A step failed and "The FamilySearch tab is left open where it stopped."</td><td>Look at the tab: a dialog may need you, or FamilySearch was slow. Steps that went through are done; running the linker again skips what's there already (the source, attachments, tags).</td></tr>
+<tr><td>"The source … in your SourceBox has this title but is of another record"</td><td>Two records share a title. Change this one's title (add a name or the date) and try again. Nothing was changed.</td></tr>
+<tr><td>A FamilySearch window pops up and goes again</td><td>That's the linker reading FamilySearch. Leave it; it closes by itself.</td></tr>
+<tr><td>In Firefox, the extension is gone after a restart</td><td>A temporary add-on, loaded from a folder, lasts until Firefox closes. Install it from <a href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons</a> instead, which keeps it; or load it again from <code>about:debugging</code> (your data is kept).</td></tr>
+<tr><td>No <strong>Digital Arkivet</strong> entry on a FamilySearch person page</td><td>Reload the page. After updating the extension, open FamilySearch tabs get it back by themselves, but a tab left asleep may not.</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="11-report-a-problem">11. Report a problem</h2>
+
+<p>At the top of the search page and the linker, <strong>Send report</strong> opens a panel with a report of the page: the version, the browser, the record, what the extension found and did. Then:</p>
+
+<ul>
+<li>Read the report and take out anything about living people. It names the tree persons you paired, with their FamilySearch IDs.</li>
+<li>In the <strong>What happened?</strong> box below it, say what you did, what you expected and what you saw. It goes into the report, under "What happened", when you send it.</li>
+<li>Add your e-mail address if you'd like an answer.</li>
+</ul>
+
+<p>Then click <strong>Send</strong>. The report goes to a private queue that only the developer reads; the panel gives its number. Firefox asks once whether the extension may send it. The <a href="https://dude4linux.github.io/arkivet2fs/privacy.html">privacy policy</a> says what a report holds, who reads it and how long it is kept.</p>
+
+<p>If it can't be sent, the panel offers to copy it and open an issue on GitHub instead. <strong>Copy report</strong> only copies it, for an e-mail, a message or a GitHub issue. Issues on GitHub are public. Don't paste FamilySearch pages.</p>
+
+<h2 id="12-good-habits">12. Good habits</h2>
+
+<ul>
+<li><strong>Check the record, not only the score.</strong> The score is a guide. Open the record on Digitalarkivet, and the scanned image when there is one, before you attach.</li>
+<li><strong>Names are spelled many ways.</strong> Jon, Joen and John; Siri, Sirj and Siry; Halvorsen and Halvardsen. The extension treats these as close, but a parent's name can be transcribed far off. One ✗ on a relative isn't enough to reject a record; several are.</li>
+<li><strong>Patronymics are surnames; farms are addresses.</strong> In "Lars Halvorsen Bakken", Halvorsen is the surname and Bakken the farm he lived on, which changed when he moved. The extension searches by the patronymic first.</li>
+<li><strong>Look over the pairs in a census.</strong> Two men of the same name and age at one farm happen. When the linker isn't sure, it leaves the row unpaired and says why.</li>
+<li><strong>Take the suggestions as suggestions.</strong> Every fact to add, every surname, every pair can be changed or left out. You know the family; the extension only reads the record.</li>
+</ul>
+</main>
+</body>
+</html>

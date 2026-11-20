@@ -1,4 +1,4 @@
-# arkivet2fs user guide
+# DigitalArkivet to FamilySearch: user guide
 
 This guide walks through the extension one task at a time, from a FamilySearch
 person to a source attached to the family. The README has the details of each page

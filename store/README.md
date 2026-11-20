@@ -14,7 +14,7 @@ excludes `store/`).
   and made-up persons (`render.js` takes the UI language).
 - The privacy policy is `PRIVACY.md` at the root, published on the website as
   https://dude4linux.github.io/arkivet2fs/privacy.html (`docs/privacy.html`, made by
-  `node tools/privacy-page.mjs`; the stores can't read GitHub's file pages, which
+  `node tools/site-pages.mjs`; the stores can't read GitHub's file pages, which
   answer their fetch with 503).
 
 All three stores take the release's package, `arkivet2fs-X.Y.Z.zip` from the GitHub
@@ -25,6 +25,6 @@ one package, the same zip people load unpacked; 1.7.0's upload was
 update check stays off there, since it runs only in a copy loaded unpacked.
 
 When a release changes what the extension reads, keeps or sends, update `PRIVACY.md`
-(then `node tools/privacy-page.mjs` for the website's copy),
+(then `node tools/site-pages.mjs` for the website's copy),
 `SECURITY.md`'s "What the extension does with your data", `review.md`, and each
 store's data form. When it adds a permission, add its reason to `review.md`.

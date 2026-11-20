@@ -22,7 +22,7 @@ FS source, attached ◀── linker (3: you review) ◀── "Review & Attach"
 
 You need to be signed in to FamilySearch; Digitalarkivet needs no account. A
 step-by-step guide to using it is in
-[`docs/guide.md`](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md).
+[`docs/guide.md`](https://dude4linux.github.io/arkivet2fs/guide.html).
 
 ### From the Chrome Web Store (Chrome, Brave, Opera)
 
@@ -184,7 +184,7 @@ key's path (`verify.sh`: after the package; `release`: `--key`).
 
 ## Use
 
-This section describes each page; the [user guide](https://github.com/Dude4Linux/arkivet2fs/blob/master/docs/guide.md)
+This section describes each page; the [user guide](https://dude4linux.github.io/arkivet2fs/guide.html)
 takes you through them task by task, with what to do when something goes wrong.
 
 ### 1. Start from a FamilySearch person
@@ -515,10 +515,10 @@ use that language.
 | `.github/workflows/release.yml` | Drafts a release, with the package, for each version tag |
 | `tools/` | Building the package (`build.mjs`), signing a release (`sign.mjs`), checking a download (`verify.sh`); `release` signs, tests and publishes a draft release, or checks a published one |
 | `keys/release.pub` | The public key the releases are signed with |
-| `docs/guide.md` | The user guide, task by task |
+| `docs/guide.md` | The user guide, task by task (on the website as `docs/guide.html`, made by `tools/site-pages.mjs`) |
 | `CHANGELOG.md` | What changed in each version |
 | `SECURITY.md` | How to report a security problem, and what the extension does with your data |
-| `PRIVACY.md` | The privacy policy: what the extension reads, keeps and sends (on the website as `docs/privacy.html`, made by `tools/privacy-page.mjs`) |
+| `PRIVACY.md` | The privacy policy: what the extension reads, keeps and sends (on the website as `docs/privacy.html`, made by `tools/site-pages.mjs`) |
 | `store/` | The texts for the store listings |
 | `LICENSE` | The GNU General Public License, version 3 |
 
