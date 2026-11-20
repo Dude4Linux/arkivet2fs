@@ -98,7 +98,7 @@ test("buildQueries(): a relative's other patronymic spelling right after the ful
     father: [{ fatherGivenName: 'Peder', fatherSurname: 'Andersen' }]
   }))[0];
   assert.deepEqual(plain(baptism.steps.map((s) => s.text)), [
-    'Ole + father Peder Anders*', 'Ole + father Peder Andres*', 'Ole + father Peder', 'Ole'
+    'Ole + father Peder Anders*', 'Ole + father Peder Andres*', 'Ole + father Anders*', 'Ole + father Andres*', 'Ole + father Peder', 'Ole'
   ]);
 });
 
@@ -316,10 +316,14 @@ test('searchPlan(): the baptism with each parent, parish before county before No
   assert.deepEqual(plain(plan.slice(0, 6).map((p) => p.step.text + ' @ ' + p.level.text)), [
     'Lars + father Halv* Lars* @ Vågå',
     'Lars + mother Astr* Lars* @ Vågå',
+    // a parent's surname alone, as when DA couldn't read a given name (report #10)
+    'Lars + father Lars* @ Vågå',
+    'Lars + mother Lars* @ Vågå',
     'Lars + father Halv* Lars* @ Oppland',
-    'Lars + mother Astr* Lars* @ Oppland',
-    'Lars + father Halv* Lars* @ Norway',
-    'Lars + mother Astr* Lars* @ Norway'
+    'Lars + mother Astr* Lars* @ Oppland'
+  ]);
+  assert.deepEqual(plain(plan.filter((p) => p.level.text === 'Norway').slice(0, 2).map((p) => p.step.text)), [
+    'Lars + father Halv* Lars*', 'Lars + mother Astr* Lars*'
   ]);
   const url = new URL(w.daSearchUrl(w.withFields(w.withFields(q.base, plan[0].step.fields), plan[0].level.fields)));
   assert.equal(url.pathname, '/en/search/persons/advanced');
@@ -456,4 +460,32 @@ test('fetchResultPage(): a refusal (403, 429) pauses without asking the front pa
   const missing = daAnswering(() => 404);
   assert.equal((await missing.w.fetchResultPage(RECORD).catch((e) => e)).message, 'Digital Arkivet answered 404.');
   assert.equal(missing.asked.length, 1);
+});
+
+// Report #10: a baptism's mother was "!! <patronymic>" on DA, her given name not read,
+// and her patronymic in the church book's letters with the father's e left out, which
+// the search never tried
+test("surnameSpellings(), searchStem(): a patronymic in the church books' letters, and without the father's e", () => {
+  assert.equal(w.searchStem('Tonnesdatter'), 'Tønnes*');
+  assert.deepEqual(plain(w.surnameSpellings('Tonnesdatter')), ['Tonnes*']);
+  assert.deepEqual(plain(w.surnameSpellings('Mathiesen')), ['Mathis*']);
+  // (not after a consonant: Aslesen is never Aslsen)
+  assert.deepEqual(plain(w.surnameSpellings('Aslesen')), []);
+  assert.ok(w.unreadableWord('!!') && w.unreadableWord('Ann??') && !w.unreadableWord('Anne'));
+  assert.equal(w.legibleStart('Ann??'), 'Ann');
+  assert.equal(w.legibleStart('!!'), '');
+});
+
+test("buildQueries(): the own baptism by a parent's surname alone, in each spelling, before the parents' given names only", () => {
+  const baptism = w.buildQueries(criteria({
+    name: [{ givenName: 'Ole', surname: 'Pedersen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1850', 'birthLikeDate.to': '1852' }],
+    mother: [{ motherGivenName: 'Anne', motherSurname: 'Mathiesdatter' }]
+  }))[0];
+  assert.deepEqual(plain(baptism.steps.map((s) => s.text)),
+    ['Ole + mother Ann* Mathies*', 'Ole + mother Ann* Mathis*', 'Ole + mother Mathies*', 'Ole + mother Mathis*', 'Ole + mother Ann*', 'Ole']);
+  const bySurname = baptism.steps[2].fields;
+  assert.equal(bySurname.firstname, 'Ole');
+  assert.equal(bySurname.related_first_name, '');
+  assert.deepEqual(plain(bySurname['related_roles[]']), ['mor']);
 });

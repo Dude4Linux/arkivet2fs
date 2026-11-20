@@ -210,3 +210,19 @@ test("englishPageUrl(): DA's English page of a Bokmål or Nynorsk address", () =
   assert.equal(w.englishPageUrl('https://www.digitalarkivet.no/nn/census/person/pf99000000000155'),
     'https://www.digitalarkivet.no/en/census/person/pf99000000000155');
 });
+
+// Report #10: DA's "!!" (a name not read) and "??" (letters not read) say so in the notes
+test("the notes say what DA's \"!!\" and \"??\" in a name mean", () => {
+  const file = 'da/baptism-1846.html';
+  const doc = fixtureDoc(w, file);
+  const swap = (from, to) => {
+    for (const a of doc.querySelectorAll('#collapse-section-0 .data-item .ssp-semibold')) {
+      if (a.textContent.includes(from)) a.textContent = a.textContent.replace(from, to);
+    }
+  };
+  swap('Astri Larsdatter', '!! Larsdatter');
+  swap('Halvor Larsen', 'Hal?? Larsen');
+  const notes = w.extractRecord(doc, fixtureUrl(file)).notes;
+  assert.match(notes, /: !! \[name not read\] Larsdatter/);
+  assert.match(notes, /: Hal\?\? \[letters not read\] Larsen/);
+});

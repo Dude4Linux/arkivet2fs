@@ -320,3 +320,22 @@ test("checkRecord(): a sister's or brother's son of a head with another patronym
   // The FS mother without a patronymic
   assert.deepEqual(against(census('hans Søstersøn'), lars({ mother: [{ motherGivenName: 'Astri', motherSurname: 'Moen' }] })), []);
 });
+
+// Report #10: the mother "!! <patronymic>" on DA, her given name not read
+test("checkRecord(): a parent whose given name DA couldn't read, with FS's patronymic, is close; with another, nothing against", () => {
+  const mother = (name) => {
+    const r = record('baptism-1846');
+    r.people.find((p) => p.role === 'mor').name = name;
+    return plain(w.checkRecord(r, lars())).filter((r) => /mother/.test(r.text));
+  };
+  for (const name of ['!! Larsdatter', 'Ast?? Larsdatter', '!! Larsdtr.']) {
+    const reasons = mother(name);
+    assert.equal(reasons.length, 1, name + ': ' + JSON.stringify(reasons));
+    assert.ok(reasons[0].points > 0 && reasons[0].ok === null, name + ': ' + JSON.stringify(reasons));
+  }
+  assert.deepEqual(mother('!! Pedersdatter'), []);
+  assert.deepEqual(mother('!!'), []);
+  // letters read that start no FS given name: not her
+  assert.ok(mother('Kar?? Larsdatter').every((r) => !(r.points > 0)));
+  assert.equal(w.unreadGivenFits({ name: '!! Tønnesdatter' }, { given: 'Anne', surname: 'Tonnesdr' }), true);
+});

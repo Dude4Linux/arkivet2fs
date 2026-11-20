@@ -1543,6 +1543,38 @@ test('factAdditions(): a christening FS lacks; a birth date FS has as a year onl
   assert.deepEqual(adds(lars, 'TEST-LAR', 'Lars Halvorsøn').filter(([fact]) => fact === 'Name'), []);
 });
 
+test('factAdditions(): a baptized child\'s birth FS lacks is in the parish of the baptism (reports #8, #9: no place, FS refused it)', () => {
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  state.fs = { ...LARS_1846, birth: undefined };
+  const birth = plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
+  assert.equal(birth.action, 'add');
+  assert.equal(birth.value.place, 'Vågå, Oppland, Norway');
+  // FS's own birth keeps its place, also none
+  state.fs = { ...LARS_1846, birth: { date: '1846', place: 'Sel, Oppland, Norway' } };
+  const edit = plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
+  assert.equal(edit.value.place, 'Sel, Oppland, Norway');
+  state.fs = { ...LARS_1846, birth: { date: '1846' } };
+  assert.equal(plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth').value.place, '');
+});
+
+test('readPlan(): a birth added without a place stops the plan (reports #8, #9: FS keeps Save off)', () => {
+  const { win, state } = checkedPage();
+  state.fs = { ...LARS_1846, birth: undefined };
+  const lars = state.rows.find((r) => r.person.name === 'Lars');
+  lars.showFacts();
+  const item = [...lars.node.querySelectorAll('.additions li')].find((li) => /Add the birth/.test(li.textContent));
+  const tick = item.querySelector('input[type=checkbox]');
+  tick.checked = true;
+  tick.dispatchEvent(new win.Event('change'));
+  const place = item.querySelector('input.place');
+  assert.equal(place.value, 'Vågå, Oppland, Norway');
+  assert.equal(plain(win.readPlan(true).pairs.find((p) => p.pid === 'TEST-LAR').additions)[0].type, 'BIRTH');
+  place.value = '';
+  place.dispatchEvent(new win.Event('input'));
+  assert.throws(() => win.readPlan(true), /FamilySearch takes no birth without a place: fill in the place of "Add the birth" for Lars/);
+});
+
 test('factAdditions(): a burial\'s death date into FS\'s year, the burial, residence and occupation added', () => {
   const { win, state } = checkedPage();
   const b = record('burial-1854');
@@ -2024,4 +2056,27 @@ test('fsMessage(): the fact steps\' messages in Bokmål, the fact named in it', 
   assert.equal(nb.fsMessage('FamilySearch shows no button to add the burial.'), 'FamilySearch viser ingen knapp for å legge til ' + nb.t('Burial').toLowerCase() + '.');
   // English as it came
   assert.equal(w.fsMessage('FamilySearch did not save the birth.'), 'FamilySearch did not save the birth.');
+});
+
+// Report #10: the mother "!! <patronymic>" on DA, her given name not read
+test("suggestPairs(), otherName(), compareFact(), renameNoteLine(): a parent whose given name DA couldn't read", () => {
+  const r = record('baptism-1846');
+  r.people.find((p) => p.role === 'mor').name = '!! Larsdatter';
+  const people = w.recordPeople(r);
+  const { pairs, why } = w.suggestPairs(r, people, w.findSelf(people, LARS_1846, true), LARS_1846);
+  const mother = people.find((p) => p.name === '!! Larsdatter');
+  assert.equal(pairs[mother.key], 'TEST-AST');
+  assert.match(why[mother.key], /given name not read on DA/);
+  // another patronymic: only named, as before
+  const r2 = record('baptism-1846');
+  r2.people.find((p) => p.role === 'mor').name = '!! Pedersdatter';
+  const people2 = w.recordPeople(r2);
+  const other = w.suggestPairs(r2, people2, w.findSelf(people2, LARS_1846, true), LARS_1846);
+  assert.equal(other.pairs[people2.find((p) => p.name === '!! Pedersdatter').key], undefined);
+  // never offered as a name, and neither the same nor another
+  assert.equal(w.otherName(mother, r, { pid: 'TEST-AST', name: 'Astrid Larsdatter', altNames: [] }), null);
+  assert.equal(w.compareFact('Name', { text: mother.name }, { text: 'Astrid Larsdatter' }, mother, { pid: 'TEST-AST', name: 'Astrid Larsdatter' }, r), '');
+  // the notes' line, as da_record.js marks it, follows a name filled in
+  assert.equal(w.renameNoteLine('Mother: !! [name not read] Larsdatter\nFather: Halvor Larsen', 'Mother', '!! Larsdatter', 'Astrid Larsdatter'),
+    'Mother: Astrid Larsdatter\nFather: Halvor Larsen');
 });

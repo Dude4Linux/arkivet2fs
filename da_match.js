@@ -105,6 +105,7 @@ function jaroWinkler(x, y) {
 // Only ever a close name (≈), never a match, and never a reason against a record.
 const SHORT_FORMS = [['hans', 'johannes']];
 function nameNear(x, y) {
+  if (unreadableWord(x) || unreadableWord(y)) return false;
   const a = fold(x).replace(/[^\p{L}]/gu, ''), b = fold(y).replace(/[^\p{L}]/gu, '');
   if (SHORT_FORMS.some((pair) => pair.includes(a) && pair.includes(b) && a !== b)) return true;
   if (a.length < 4 || b.length < 4) return false;
@@ -117,10 +118,12 @@ function nameNear(x, y) {
 // Two patronymics' father names (patronymicBase()) that may be one man's: spellings
 // of one name (Halvard, Halvor; Gudbrand, Gulbrand), one the start of the other
 // (Johan, Johannes), or forms of Johannes, which church books wrote as John, Jon or
-// Joen for the same man (Johnsdatter, Johansdatter, Johannesdatter for one woman)
+// Joen for the same man (Johnsdatter, Johansdatter, Johannesdatter for one woman).
+// Ø and æ are o and ae, å aa: FS often writes them so (Tonnesdr for Tønnessen)
 const JOHANNES_FORMS = /^(jo(h?n|en)|johan+[ae]?)$/;
 function sameFather(x, y) {
-  const a = fold(x), b = fold(y);
+  const plain = (s) => fold(s).replace(/ø/g, 'o').replace(/æ/g, 'ae').replace(/å/g, 'aa');
+  const a = plain(x), b = plain(y);
   if (!a || !b) return false;
   return a.startsWith(b) || b.startsWith(a) || nameMatch(a, b) || nameMatch(b, a) || nameNear(a, b)
     || (JOHANNES_FORMS.test(a) && JOHANNES_FORMS.test(b));
@@ -132,6 +135,8 @@ function sameFather(x, y) {
 // Å and the older aa are one letter (Aase for Åse).
 const foldAa = (s) => fold(s).replace(/å/g, 'aa');
 function nameMatch(word, name) {
+  // (DA's "!!" and "??", letters not read, are never a name: illegibleFits())
+  if (unreadableWord(word) || unreadableWord(name)) return false;
   if (foldAa(word) === foldAa(name)) return true;
   const forms = nameForms(name);
   if (forms.length > 1 && forms.includes(nameKey(word))) return true;
@@ -179,7 +184,15 @@ function ageOn(on, birth) {
 // stem of FS's (Astri for Astrid; nameMatch() the other way round), as
 // church books often write it, or a near spelling (Ingebret for Ingebrigt: nameNear())
 function nameClose(word, name) {
-  return !nameMatch(word, name) && (nameMatch(name, word) || nameNear(word, name));
+  return !nameMatch(word, name) && (nameMatch(name, word) || nameNear(word, name) || illegibleFits(word, name));
+}
+
+// A record's name with letters DA couldn't read ("Ann??": unreadableWord()) whose
+// letters read, at least two, start FS's name (Anne): close, never a match (report #10)
+function illegibleFits(word, name) {
+  if (!/\?\?/.test(word || '') || unreadableWord(name)) return false;
+  const start = legibleStart(word);
+  return start.length >= 2 && foldAa(name).startsWith(foldAa(start));
 }
 
 // An FS place's parts, each with its other names
@@ -214,14 +227,16 @@ function scoreHit(hit, P) {
   // The first given name (of any FS name): the same 2, a spelling of it 2, otherwise
   // a variant DA matched 1 (0 where all given names are given: it isn't one of them)
   const first = names.find((w) => P.givens.some((g) => fold(g) === fold(w)));
-  const close = !first && names.find((w) => P.givens.some((g) => nameMatch(w, g) || nameNear(w, g)));
-  const variant = !first && !close && P.givens.length && names[0];
+  const near = (w, g) => nameMatch(w, g) || nameNear(w, g) || illegibleFits(w, g);
+  const close = !first && names.find((w) => P.givens.some((g) => near(w, g)));
+  // (a name DA couldn't read, "!!", says nothing either way)
+  const variant = !first && !close && P.givens.length && !unreadableWord(names[0]) && names[0];
   // A variant only when a search asked for the given name: a search by the surname
   // and a relative (the mother Johans* of a father) finds other given names, other
   // people (Marit Johansdatter for Astri Johansdatter)
   const byGiven = (hit.queries || []).some((q) => !q.fields || q.fields.firstname);
   if (first) add(2, first, true);
-  else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => nameMatch(close, g) || nameNear(close, g)) }), null);
+  else if (close) add(2, t('{name} for {fs}', { name: close, fs: P.givens.find((g) => near(close, g)) }), null);
   else if (variant && byGiven) add(allGiven ? 0 : 1, t('{name} (variant of {fs})', { name: variant, fs: P.given }), null);
   else if (variant) add(-3, t('{name} in the record, not {fs}', { name: variant, fs: P.given }), false);
   // Further given names (Magdalen for Magdaline)
@@ -234,7 +249,7 @@ function scoreHit(hit, P) {
   // Kristina Caspara for Maren Kristine)
   if (allGiven && P.givenNames.length) {
     for (const w of names) {
-      if (!used.has(w) && !isPatronymic(w) && ![...P.givenNames, ...P.givens].some((name) => nameMatch(w, name) || nameNear(w, name))) add(-1, t('{name} not in FamilySearch', { name: w }), false);
+      if (!used.has(w) && !isPatronymic(w) && !unreadableWord(w) && ![...P.givenNames, ...P.givens].some((name) => near(w, name))) add(-1, t('{name} not in FamilySearch', { name: w }), false);
     }
   }
 

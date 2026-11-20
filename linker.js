@@ -42,6 +42,14 @@ function givenOf(name) {
   return words.slice(0, i > 0 ? i : -1).join(' ');
 }
 
+// An FS name as {given, surname}: the given names, then the patronymic, else the last
+// word (unreadGivenFits())
+function fsNameParts(name) {
+  const given = givenOf(name);
+  const rest = String(name || '').split(/\s+/).filter(Boolean).slice(given.split(/\s+/).filter(Boolean).length);
+  return { given, surname: rest.find(isPatronymic) || rest[rest.length - 1] || '' };
+}
+
 // A name in a title or citation: "1845, Ole, son of ...", "baptism of Ole, 3 January",
 // "Lars Halvorsen and Kari", "Lars Halvorsen household" (whole names only, so "Lars" isn't
 // found in "Lars Halvorsen")
@@ -54,7 +62,10 @@ function renamePhrase(text, oldName, newName) {
 // A person's line in the notes: "Child: Ole *", "Father: Halvor Larsen (b. 1810)"
 function renameNoteLine(notes, role, oldName, newName) {
   if (!oldName || oldName === newName) return notes;
-  const re = new RegExp('^(' + escapeRe(role) + ': )' + escapeRe(oldName) + '(?= \\*| \\(|$)', 'm');
+  // (with da_record.js's notes on DA's "!!" and "??": "!! [name not read]")
+  const written = oldName.split(' ').map((w) => escapeRe(w) + (w === '!!' ? '(?: \\[name not read\\])?'
+    : /\?\?/.test(w) ? '(?: \\[letters not read\\])?' : '')).join(' ');
+  const re = new RegExp('^(' + escapeRe(role) + ': )' + written + '(?= \\*| \\(|$)', 'm');
   return notes.replace(re, (all, before) => before + newName);
 }
 
@@ -159,7 +170,10 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       const candidates = found[relation];
       const byName = candidates.find((p) => hasGivenName(p, givenOf(relative.name)));
       if (byName) pair(byName, relative, t(relation + ', same given name'));
-      else if (!census && candidates.length === 1) other(candidates[0], relative, relation);
+      // DA couldn't read the given name, the surname agrees (report #10)
+      else if (!census && candidates.length === 1 && unreadGivenFits(candidates[0], fsNameParts(relative.name))) {
+        pair(candidates[0], relative, t(relation + ', given name not read on DA, same surname'));
+      } else if (!census && candidates.length === 1) other(candidates[0], relative, relation);
     };
     single('father', tree.father);
     single('mother', tree.mother);
@@ -168,7 +182,10 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       const match = found.spouse.find((p) => hasGivenName(p, givenOf(x.name)));
       if (match) pair(match, x, t('spouse, same given name'));
     }
-    if (spouses.length === 1 && !census && found.spouse.length === 1) other(found.spouse[0], spouses[0], 'spouse');
+    if (spouses.length === 1 && !census && found.spouse.length === 1) {
+      if (unreadGivenFits(found.spouse[0], fsNameParts(spouses[0].name))) pair(found.spouse[0], spouses[0], t('spouse, given name not read on DA, same surname'));
+      else other(found.spouse[0], spouses[0], 'spouse');
+    }
     // Each record child with the FS child that fits best: the first given name before a
     // later one (Johan Peder is FS's Johan Peder, not his sister Marte Johanne), then
     // the year; never one of the other sex
@@ -255,7 +272,7 @@ function givenNameFit(person, tree) {
   const given = givenOf(stripVariants(tree.name));
   if (hasGivenName(person, given)) return 2;
   const first = stripVariants(person.name).split(/\s+/)[0] || '';
-  return first && given.split(/\s+/).some((g) => nameMatch(g, first) || nameNear(first, g)) ? 1 : 0;
+  return first && given.split(/\s+/).some((g) => nameMatch(g, first) || nameNear(first, g) || illegibleFits(first, g)) ? 1 : 0;
 }
 
 // A resident's sex where the record tells it: a woman's patronymic (Olsdatter), the
@@ -941,6 +958,8 @@ function treeFacts(tree, record) {
 function compareFact(fact, da, fs, person, tree, record, name) {
   if (!da || !fs) return '';
   if (fact === 'Name') {
+    // (a given name DA couldn't read, "!!", neither agrees nor differs)
+    if (/^!!/.test(String(name || stripVariants(person.name)).trim())) return '';
     const fit = givenNameFit(name ? { ...person, name } : person, tree);
     const full = record && tree && fullTree(tree.pid);
     if (fit === 2 && full && otherName(person, record, full, name)) return 'near';
@@ -1163,6 +1182,8 @@ const fsYear = (text) => (parseFsDate(text) || {}).year || Number((String(text |
 // has no surname: its last word isn't one, and it's no other name.
 function otherName(person, record, full, name) {
   const asWritten = name || stripVariants(person.name);
+  // (DA's "!!" and "??" for what it couldn't read are no name to keep: report #10)
+  if (asWritten.split(/\s+/).some(unreadableWord)) return null;
   const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
   const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
   const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
@@ -1195,8 +1216,13 @@ function factAdditions(person, record, tree, name) {
   const bornAt = da.Birth && cleanPlace(da.Birth.place);
   // a birth farm FS has no place for: in the parish when he died on the same farm
   const bornSuggested = bornAt && !fsMunicipality(bornAt, record, true) && died && sameFarm(bornAt, died) ? diedAt : '';
+  // A baptism that names no birthplace, of a child FS has no birth for: born in the
+  // parish the child was baptized in, since FS takes no birth added without a place
+  // (reports #8, #9); FS's own birth, placeless or not, is left its place
+  const fsBirth = full.birth && String(full.birth.date || full.birth.place || '').trim();
+  const baptized = !bornAt && !fsBirth && (record.recordTypeInfo || {}).type === 'birth_baptism' && roleKind(person) === 'child' && parish;
   const vitalPlace = {
-    Birth: [bornAt, false, true, '', bornSuggested],
+    Birth: baptized ? [parish.split(',')[0].trim(), true, false, '', parish] : [bornAt, false, true, '', bornSuggested],
     Christening: [church.name, false, false, '', church.place],
     Death: [died || place, !died, false, place, died ? diedAt : ''],
     Burial: [church.name, false, false, '', church.place]
@@ -2120,6 +2146,10 @@ function readPlan(attach) {
         const v = a.value;
         const empty = a.action === 'name' ? !(v.given || v.surname) : !(v.date || v.place || v.description);
         if (empty) throw new Error(t('"{what}" for {name} is empty: fill it in or untick it.', { what: additionLabel(a), name: row.label() }));
+        // FS's form keeps Save off for a birth added with a date and no place (reports #8, #9)
+        if (!empty && a.action === 'add' && a.type === 'BIRTH' && !String(v.place || '').trim()) {
+          throw new Error(t('FamilySearch takes no birth without a place: fill in the place of "{what}" for {name}, or untick it.', { what: additionLabel(a), name: row.label() }));
+        }
       }
       // A fact added is tagged once saved (saveAdditions()), not when attaching: the
       // person hasn't it yet, or has another (a residence of another year)
@@ -2938,8 +2968,11 @@ function newPersonDraft(row) {
   const person = row.person;
   const record = state.record;
   const facts = recordFacts(person, record);
-  const words = (row.name || stripVariants(person.name)).split(/\s+/).filter(Boolean);
   const notes = [];
+  // DA's "!!" and "??" for what it couldn't read (report #10) are left out
+  const written = (row.name || stripVariants(person.name)).split(/\s+/).filter(Boolean);
+  const words = written.filter((w) => !unreadableWord(w));
+  if (words.length < written.length) notes.push(t('Not read on DigitalArkivet, left out of the name: {words}.', { words: written.filter(unreadableWord).join(' ') }));
   // The patronymic is the surname; a word after it (a farm, an address) is left out
   let { given, surname, rest } = nameParts(words.join(' '));
   if (rest) notes.push(t('Left out of the name: {rest} (a farm is an address; add it if it is a family name).', { rest }));

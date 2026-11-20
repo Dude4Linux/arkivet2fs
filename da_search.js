@@ -68,6 +68,17 @@ const ROLES = {
 function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, ''); }
 
 function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
+
+// DA's marks for what its transcribers couldn't read (report #10): "!!" in place of a
+// name not read at all ("!! Halvorsdatter": the given name), "??" for letters not read in a
+// name ("Ann??"). Such a word is no name to match, search or offer as one; the letters
+// before a "??" are its start (legibleStart(): "Ann?? " → "Ann", "!!" → "").
+function unreadableWord(word) { return /!!|\?\?/.test(word || ''); }
+function legibleStart(word) {
+  const w = String(word || '').trim();
+  const at = w.search(/!!|\?\?/);
+  return (at < 0 ? w : w.slice(0, at)).replace(/[^\p{L}]/gu, '');
+}
 // The father's name in a patronymic (Halvorsen → Halvor, Olsdr. → Ol)
 function patronymicBase(surname) { return (surname || '').replace(PATRONYMIC_ENDING, ''); }
 
@@ -229,7 +240,7 @@ function searchStem(surname) {
 // Hakonsen, Palsen; Håkonsen in today's spelling): DA doesn't treat o as ø, nor å as
 // aa, and its transcriptions keep the church books' letters (Jørgensen, Haakonsen:
 // Jorgens* finds few of them, Håkons* none), so searchStem() searches by those first
-const NORWEGIAN_LETTER_FATHERS = ['søren', 'jørgen', 'jørn', 'bjørn', 'sæbjørn', 'gjøran', 'tørres', 'tørris',
+const NORWEGIAN_LETTER_FATHERS = ['søren', 'jørgen', 'jørn', 'bjørn', 'sæbjørn', 'gjøran', 'tørres', 'tørris', 'bøye', 'tønnes',
   'østen', 'øystein', 'bård', 'håkon', 'pål', 'ståle', 'ånund', 'åsmund', 'åsulf', 'tjøstolv', 'tjøstel'];
 
 // A patronymic in the church books' letters (Jorgensen → Jørgensen, Hakonsdatter and
@@ -260,9 +271,14 @@ function surnameSpellings(surname) {
   // (not Håkonsen's own: DA's transcriptions have no å)
   if (own) return [...(/å/i.test(surname) ? [] : [surnameStem(surname)]), ...surnameSpellings(own)];
   const spelled = patronymicGroup(surname);
-  if (!spelled || spelled.group.shared) return [];
+  if (spelled && spelled.group.shared) return [];
   const s = surname.trim();
-  return spelled.group.forms.filter((p) => p !== spelled.own).map((p) => s[0] + p.slice(1) + spelled.rest + '*');
+  if (spelled) return spelled.group.forms.filter((p) => p !== spelled.own).map((p) => s[0] + p.slice(1) + spelled.rest + '*');
+  // A father's name ending in e loses it before the genitive s as often as not
+  // (Mathiesen and Mathisen)
+  const stem = isPatronymic(s) ? s.replace(PATRONYMIC_ENDING, '$1') : '';
+  // (after a vowel or j only: Aslesen is never Aslsen)
+  return /[aiouyæøåj]es$/i.test(stem) && stem.length >= 5 ? [stem.slice(0, -2) + 's*'] : [];
 }
 
 const year = (v) => (/^\d{4}$/.test(String(v || '').trim()) ? Number(v) : null);
@@ -533,16 +549,20 @@ function buildQueries(criteria) {
 
   // Own baptism: the child usually has no surname in the record, so by the first
   // given name and a parent's full name, then by two given names alone (all must
-  // match), then with a parent's given name only (DA's transcriptions of parents can
-  // be far off) and by the first given name alone, in the FS birthplace
+  // match), then with a parent's surname only in each of its spellings (DA's "!!" for
+  // a given name it couldn't read, "!! Larsdatter": report #10) and with a parent's given
+  // name only (DA's transcriptions of parents can be far off), and by the first given
+  // name alone, in the FS birthplace
   if (P.given) {
     const from = P.birth && P.birth.from, to = P.birth && P.birth.to + 1; // baptism can fall in the next year
     const parents = [relative(P.father, t('father'), ['far']), relative(P.mother, t('mother'), ['mor'])].filter(Boolean);
     const pairs = parents.map((r) => pairSteps(r, { first: given }));
     // (two given names find fewer children than one and a parent's given name)
     const two = P.givenNames.length > 1 ? P.givenNames.slice(0, 2).map(givenStem).join(' ') : '';
+    const bySurname = parents.filter((r) => r.last).flatMap((r) => [r.last, ...r.spellings]
+      .map((last) => step([part({ first: given }, 1, 0), part({ ...r, last }, 0, 1)])));
     const steps = [...pairs.map((p) => p[0]), ...(P.birth && two ? alone({ first: two }, 1, 0) : []),
-      ...pairs.map((p) => p[1]), ...(P.birth ? alone(me, 1, 0) : [])].filter(Boolean);
+      ...bySurname, ...pairs.map((p) => p[1]), ...(P.birth ? alone(me, 1, 0) : [])].filter(Boolean);
     const q = query('baptism', t('Baptism'), { 'roles[]': 'barn', ...years(from, to) }, steps,
       levelsFor(P.birthPlace ? [P.birthPlace] : allPlaces), [as(['barn']), span(from, to)]);
     if (!steps.length) q.skip = t('Add the father or mother, or a birth year, to search for the baptism.');

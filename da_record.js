@@ -848,7 +848,10 @@ function extractRecord(document, pageUrl) {
     // "Role: Name (position, b. 1841 or age 35, birthplace, res. ...)"
     function personLine(person) {
       const role = person.roleEnglish || person.role || 'Unknown';
-      let line = role + ': ' + person.name + (person.primary ? ' *' : '');
+      // DA's marks for what it couldn't read: "!!" a whole name, "??" letters (report #10)
+      const name = String(person.name || '').replace(/(^|\s)!!(?=\s|$)/g, '$1!! [name not read]')
+        .replace(/(\S*\?\?\S*)/g, '$1 [letters not read]');
+      let line = role + ': ' + name + (person.primary ? ' *' : '');
       const details = [];
       if (person.position) details.push(expandAbbreviations(person.position));
       // Censuses give a birth year or an age ("35", "3 m"), 1910 a full date, church books a year

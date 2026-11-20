@@ -218,6 +218,24 @@ function patronymicDiffers(person, surname) {
   return patronymics.length > 0 && !patronymics.some((w) => sameFather(patronymicBase(w), base));
 }
 
+// A record person whose given name DA couldn't read ("!! Larsdatter"; "Ann?? Larsdatter"
+// when the letters read start an FS given name: legibleStart()) and whose surname
+// agrees with FS's: a patronymic of the same father, also in the church books' letters
+// (Tønnesdatter for FS's Tonnesdr), or the same surname (report #10).
+// `relative` is {given, surname}.
+function unreadGivenFits(person, relative) {
+  const words = (person.name || '').replace(/%[^%]*%|[*,]/g, ' ').split(/\s+/).filter(Boolean);
+  const surname = String(relative.surname || '').trim();
+  if (words.length < 2 || !surname || !unreadableWord(words[0])) return false;
+  const start = legibleStart(words[0]).toLowerCase();
+  const givens = String(relative.given || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (start && !givens.some((g) => g.replace(/å/g, 'aa').startsWith(start.replace(/å/g, 'aa')))) return false;
+  const fsForms = [surname, churchSpelling(surname)].filter(Boolean);
+  return words.slice(1).some((w) => fsForms.some((s) => (isPatronymic(w) && isPatronymic(s)
+    ? sameFather(patronymicBase(w), patronymicBase(s))
+    : w.toLowerCase().startsWith(surnameStem(s).replace(/\*$/, '').toLowerCase()))));
+}
+
 // Could a record person be this FS relative: the given name, no other patronymic, and
 // a birth year within 5 of FS's (census ages are often a few years off)
 function isRelative(person, relative, record, close = false) {
@@ -269,14 +287,18 @@ function checkRecord(record, P) {
     const match = candidates.find((p) => isRelative(p, relative, record));
     const near = !match && elsewhere.find((p) => isRelative(p, relative, record));
     const close = !match && !near && !census && candidates.find((p) => isRelative(p, relative, record, true));
+    const unread = !match && !near && !close && !census && candidates.find((p) => unreadGivenFits(p, relative));
     if (match) add(3, t('{relation} {name} in the record', { relation, name: match.name }), true);
     else if (near) add(2, t('{relation} {name} at the same residence', { relation, name: near.name }), true);
     else if (close) add(2, t('{relation} {name} in the record, for {fs}', { relation, name: close.name, fs: relative.given.split(/\s+/)[0] }), null);
+    else if (unread) add(1, t('{relation} {name} in the record, the given name not read on DA', { relation, name: unread.name }), null);
     else if (candidates.length && !census) differs(relation, candidates[0], [relative]);
   };
   // Another person where FS has a relative: -3 with another given name (Anne for
   // Astrid), -2 with the same or a close one (another patronymic or birth year)
   const differs = (relation, person, relatives) => {
+    // (a given name DA couldn't read, "!!", is no other name)
+    if (unreadableWord(firstName(person))) return;
     const named = relatives.some((r) => hasGivenName(person, r.given) || hasCloseName(person, r.given));
     add(named ? -2 : -3, relation + ' ' + notRelative(person, relatives, record), false);
   };
@@ -287,7 +309,9 @@ function checkRecord(record, P) {
   if (P.spouses.length && inRecord.spouse.length) {
     const match = inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record)));
     const close = !match && !census && inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record, true)));
+    const unread = !match && !close && !census && inRecord.spouse.find((p) => P.spouses.some((s) => unreadGivenFits(p, s)));
     if (match) add(3, t('{relation} {name} in the record', { relation: t('spouse'), name: match.name }), true);
+    else if (unread) add(1, t('{relation} {name} in the record, the given name not read on DA', { relation: t('spouse'), name: unread.name }), null);
     else if (close) {
       const spouse = P.spouses.find((s) => isRelative(close, s, record, true));
       add(2, t('{relation} {name} in the record, for {fs}', { relation: t('spouse'), name: close.name, fs: spouse.given.split(/\s+/)[0] }), null);

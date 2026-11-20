@@ -316,3 +316,22 @@ test('pairParallel(): twins are paired only by their checked records', () => {
   const c = hitIn('c1', BOOK_A, { record: baptism('Lars') }), d = hitIn('d1', BOOK_B, { record: baptism('Ingrid') });
   assert.equal(w.pairParallel([c, d]).length, 2);
 });
+
+// Report #10: DA writes "!!" for a name it couldn't read and "??" for letters
+test("nameMatch(), nameClose(), scoreHit(): DA's \"!!\" and \"??\" are never a match nor against one", () => {
+  assert.equal(w.nameMatch('!!', 'Lars'), false);
+  assert.equal(w.nameMatch('La??', 'Lars'), false);
+  assert.equal(w.nameClose('La??', 'Lars'), true);
+  assert.equal(w.nameClose('Ol??', 'Lars'), false);
+  assert.equal(w.nameClose('L??', 'Lars'), false, 'one letter read says too little');
+  assert.equal(w.sameFather('Tønnes', 'Tonnes'), true);
+  const score = (name) => {
+    const merged = new Map();
+    w.mergeHits(merged, { fields: { lastname: 'Halvors*' }, reasons: [] }, [{ id: 'pd99000000000952', name, role: 'Child', date: '1846-08-02', source: '' }]);
+    return plain(w.groupHits(merged, P)).flatMap((g) => g.hits)[0];
+  };
+  const unread = score('!! Halvorsen');
+  assert.ok(!unread.reasons.some((r) => r.ok === false), JSON.stringify(unread.reasons));
+  const letters = score('La?? Halvorsen');
+  assert.equal(reason(letters, /^La\?\?/).ok, null, JSON.stringify(letters.reasons));
+});
