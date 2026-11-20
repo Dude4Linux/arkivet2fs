@@ -3,12 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DigitalArkivet to FamilySearch</title>
-<meta name="description" content="A free genealogy extension for your browser that finds your Norwegian ancestors' records in Digitalarkivet and attaches them to your FamilySearch tree as cited sources.">
+<title>DigitalArkivet to FamilySearch (arkivet2fs): Norwegian genealogy extension</title>
+<meta name="description" content="A free genealogy extension for Chrome, Firefox, Brave and Opera that finds your Norwegian ancestors&#39; records in Digitalarkivet (church books, censuses, emigrant lists) and attaches them to your FamilySearch tree as cited sources.">
+<link rel="canonical" href="https://dude4linux.github.io/arkivet2fs/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DigitalArkivet to FamilySearch">
+<meta property="og:title" content="DigitalArkivet to FamilySearch: find your Norwegian ancestors and cite them">
+<meta property="og:description" content="A free browser extension that searches Digitalarkivet's church books, censuses and emigrant lists from a person in your FamilySearch tree, and attaches the records as cited sources.">
+<meta property="og:url" content="https://dude4linux.github.io/arkivet2fs/">
+<meta property="og:image" content="https://dude4linux.github.io/arkivet2fs/images/card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The extension's icon, a church book with a family tree, and its name: DigitalArkivet to FamilySearch">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<!-- Structured data for search engines (data, not a script that runs) -->
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "SoftwareApplication",
+ "name": "DigitalArkivet to FamilySearch",
+ "alternateName": "arkivet2fs",
+ "description": "A free genealogy extension for Chrome, Firefox, Brave and Opera that finds your Norwegian ancestors' records in Digitalarkivet (church books, censuses, emigrant lists) and attaches them to your FamilySearch tree as cited sources.",
+ "url": "https://dude4linux.github.io/arkivet2fs/",
+ "image": "https://dude4linux.github.io/arkivet2fs/images/card.png",
+ "applicationCategory": "BrowserApplication",
+ "applicationSubCategory": "Genealogy",
+ "operatingSystem": "Windows, macOS, Linux",
+ "browserRequirements": "Chrome, Brave, Opera, or Firefox 140 or later",
+ "inLanguage": [
+  "en",
+  "nb",
+  "nn"
+ ],
+ "isAccessibleForFree": true,
+ "offers": {
+  "@type": "Offer",
+  "price": "0",
+  "priceCurrency": "USD"
+ },
+ "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+ "codeRepository": "https://github.com/Dude4Linux/arkivet2fs",
+ "sameAs": [
+  "https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm",
+  "https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/",
+  "https://github.com/Dude4Linux/arkivet2fs"
+ ]
+}
+</script>
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="images/icon.svg" type="image/svg+xml">
 <!-- The website, published by GitHub Pages from master's docs/ (.nojekyll: served as is).
-     No fonts, scripts or anything else from other sites: a visit is seen by GitHub only. -->
+     No fonts, scripts or anything else from other sites (the JSON-LD is data): a visit is seen by GitHub only. -->
 <style>
 /* Layout: one centred column; a parchment hero with the install buttons, then how it works, needs, install per browser, privacy, help */
 :root {
@@ -73,7 +119,6 @@ ul, ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; }
   box-shadow: var(--shadow); line-height: 1.3;
 }
 .button small { font-weight: 400; font-size: .8rem; opacity: .9; }
-.button.soon { background: transparent; color: var(--deep); border: 2px dashed var(--deep); box-shadow: none; cursor: default; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: .95rem; list-style: none; padding: 0; }
 .facts li::before { content: "✓ "; color: var(--copper); font-weight: 700; }
 
@@ -100,7 +145,6 @@ table { width: 100%; border-collapse: collapse; font-size: .97rem; }
 th, td { text-align: left; vertical-align: top; padding: 12px 10px; border-bottom: 1px solid var(--rule); }
 th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 td:first-child { font-weight: 600; white-space: nowrap; }
-.soon-text { color: var(--copper); font-style: italic; }
 .note { color: var(--muted); font-size: .95rem; }
 pre { background: var(--parchment); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: .9rem; line-height: 1.45; margin: 8px 0; }
 
@@ -130,12 +174,10 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
     </div>
     <p class="tagline">A free genealogy extension for your browser that finds your Norwegian ancestors' records in <strong>Digitalarkivet</strong>, the National Archives of Norway's online archive, and attaches them to your <strong>FamilySearch</strong> tree as cited sources.</p>
     <div class="buttons">
-      <!-- When AMO's listing is live: replace the .soon with href="<store address>" and drop the class -->
       <a class="button" href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store<small>Chrome, Brave, Opera</small></a>
-      <a class="button soon" aria-disabled="true">Firefox Add-ons<small>coming soon · Firefox, LibreWolf</small></a>
+      <a class="button" href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons<small>Firefox, LibreWolf</small></a>
       <a href="#install">How to install</a>
     </div>
-    <p class="note">On the Chrome Web Store now; Firefox Add-ons is still reviewing it. Using Firefox and can't wait? <a href="#unpacked">Install it from GitHub</a>.</p>
     <ul class="facts">
       <li>Free and open source</li>
       <li>No account, no tracking</li>
@@ -182,7 +224,7 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
 
     <section id="install">
       <h2>Install</h2>
-      <p class="prose">Chrome, Brave and Opera install it from the Chrome Web Store. Firefox Add-ons is still reviewing it; until it's there, if you're comfortable with a few technical steps, you can <a href="#unpacked">install it from GitHub</a> below.</p>
+      <p class="prose">Chrome, Brave and Opera install it from the Chrome Web Store, Firefox and LibreWolf from Firefox Add-ons. The store keeps it up to date.</p>
       <div class="table">
         <table>
           <thead><tr><th>Browser</th><th>Where</th><th>How</th></tr></thead>
@@ -190,8 +232,8 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
             <tr><td>Chrome</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Click <strong>Add to Chrome</strong>.</td></tr>
             <tr><td>Brave</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Click <strong>Add to Brave</strong>.</td></tr>
             <tr><td>Opera</td><td><a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a></td><td>Opera first offers its own <strong>Install Chrome Extensions</strong> helper: add it, then the extension.</td></tr>
-            <tr><td>Firefox</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Firefox 140 or later. Click <strong>Add to Firefox</strong>.</td></tr>
-            <tr><td>LibreWolf</td><td>Firefox Add-ons <span class="soon-text">(coming soon)</span></td><td>Click <strong>Add to Firefox</strong>. LibreWolf signs you out of every site when it closes; to stay signed in to FamilySearch, go to Settings → Privacy &amp; Security → Cookies and Site Data → Manage Exceptions, and allow <code>https://www.familysearch.org</code>.</td></tr>
+            <tr><td>Firefox</td><td><a href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons</a></td><td>Firefox 140 or later. Click <strong>Add to Firefox</strong>.</td></tr>
+            <tr><td>LibreWolf</td><td><a href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons</a></td><td>Click <strong>Add to Firefox</strong>. LibreWolf signs you out of every site when it closes; to stay signed in to FamilySearch, go to Settings → Privacy &amp; Security → Cookies and Site Data → Manage Exceptions, and allow <code>https://www.familysearch.org</code>.</td></tr>
           </tbody>
         </table>
       </div>
@@ -199,8 +241,8 @@ footer .wrap { padding-block: 24px 40px; display: grid; gap: 6px; }
     </section>
 
     <section id="unpacked">
-      <h2>Install now, from GitHub</h2>
-      <p class="prose">For the technically inclined who'd rather not wait for Firefox Add-ons, or want a new release before the stores have it. You load the extension from a folder on your computer, as developers do. It's the same extension the stores have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
+      <h2>Install from GitHub</h2>
+      <p class="prose">For the technically inclined who want a new release before the stores have it. You load the extension from a folder on your computer, as developers do. It's the same extension the stores have, but it doesn't update itself: it tells you when there's a new release, and you install it the same way.</p>
       <ol class="prose">
         <li>Download <code>arkivet2fs-X.Y.Z.zip</code> (1.8.0 or later) from the <a href="https://github.com/Dude4Linux/arkivet2fs/releases/latest">latest release</a>. The same file works in every browser.</li>
         <li>Unzip it into a folder named just <code>arkivet2fs</code>, with no version in the name, somewhere it can stay, such as your home folder. On Linux or macOS, in a terminal:
@@ -262,6 +304,12 @@ Either one makes the folder if it isn't there and replaces its files if it is. W
       <h2>Testers wanted</h2>
       <p>The extension is new. If you have Norwegian ancestors in FamilySearch's tree, try it on your own family and tell us what works and what doesn't, with <strong>Send report</strong>. Every report is read.</p>
     </div>
+
+    <section id="norsk" lang="nb" class="prose">
+      <h2>På norsk</h2>
+      <p><strong>Digitalarkivet til FamilySearch</strong> er en gratis utvidelse for nettleseren til slektsforskning i norske kilder. Fra en person i slektstreet i FamilySearch søker den i Digitalarkivet etter dåp, konfirmasjon, ekteskap, barnas dåp, folketellinger, utvandring og begravelse, rangerer treffene og forklarer hvorfor hvert treff passer. Posten du velger, legges til i FamilySearch som en kilde med kildehenvisning, knyttet til personene den nevner.</p>
+      <p>Utvidelsen er på bokmål, nynorsk og engelsk. Installer den fra <a href="https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm">Chrome Web Store</a> (Chrome, Brave, Opera) eller <a href="https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/">Firefox Add-ons</a> (Firefox, LibreWolf). Den er et uavhengig prosjekt, uten tilknytning til FamilySearch eller Arkivverket.</p>
+    </section>
 
   </div>
 </main>

@@ -64,6 +64,7 @@ export function privacyPage(markdown) {
 <title>Privacy policy · DigitalArkivet to FamilySearch</title>
 <meta name="description" content="The privacy policy of DigitalArkivet to FamilySearch (arkivet2fs), a free genealogy extension for the browser.">
 <meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://dude4linux.github.io/arkivet2fs/privacy.html">
 <link rel="icon" href="images/icon.svg" type="image/svg+xml">
 <!-- Made from PRIVACY.md by tools/privacy-page.mjs: edit PRIVACY.md and run it again. -->
 <style>

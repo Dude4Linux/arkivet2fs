@@ -25,9 +25,9 @@ Halvor Larsen and Astri Larsdatter, who emigrated to America.
 ## 1. Before you start
 
 - **Install the extension**: in Chrome, Brave and Opera from the
-  [Chrome Web Store](https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm); in Firefox and LibreWolf, until it's on Firefox Add-ons, as
-  the [README](https://github.com/Dude4Linux/arkivet2fs#install) says. Pin its icon to
-  the toolbar.
+  [Chrome Web Store](https://chromewebstore.google.com/detail/digitalarkivet-to-familys/malggmddihmieaipddkjemajhiembnkm),
+  in Firefox and LibreWolf from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/). Pin its icon to the toolbar.
+  The [README](https://github.com/Dude4Linux/arkivet2fs#install) has the details.
 - **Sign in to FamilySearch** in the same browser. The extension works in your
   FamilySearch pages as you would; it never sees your password.
 - **Choose a language** if you like: the menu at the top right of the search page and
@@ -217,7 +217,7 @@ box at the top.
 | A step failed and "The FamilySearch tab is left open where it stopped." | Look at the tab: a dialog may need you, or FamilySearch was slow. Steps that went through are done; running the linker again skips what's there already (the source, attachments, tags). |
 | "The source … in your SourceBox has this title but is of another record" | Two records share a title. Change this one's title (add a name or the date) and try again. Nothing was changed. |
 | A FamilySearch window pops up and goes again | That's the linker reading FamilySearch. Leave it; it closes by itself. |
-| In Firefox, the extension is gone after a restart | A temporary add-on lasts until Firefox closes. Load it again from `about:debugging`; your data is kept. |
+| In Firefox, the extension is gone after a restart | A temporary add-on, loaded from a folder, lasts until Firefox closes. Install it from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/) instead, which keeps it; or load it again from `about:debugging` (your data is kept). |
 | No **Digital Arkivet** entry on a FamilySearch person page | Reload the page. After updating the extension, open FamilySearch tabs get it back by themselves, but a tab left asleep may not. |
 
 ## 11. Report a problem

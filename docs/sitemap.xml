@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The website's pages, for search engines (submitted in Google Search Console).
+     GitHub Pages serves a project site under /arkivet2fs/, so there is no robots.txt to name it. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://dude4linux.github.io/arkivet2fs/</loc><lastmod>2026-11-19</lastmod></url>
+  <url><loc>https://dude4linux.github.io/arkivet2fs/privacy.html</loc><lastmod>2026-11-17</lastmod></url>
+</urlset>

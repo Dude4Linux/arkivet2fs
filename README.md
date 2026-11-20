@@ -34,15 +34,26 @@ step-by-step guide to using it is in
 
 The store keeps it up to date. If one of its pages shows **Allow access**, click it once.
 
-Firefox Add-ons is still reviewing it; until it's there, Firefox and LibreWolf load it
-from a folder, as below.
+### From Firefox Add-ons (Firefox, LibreWolf)
+
+Firefox 140 or later.
+
+1. Open [the extension's page](https://addons.mozilla.org/en-US/firefox/addon/digitalarkivet-to-familysearch/) on Firefox Add-ons.
+2. Click **Add to Firefox**, then **Add** when Firefox asks.
+3. Pin the extension's icon to the toolbar (the puzzle piece, then the gear, **Pin to
+   Toolbar**).
+
+Firefox keeps it up to date. If Firefox hasn't given the extension Digitalarkivet and
+FamilySearch, the search page and the linker show **Allow access**: click it once. In
+LibreWolf, keep FamilySearch's cookies when it closes (Settings → Privacy & Security →
+Cookies and Site Data → Manage Exceptions → `https://www.familysearch.org`, Allow), or
+you'll be signed out of FamilySearch each time.
 
 ### From GitHub, loaded from a folder
 
 There's no build step: the extension is its source files, and one package serves every
 browser below. Any of them can load it from a folder on your computer, as developers
-do: for Firefox until it's on Firefox Add-ons, or for a new release before the stores
-have it. Such a copy doesn't update itself; it tells you when there's a new release.
+do, for a new release before the stores have it. Such a copy doesn't update itself; it tells you when there's a new release.
 
 First, in every browser:
 
@@ -90,8 +101,8 @@ Digitalarkivet and FamilySearch with an **Allow access** button the first time.
 
 #### Firefox and LibreWolf
 
-Firefox 140 or later. Until the extension is on Mozilla's add-ons site, Firefox loads
-it as a temporary add-on, which it keeps until it closes:
+Firefox 140 or later. Firefox loads a copy from a folder as a temporary add-on, which
+it keeps until it closes:
 
 1. Open `about:debugging`, choose **This Firefox**, then **Load Temporary Add-on…**.
 2. Pick `manifest.json` in the `arkivet2fs` folder.
