@@ -537,6 +537,8 @@ extension read, showed and did. It opens a panel with the report to read and edi
 first: take out living people (the report names the tree persons you paired, with
 their IDs), and say what went wrong in the **What happened?** box below it. Nothing is sent before you
 click **Send**, and the report goes to a private queue that only the developer reads.
+Every report is read, but fixes come in updates now and then, each fixing several
+problems, so don't expect an answer or a fix right away.
 Ideas, and reports you'd rather make in public, go in the
 [issues](https://github.com/Dude4Linux/arkivet2fs/issues): **Copy report** puts the
 report on the clipboard to paste there. Issues are public.

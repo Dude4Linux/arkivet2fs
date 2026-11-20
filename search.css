@@ -120,7 +120,7 @@ button, input, select { font: inherit; }
   box-shadow: var(--shadow);
 }
 .report-panel h2 { margin: 0 0 6px; font-size: 18px; }
-.report-panel .report-about { margin: 0 0 10px; max-width: 70em; color: var(--muted); font-size: 14px; }
+.report-panel .report-about, .report-panel .report-pace { margin: 0 0 10px; max-width: 70em; color: var(--muted); font-size: 14px; }
 .report-panel .report-text {
   display: block;
   box-sizing: border-box;

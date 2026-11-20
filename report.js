@@ -233,6 +233,7 @@ function openReportPanel(topbar, build) {
   contact.maxLength = 200;
   contact.autocomplete = 'email';
   contactLabel.append(contact);
+  const pace = reportElement(doc, 'p', 'report-pace', t('Every report is read, but fixes come in updates now and then, each fixing several problems, so an answer or a fix can take a while.'));
   const send = reportElement(doc, 'button', 'primary', t('Send'));
   send.type = 'button';
   const cancel = reportElement(doc, 'button', '', t('Cancel'));
@@ -241,7 +242,7 @@ function openReportPanel(topbar, build) {
   status.setAttribute('role', 'status');
   const buttons = reportElement(doc, 'div', 'report-actions');
   buttons.append(send, cancel);
-  panel.append(title, about, area, whatLabel, contactLabel, buttons, status);
+  panel.append(title, about, area, whatLabel, contactLabel, pace, buttons, status);
   // The report as it is sent (and copied for an issue): the answer in its place
   const finalReport = () => withWhatHappened(area.value.trim(), what.value);
 

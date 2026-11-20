@@ -12,4 +12,7 @@ sends it privately instead.
 
 Issues are public. Read the report before you submit it, and take out living people
 (names, dates, FamilySearch IDs) and anything else you'd rather not show.
+
+Every report is read, but fixes come in updates now and then, each fixing several
+problems, so an answer or a fix can take a while.
 -->

@@ -237,6 +237,10 @@ the panel gives its number. Firefox asks once whether the extension may send it.
 The [privacy policy](https://dude4linux.github.io/arkivet2fs/privacy.html) says what a
 report holds, who reads it and how long it is kept.
 
+Every report is read, but don't expect an answer or a fix right away: fixes come in
+updates now and then, each one fixing several reported problems. The stores install
+the update by themselves.
+
 If it can't be sent, the panel offers to copy it and open an issue on GitHub instead.
 **Copy report** only copies it, for an e-mail, a message or a GitHub issue. Issues on
 GitHub are public. Don't paste FamilySearch pages.
