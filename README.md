@@ -65,18 +65,18 @@ First, in every browser:
    can stay, for instance in your home folder. On Linux or macOS, in a terminal:
 
    ```sh
-   unzip -o ~/Downloads/arkivet2fs-1.8.1.zip -d ~/arkivet2fs
+   unzip -o ~/Downloads/arkivet2fs-1.8.2.zip -d ~/arkivet2fs
    ```
 
    On Windows, in PowerShell:
 
    ```powershell
-   Expand-Archive -Force "$HOME\Downloads\arkivet2fs-1.8.1.zip" "$HOME\arkivet2fs"
+   Expand-Archive -Force "$HOME\Downloads\arkivet2fs-1.8.2.zip" "$HOME\arkivet2fs"
    ```
 
    Either one makes the folder if it isn't there and replaces its files if it is
    (`manifest.json` ends up right inside `arkivet2fs`). With a file manager instead,
-   change the folder it suggests (`arkivet2fs-1.8.1`) to `arkivet2fs`. Use the same
+   change the folder it suggests (`arkivet2fs-1.8.2`) to `arkivet2fs`. Use the same
    folder for every update and keep it where it is: the browser loads the extension
    from it each time it starts, and Chrome keeps your stored persons and records by the
    folder's path.

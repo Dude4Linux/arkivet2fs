@@ -4,6 +4,37 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.8.2 - 2026-11-21
+
+- **Places as the record writes them:** a changed or added fact, and a new person,
+  keep the record's place names (FamilySearch recognizes most of them and
+  standardizes them itself). "Check with FamilySearch" shows FamilySearch's standard
+  place beside it. Dates are still FamilySearch's standard ones.
+- **A changed christening** no longer puts FamilySearch's "Østre Moss" inside the
+  record's "Moss". A place with a direction word (Østre, Nordre, Søndre, Vestre, Øvre,
+  Nedre, ...) before the record's place already names it, and is kept with its
+  Norwegian letters. The same date in another form ("23 AUG 1846") is no change.
+- **Update source only** (and Create source only) now saves the ticked changes for
+  the people who have the source, and says why for those who don't.
+- **A birth without a place:** FamilySearch won't save a birth added without one. A
+  baptized child's birth that the record gives no place for is now put in the parish,
+  and the linker says so when a ticked birth has no place.
+- **Names the transcribers couldn't read:** DigitalArkivet writes "!!" for a missing
+  name and "??" for illegible letters. These are no longer taken for names: they
+  never count against a match, a parent "!! Larsdatter" with the right surname counts
+  as close and is paired, and they are never offered as an alternate name. The own
+  baptism search also tries a parent's surname alone, in each spelling.
+- **DigitalArkivet's other signs:** two readings ("Even@Sven", shown "Even/Sven") match
+  a name by either; struck-out words and the transcriber's notes ("E:") are left out
+  of places and occupations. The source notes end with what each sign used in them
+  means.
+- **A child without a name in the source** is titled "son of <father>" ("daughter of",
+  "child of"); paired with a tree person, the title takes their FamilySearch name.
+- A relation written in the position ("Serg. Halvor Larsens D.B.", the sergeant's
+  boy) is no longer offered as an occupation.
+- Old spellings with y or i between vowels match (Eyolf, Eiolf, Ejolf; Tøiesen,
+  Tojesen for Toyesdr), so a spouse written either way is recognized.
+
 ## 1.8.1 - 2026-11-17
 
 - **Send report:** choosing one of your browser's saved e-mail addresses now fills in

@@ -1,7 +1,7 @@
 # Release plan: GitHub, signed packages, update checker, more browsers
 
-Status: **Phases 0–6 done**; v1.7.0 (16 November 2026) is the latest signed release.
-Phase 7 is next: the Chrome Web Store and Firefox AMO (Opera add-ons later).
+Status: **Phases 0–7 done** (Opera add-ons later); v1.8.2 (21 November 2026) is the
+latest signed release, live on the Chrome Web Store and Firefox AMO from 1.8.1 on.
 The steps (Phases 4–8, decided 7–9 November 2026) take the extension from one Chromium
 folder loaded unpacked to store listings in three stores, and then to testers:
 
