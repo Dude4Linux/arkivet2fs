@@ -3,7 +3,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, value, fixtureDoc, fixtureUrl, plain, SHARED } = require('./harness.js');
+const { load, value, fixtureDoc, fixtureUrl, plain, unnamedBurial, SHARED } = require('./harness.js');
 
 const w = load([...SHARED, 'linker.js'], { html: 'linker.html' });
 const record = (name) => w.extractRecord(fixtureDoc(w, 'da/' + name + '.html'), fixtureUrl('da/' + name + '.html'));
@@ -307,6 +307,17 @@ test('recordSex(): from a patronymic or a family position', () => {
   assert.equal(w.recordSex({ name: 'Kolmund Dalbø', role: 'brudgom', roleEnglish: 'Groom' }), 'Male');
   assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'bruras far', roleEnglish: 'Bride\'s Father' }), 'Male');
   assert.equal(w.recordSex({ name: 'Kolvald Dalbø', role: 'brudgommens far', roleEnglish: 'Groom\'s Father' }), 'Male');
+});
+
+// A burial's nameless child, "!! Halvorsd.*" for the book's "Serg. Halvor Larsens D.B."
+// (the boy baptised three weeks before): DA's star marks the patronymic as the
+// transcriber's, made from a misread "D.B.", so it must tell no sex
+test('recordSex(): a patronymic DA starred tells no sex', () => {
+  const child = { name: '!! Halvorsd.*', role: 'avdød', roleEnglish: 'Deceased', position: 'Serg. Halvor Larsens D.B.' };
+  assert.equal(w.recordSex(child), '');
+  assert.equal(w.childSex(child, { fields: { role: 'far', gender: 'm' } }), '');
+  assert.equal(w.recordSex({ name: 'Lars Halvorsen*' }), '');
+  assert.equal(w.recordSex({ name: 'Eli Larsdatter' }), 'Female');
 });
 
 // Bug: a compound kin word gave no sex ("hans Søstersøn": Sex —); its last part tells
@@ -904,6 +915,20 @@ test('recordFacts(): a family word or marital status in the occupation is no occ
   for (const work of ['Husmandskone', 'Tjenestepige', 'Skipperenke', 'Husmoder', 'Opholdes af sønnen']) assert.equal(occupation(work), work);
 });
 
+// Bug: an unnamed child's "Serg. Halvor Larsens D.B." (the sergeant's boy child) was
+// offered as the child's occupation; it is the child's relation to the father, whose
+// own row has the occupation
+test('recordFacts(): a relation to someone named in the position is no occupation', () => {
+  const r = w.extractRecord(unnamedBurial(w), fixtureUrl('da/burial-1854.html'));
+  const [child, father] = w.recordPeople(r);
+  assert.equal(w.recordFacts(child, r).Occupation, undefined);
+  assert.equal(w.recordFacts(father, r).Occupation.text, 'Serg.');
+  for (const kin of ['Serg. Halvor Larsens D.B.', 'Husmand Ole Olsens Enke', 'Gmd. Lars Halvorsens P. B.', 'Halvor Larsens Søn', 'Inderst Ole Olsens Dtr.', 'Skomager Lars Olsens S.']) {
+    assert.equal(w.occupationOf(kin), '', kin);
+  }
+  for (const work of ['Serg.', 'Husmand under Ole Olsens Gaard', 'Lars Olsens Tjenestepige']) assert.equal(w.occupationOf(work), work);
+});
+
 test('recordFacts(): a marriage\'s "Cop." or "Corp." (copulerede, married) is no occupation', () => {
   const r = record('marriage-bride');
   const [groom] = w.recordPeople(r);
@@ -943,20 +968,49 @@ test('factsTable(): FS\'s facts beside the record\'s, the agreements and differe
 });
 
 // --- A new person on FamilySearch ---------------------------------------------------
-// A baptism's page with the given people paired (by name in the record)
-function pairedPage(chrome, record, pairs) {
+// A baptism's page with the given people paired (by name in the record); `record` a
+// fixture's name, or a function giving the page's document; `fs` the FS person
+function pairedPage(chrome, record, pairs, fs = LARS_1846) {
   const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
   win.Element.prototype.scrollIntoView = () => {};
   const state = value(win, 'state');
-  const r = win.extractRecord(fixtureDoc(win, 'da/' + record + '.html'), fixtureUrl('da/' + record + '.html'));
+  const name = typeof record === 'string' ? record : 'burial-1854';
+  const doc = typeof record === 'string' ? fixtureDoc(win, 'da/' + record + '.html') : record(win);
+  const r = win.extractRecord(doc, fixtureUrl('da/' + name + '.html'));
   Object.assign(state, { record: r, people: win.recordPeople(r) });
   win.fillSource(r);
-  state.rows = state.people.map((p) => win.personRow(p, win.treePool(LARS_1846, {}), pairs[p.name]));
+  state.rows = state.people.map((p) => win.personRow(p, win.treePool(fs, {}), pairs[p.name]));
   win.document.getElementById('people').replaceChildren(...state.rows.map((row) => row.node));
   const rowOf = (name) => state.rows.find((row) => row.name === name);
   return { win, state, rowOf, $: (id) => win.document.getElementById(id) };
 }
 const PARENTS = { 'Halvor Larsen': 'TEST-HAL', 'Astri Larsdatter': 'TEST-AST' };
+
+// A buried child DA couldn't read the name of is "son of Halvor Larsen" in the title
+// (da_record.js); paired with the FS son, the title takes his FS name, and the "son of"
+// again when unpaired; a name typed in the row goes there too, a title edited stays
+test('unnamedChildTitle(): an unnamed child\'s title follows the tree person paired', () => {
+  const SON = { pid: 'TEST-LAR', name: 'Lars Halvorsen', gender: 'Male', father: { pid: 'TEST-HAL', name: 'Halvor Larsen', lifespan: '1820-1890' }, families: [] };
+  const { win, state, rowOf, $ } = pairedPage(undefined, unnamedBurial, { '!! Halvorsd.*': 'TEST-LAR', 'Halvor Larsen': 'TEST-HAL' }, SON);
+  state.fs = SON;
+  const tail = ' - Vinger parish 1847-1855 (0421Q) - Burial, 18 April 1854';
+  assert.equal($('f-title').value, 'Lars Halvorsen' + tail);
+  const row = rowOf('!! Halvorsd.*');
+  const select = row.node.querySelector('select');
+  const choose = (pid) => { select.value = pid; select.dispatchEvent(new win.Event('change')); };
+  choose('');
+  assert.equal($('f-title').value, 'son of Halvor Larsen' + tail);
+  choose('TEST-LAR');
+  assert.equal($('f-title').value, 'Lars Halvorsen' + tail);
+  const name = row.node.querySelector('input.name');
+  name.value = 'Lars Halvorsen d.y.';
+  name.dispatchEvent(new win.Event('change'));
+  assert.equal($('f-title').value, 'Lars Halvorsen d.y.' + tail);
+  // edited by hand: left as it is
+  $('f-title').value = 'Little Lars' + tail;
+  choose('');
+  assert.equal($('f-title').value, 'Little Lars' + tail);
+});
 
 test('newPersonDraft(): a baptized child by given name, with the father\'s patronymic and FS\'s form of the place', () => {
   const { win, rowOf } = pairedPage(undefined, 'baptism-1846', PARENTS);

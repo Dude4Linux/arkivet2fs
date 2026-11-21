@@ -668,12 +668,35 @@ function extractRecord(document, pageUrl) {
     return principal.persons.map(function(p) { return stripNameVariants(p.name); }).join(' and ');
   }
 
+  // --- Helper: a child whose name DA couldn't read ---
+  // DA writes "!!" for a name not read; a baptized or buried child's then has no name of
+  // its own ("!! Halvorsd.*", the starred patronymic the transcriber's, no more): it is
+  // "child of Halvor Larsen" ("son"/"daughter" by the child's own gender field), '' when
+  // it has a name or no parent is named
+  function childsParent(people) {
+    return people.find(function(p) { return ['far', 'fader'].includes(p.role) && p.name; }) ||
+           people.find(function(p) { return ['mor', 'moder'].includes(p.role) && p.name; });
+  }
+  function childRelation(gender) {
+    gender = (gender || '').toLowerCase();
+    return gender === 'm' ? 'son' : (gender === 'k' || gender === 'f') ? 'daughter' : 'child';
+  }
+  function unnamedChild(principal, people, gender) {
+    if (!principal || !['baptism', 'burial'].includes(principal.event) || principal.persons.length !== 1) return '';
+    const child = principal.persons[0];
+    if (!/^!!(\s|$)/.test(String(child.name || '').trim())) return '';
+    const parent = childsParent(people);
+    return parent ? childRelation(child.current ? gender : '') + ' of ' + stripNameVariants(parent.name) : '';
+  }
+
   // --- Helper: Describe the record entry by its principal person(s) ---
   // e.g. "baptism of Peder Martin", "marriage of Peder Andersen and Johanne Andreasd.",
   // "Andreas Olsen household". Falls back to "entry for <open person>" for other record types.
-  function describeEntry(type, people, pageName) {
+  function describeEntry(type, people, pageName, gender) {
     const principal = recordPrincipal(type, people);
     if (principal && principal.event === 'household') return principalNames(principal) + ' household';
+    const unnamed = unnamedChild(principal, people, gender);
+    if (unnamed) return principal.event + ' of a ' + unnamed;  // "burial of a child of Halvor Larsen"
     if (principal) return principal.event + ' of ' + principalNames(principal);
     pageName = stripNameVariants(pageName);
     return pageName ? 'entry for ' + pageName : '';
@@ -727,7 +750,7 @@ function extractRecord(document, pageUrl) {
     if (details['page'] || details['page number']) parts.push(citePage(details['page'] || details['page number']));
     if (details['line number']) parts.push('line ' + details['line number']);
     if (details['serial no.']) parts.push('entry ' + details['serial no.']);
-    parts.push(describeEntry(c.recordTypeInfo.type, c.people, c.pageName));
+    parts.push(describeEntry(c.recordTypeInfo.type, c.people, c.pageName, c.gender));
     if (c.date && !isCensus) parts.push(c.date);  // census year is already in the title
 
     // Evidence Explained puts the comma inside the closing quote: "Title," next
@@ -1025,7 +1048,7 @@ function extractRecord(document, pageUrl) {
     const citation = buildCitation({
       recordTypeInfo: recordTypeInfo, recordType: recordType, date: date,
       sourceInfo: sourceInfo, recordDetails: recordDetails, people: people,
-      pageName: pageName, censusLocation: censusLocation,
+      pageName: pageName, censusLocation: censusLocation, gender: ownFields['gender'],
       permanentId: idValidation.valid ? permanentId : '',
       permalink: url, accessDate: accessDate, scans: scans
     });
@@ -1073,17 +1096,16 @@ function extractRecord(document, pageUrl) {
     if (principal && principal.event === 'household') {
       titleName = [titleName + ' household', census.residence, census.district].filter(Boolean).join(', ');
     }
-    if (principal && principal.event === 'baptism') {
+    // A child DA couldn't read the name of ("!! Halvorsd.*": "!!" for the name, the
+    // starred patronymic the transcriber's) is "child of Halvor Larsen", baptized or buried
+    const unnamed = unnamedChild(principal, people, ownFields['gender']);
+    if (unnamed) titleName = unnamed;
+    else if (principal && principal.event === 'baptism') {
       const child = principal.persons[0];
       // A surname is known only from the child's own page (its "Last name" field)
       const knownSurname = child.current && ownFields['last name'];
-      const parent = people.find(function(p) { return ['far', 'fader'].includes(p.role) && p.name; }) ||
-                     people.find(function(p) { return ['mor', 'moder'].includes(p.role) && p.name; });
-      if (!knownSurname && parent) {
-        const gender = child.current ? (ownFields['gender'] || '').toLowerCase() : '';
-        const relation = gender === 'm' ? 'son' : (gender === 'k' || gender === 'f') ? 'daughter' : 'child';
-        titleName += ', ' + relation + ' of ' + stripNameVariants(parent.name);
-      }
+      const parent = childsParent(people);
+      if (!knownSurname && parent) titleName += ', ' + childRelation(child.current ? ownFields['gender'] : '') + ' of ' + stripNameVariants(parent.name);
     }
     const titleParts = [titleName, titleSource];
     if (titleType && titleSource && !titleSource.toLowerCase().includes(titleType.toLowerCase())) {

@@ -112,4 +112,29 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-module.exports = { load, loadBackground, chromeStub, value, fixture, fixtureDoc, fixtureUrl, plain, SHARED, ROOT, FIXTURES };
+// The burial fixture as a child's whose name DA couldn't read: "!! Halvorsd.*" (the
+// book's "Halvor Larsens D.B.", a boy child; the starred patronymic is the transcriber's),
+// with the father as a second person
+function unnamedBurial(win) {
+  const doc = fixtureDoc(win, 'da/burial-1854.html');
+  const value = (item, label) => [...item.querySelectorAll('div')].find((d) => d.textContent.trim() === label + ':').nextElementSibling;
+  const child = doc.querySelector('#collapse-section-0 .data-item');
+  value(child, 'Name').textContent = '!! Halvorsd.*';
+  value(child, 'Position').textContent = 'Serg. Halvor Larsens D.B.';
+  value(child, 'Birth year').textContent = '1854 (calculated)';
+  for (const d of doc.querySelectorAll('div')) {
+    if (d.textContent.trim() === 'Given name:') d.nextElementSibling.textContent = '!!';
+    if (d.textContent.trim() === 'Last name:') d.nextElementSibling.textContent = 'Halvorsd.*';
+  }
+  const father = child.cloneNode(true);
+  father.classList.remove('current');
+  father.querySelector('h4 a').setAttribute('href', 'https://www.digitalarkivet.no/en/view/903/pg99000000000024');
+  value(father, 'Role').textContent = 'far';
+  value(father, 'Name').textContent = 'Halvor Larsen';
+  value(father, 'Position').textContent = 'Serg.';
+  value(father, 'Birth year').textContent = '-';
+  child.after(father);
+  return doc;
+}
+
+module.exports = { load, loadBackground, chromeStub, value, fixture, fixtureDoc, fixtureUrl, plain, unnamedBurial, SHARED, ROOT, FIXTURES };

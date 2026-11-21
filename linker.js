@@ -295,7 +295,9 @@ function recordSex(person, record) {
   // a bride or groom (not their fathers: "Bride's Father")
   if (/^(brur|brud|bride)$/i.test(person.role || '') || /^bride$/i.test(person.roleEnglish || '')) return 'Female';
   if (/^(brudgom|brudgum|groom)$/i.test(person.role || '') || /^groom$/i.test(person.roleEnglish || '')) return 'Male';
-  const last = stripVariants(person.name).split(/\s+/).slice(1).join(' ');
+  // A word DA starred ("!! Halvorsd.*") is the transcriber's guess, not the book's: it
+  // tells no sex
+  const last = stripVariants(person.name).split(/\s+/).slice(1).filter((w) => !w.endsWith('*')).join(' ');
   if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
   const role = foldRole((person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, ''));
   const female = FEMALE_ROLE.test(role) || FEMALE_KIN_END.test(role);
@@ -886,8 +888,14 @@ function recordFacts(person, record) {
 // The occupation a position gives: none for a family word or a marital status alone,
 // which censuses and church books write in its place (1900's "Søn", "Datter", a
 // baptism's "Pige", "Barnet", "Hustru", 1865's "Smedens Kone"), and without a leading
-// marital status ("Gift Murerarbeider")
+// marital status ("Gift Murerarbeider"); none either for a relation to someone named
+// before it, which church books write there ("Serg. Halvor Larsens D.B.", the sergeant's
+// boy child; "Husmand Ole Olsens Enke"), also abbreviated: D.B. and P.B. (drengebarn,
+// pigebarn), B., S., D., Dr., Dtr., Dat., Hustr. That is the family the tree's links
+// hold, and the occupation in it someone else's
 const KIN_WORD = '(?:søn|sønn|datter|dotter|barn|barnet|børn|pige|pigen|pigebarn|dreng|drengen|drengebarn|gut|guten|hustru|hustrue|hustr|kone|konen|ugift|ugifte|gift|enke|enkemand|enkemann)';
+// (after the final full stop is dropped: "D.B." is "d.b")
+const KIN_ABBREVIATION = '(?:d\\.? ?b|p\\.? ?b|b|s|d|dr|dtr|dat|hustr)';
 // In a marriage, "Cop." (copulerede, married), as the book notes the couple's wedding,
 // also stands where the position would, and DA can read it "Corp."; not elsewhere,
 // where "Corp." is a corporal
@@ -896,7 +904,8 @@ function occupationOf(position, marriage = false) {
   const text = String(position || '').replace(/^(?:u?gift)\s+(?=\S)/iu, '').trim();
   const bare = text.replace(/[.,;:]+$/u, '').replace(/\s+/g, ' ').toLowerCase();
   const kin = new RegExp('^(?:hj\\. ?|(?:hjemmev\\.?|hjemmeværende|' + REFERRING + '|\\p{L}+s) )?' + KIN_WORD + '$', 'iu');
-  return !bare || kin.test(bare) || (marriage && MARRIED_WORD.test(bare)) ? '' : text;
+  const relation = new RegExp('(?:^|\\s)\\p{L}+s\\s+(?:' + KIN_WORD + '|' + KIN_ABBREVIATION + ')$', 'iu');
+  return !bare || kin.test(bare) || relation.test(bare) || (marriage && MARRIED_WORD.test(bare)) ? '' : text;
 }
 
 // The tree person's whole page when known (the FS person, a relative's family read
@@ -1501,6 +1510,7 @@ function personRow(person, family, suggestion, why) {
     const tree = row.tree() || (PID_PATTERN.test(pid) ? { pid, name: '' } : null);
     const reading = !!state.detailsPending && state.detailsPending.has(pid);
     const name = nameInput.value.trim();
+    unnamedChildTitle(row);  // before the additions, whose reasons quote the title
     const list = tree && !reading ? factAdditions(person, state.record, tree, name) : [];
     row.offered = list;
     row.additions = () => [];
@@ -1569,6 +1579,37 @@ function personRow(person, family, suggestion, why) {
   row.node = node;
   refresh();
   return row;
+}
+
+// A baptized or buried child whose name DA couldn't read ("!! Halvorsd.*") starts the
+// title as "child of Halvor Larsen" (da_record.js unnamedChild()). Paired with a tree
+// person, the title takes their FS name instead, or the name typed in the row, and the
+// "child of" again when unpaired; a title edited there by hand stays. True when changed.
+function unnamedChildTitle(row) {
+  const person = row.person;
+  if (!['barn', 'avdød', 'avdøde'].includes(person.role) || !/^!!(\s|$)/.test(String(person.name || '').trim())) return false;
+  const pid = row.pid();
+  const tree = PID_PATTERN.test(pid) ? row.tree() || fullTree(pid) : null;
+  const typed = row.name && !/^!!(\s|$)/.test(row.name) ? row.name : '';
+  const name = typed || (tree && tree.name ? stripVariants(tree.name) : '');
+  state.unnamedTitles = state.unnamedTitles || {};
+  let changed = false;
+  for (const id of ['f-title', 'g-title']) {
+    const box = $(id);
+    if (!box || !box.value) continue;
+    let entry = state.unnamedTitles[id];
+    if (!entry) {
+      const first = box.value.split(' - ')[0];
+      if (!/^(child|son|daughter) of /.test(first)) continue;
+      entry = state.unnamedTitles[id] = { base: first, now: first };
+    }
+    const want = name || entry.base;
+    if (want === entry.now || !box.value.startsWith(entry.now + ' - ')) continue;
+    box.value = want + box.value.slice(entry.now.length);
+    entry.now = want;
+    changed = true;
+  }
+  return changed;
 }
 
 // A person's new name in the title, citation and notes
@@ -1841,6 +1882,7 @@ function readDetails() {
     Object.assign(state.details, read);
     for (const pid of pids) state.detailsPending.delete(pid);
     for (const row of state.rows) row.showFacts();
+    showFsCheck();  // a title may have taken a tree person's name (unnamedChildTitle())
   });
   return detailsQueue;
 }
@@ -1872,6 +1914,7 @@ async function readInTab(tabId, pid) {
 // The source's fields (`prefix` f; g for the other church book's)
 function fillSource(record, prefix = 'f') {
   $(prefix + '-title').value = record.title || '';
+  if (state.unnamedTitles) delete state.unnamedTitles[prefix + '-title'];  // a new title: unnamedChildTitle() reads it again
   $(prefix + '-date').value = record.date || '';
   $(prefix + '-url').value = record.url || '';
   $(prefix + '-citation').value = record.citation || '';

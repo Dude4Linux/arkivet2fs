@@ -4,7 +4,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, fixtureDoc, fixtureUrl, plain, SHARED } = require('./harness.js');
+const { load, fixtureDoc, fixtureUrl, plain, unnamedBurial, SHARED } = require('./harness.js');
 
 const w = load(SHARED);
 function record(name) {
@@ -80,6 +80,15 @@ test('a burial: split date of death merged, age in years, the position translate
   // noteNames(): the last name's last word is the surname, the rest the given name
   assert.match(r.notes, /^Given name: Lars Larsen$/m);
   assert.match(r.notes, /^Last name: Holt-Sletten$/m);
+});
+
+// A child DA couldn't read the name of is titled "son of <father>" (by the gender field),
+// not by DA's "!!" and the transcriber's starred patronymic
+test('a burial of a child whose name DA couldn\'t read: "son of" the father in the title and citation', () => {
+  const r = plain(w.extractRecord(unnamedBurial(w), fixtureUrl('da/burial-1854.html')));
+  assert.deepEqual(people(r), ['!! Halvorsd.* (Deceased)', 'Halvor Larsen (Father)']);
+  assert.equal(r.title, 'son of Halvor Larsen - Vinger parish 1847-1855 (0421Q) - Burial, 18 April 1854');
+  assert.match(r.citation, /, burial of a son of Halvor Larsen, 18 April 1854;/);
 });
 
 test("a census of 1865: the open person's household, its head in the title", () => {
