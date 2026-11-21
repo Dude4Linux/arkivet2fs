@@ -317,3 +317,66 @@ function placeAbroad(place) {
   const parts = (place || '').split(',').map((p) => p.trim()).filter(Boolean);
   return parts.length > 0 && ABROAD_PLACE.test(parts[parts.length - 1]);
 }
+
+// Direction words a place's name can start with, in their old and new spellings
+// (Swedish ö and ä, and FS's spellings without Norwegian letters, read as the same):
+// Østre Moss (a part of the town), Nordre Land, Sør-Fron, Øystre Slidre. With
+// one, a name is either a part of the place without it (FS's "Østre Moss"
+// names the record's "Moss") or a place of its own (Østre and Vestre Toten),
+// never the place of another direction word.
+const DIRECTION_WORDS = ['nord', 'nordre', 'nørdre', 'nørre', 'sør', 'søndre', 'sønder', 'sønnre', 'søre', 'syd', 'sydre',
+  'øst', 'østre', 'øster', 'øystre', 'aust', 'austre', 'vest', 'vestre', 'vester', 'vestra', 'wester', 'westre',
+  'ytre', 'indre', 'midtre', 'mellom', 'mellem', 'øvre', 'øvste', 'nedre', 'nedste'];
+// A direction word's key (ö as ø, ä as æ, then as asciiPlace() writes it), and the word
+// as written in DIRECTION_WORDS for that key
+const directionKey = (word) => asciiPlace(foldPlace(word).replace(/ö/g, 'ø').replace(/ä/g, 'æ'));
+let directionIndex = null;
+function directionWord(word) {
+  if (!directionIndex) {
+    // of two with one key (Nordre, Nørdre), the first
+    directionIndex = new Map();
+    for (const w of DIRECTION_WORDS) if (!directionIndex.has(directionKey(w))) directionIndex.set(directionKey(w), w);
+  }
+  return directionIndex.get(directionKey(word)) || '';
+}
+// A place part that starts with a direction word before more of a name ("Ostre
+// Moss", "Nord-Aurdal"): {word, sep, rest}; else null
+function placeDirection(part) {
+  const m = String(part || '').trim().match(/^([^\s,-]+)(\s*-\s*|\s+)(\S.*)$/);
+  return m && directionWord(m[1]) ? { word: m[1], sep: /-/.test(m[2]) ? '-' : ' ', rest: m[3] } : null;
+}
+
+// FS's place in Norway with its Norwegian letters: a part FS gives without them
+// ("Ostfold", "Vaga", "Sor-Fron") in the spelling of the one county or municipality
+// it can be, a direction word before a name too ("Ostre Moss" → "Østre
+// Moss"); the parts joined by ", ". A part that is a name as it is (Os), one
+// with Norwegian letters, one several names fit and a place outside Norway stay.
+let spellingIndex = null;
+function norwegianSpelling(place) {
+  const parts = String(place || '').split(',').map((p) => p.trim()).filter(Boolean);
+  if (!parts.length || !/^(norway|norge|noreg)$/i.test(parts[parts.length - 1])) return parts.join(', ');
+  if (!spellingIndex) {
+    spellingIndex = new Map();
+    for (const n of [...Object.values(DA_MUNICIPALITIES), ...Object.values(DA_COUNTIES)]) {
+      for (const key of new Set([asciiPlace(n), asciiPlace(n, 'a')])) spellingIndex.set(key, new Set([...(spellingIndex.get(key) || []), n]));
+    }
+  }
+  const known = (name) => placeCodes(name, true);
+  const spelled = (name) => {
+    if (/[^\x00-\x7f]/.test(name)) return name;
+    const { municipalities, counties } = known(name);
+    if (municipalities.length || counties.length) return name;
+    const names = spellingIndex.get(asciiPlace(name));
+    return names && names.size === 1 ? [...names][0] : name;
+  };
+  const capital = (word, like) => (/^[A-Z]/.test(like) ? word.charAt(0).toUpperCase() + word.slice(1) : word);
+  return parts.map((part) => {
+    const whole = spelled(part);
+    if (whole !== part || /[^\x00-\x7f]/.test(part)) return whole;
+    const d = placeDirection(part);
+    if (!d) return part;
+    // a direction word as written (Nordre, not Nørdre) stays
+    const word = /[^\x00-\x7f]/.test(d.word) || DIRECTION_WORDS.includes(foldPlace(d.word)) ? d.word : capital(directionWord(d.word), d.word);
+    return word + d.sep + spelled(d.rest);
+  }).join(', ');
+}

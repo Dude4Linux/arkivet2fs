@@ -1028,7 +1028,8 @@ const VITAL_TYPES = { Birth: 'BIRTH', Christening: 'CHRISTENING', Death: 'DEATH'
 const FS_APPROX = /\b(abt|about|ca|circa|est|estimated|calc|calculated|omkring|omtrent)\b/i;
 
 // A date combining the record's and FS's: the more specific where they agree, the
-// record's where they disagree. A year from an age doesn't replace FS's within three.
+// record's where they disagree (the same date in the record's form: "23 August 1846"
+// for FS's "23 AUG 1846"). A year from an age doesn't replace FS's within three.
 function mergeDate(da, approx, fsText) {
   const has = String(fsText || '').trim();
   if (!da || !da.year) return has;
@@ -1039,7 +1040,13 @@ function mergeDate(da, approx, fsText) {
   if (approx) return Math.abs(fs.year - da.year) <= 3 ? has : mine;
   if (fs.year !== da.year || (da.month && fs.month && da.month !== fs.month) || (da.day && fs.day && da.day !== fs.day)) return mine;
   const detail = (d) => (d.month ? 1 : 0) + (d.day ? 1 : 0);
-  return detail(da) > detail(fs) || (detail(da) === detail(fs) && FS_APPROX.test(has)) ? mine : has;
+  return detail(da) >= detail(fs) ? mine : has;
+}
+// Whether two dates are one date, perhaps written differently ("23 AUG 1846" and
+// "23 August 1846"); "about 1846" isn't 1846
+function sameDateText(has, want) {
+  const a = String(has || '').trim(), b = String(want || '').trim();
+  return a === b || (Boolean(a && b && parseFsDate(a)) && !FS_APPROX.test(a) && !FS_APPROX.test(b) && sameFsDate(a, b));
 }
 
 // DA's place name without its marks: "Vågå herred*" → "Vågå", "1029P Audnedal" → "Audnedal"
@@ -1047,16 +1054,22 @@ function cleanPlace(place) {
   return asInSource(place).replace(/\*/g, '').replace(/^\d{3,4}[A-Z]?\s+/, '')
     .replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
 }
-// Whether FS's place names the record's (by any of its names: Vaage, Vågå, Vaga)
+// Whether FS's place names the record's (by any of its names: Vaage, Vågå, Vaga),
+// also more closely, by a direction word before it: FS's "Ostre Moss" names
+// the record's Moss (never the other way round, nor Vestre for Østre)
 function placeIn(name, fsText) {
   const words = placeWords(name);
   if (words) return words.every((w) => placeIn(w, fsText));
   const names = new Set(placeAliases(name).flatMap((n) => [foldPlace(n), asciiPlace(n)]));
+  const named = (p) => names.has(foldPlace(p)) || names.has(asciiPlace(p));
   return String(fsText || '').split(',').some((part) => {
     const p = part.replace(/\b(church|kirke|kirkested|prestegjeld|parish|sogn|herred|municipality|kommune)\b/gi, '').trim();
-    return names.has(foldPlace(p)) || names.has(asciiPlace(p));
+    const d = placeDirection(p);
+    return named(p) || Boolean(d && named(d.rest));
   });
 }
+// A place's parts joined by ", " ("Vågå,Oppland,Norway" → "Vågå, Oppland, Norway")
+const placeText = (place) => String(place || '').split(',').map((p) => p.trim()).filter(Boolean).join(', ');
 // A place DA gives as one name written twice, perhaps with a letter after it
 // ("Christiansund Christiansund N", the town Kristiansund N): its words, else null
 function placeWords(name) {
@@ -1075,7 +1088,8 @@ function placeWords(name) {
 // (a death: the parish, not the town of a hospital). `suggested` is the place to give
 // when FS has none.
 function mergePlace(daPlace, fsText, record, weak, elsewhere, within, suggested) {
-  const has = String(fsText || '').trim();
+  // FS's own with its Norwegian letters ("Ostfold" → "Østfold")
+  const has = norwegianSpelling(fsText);
   const name = cleanPlace(daPlace);
   if (!name) return has;
   if (!has) return suggested || fsPlace(name, record, elsewhere);
@@ -1254,7 +1268,8 @@ function factAdditions(person, record, tree, name) {
     // FS's fact with neither date nor place ("Deceased", of an old import) is changed:
     // FS keeps one of each and has no Add for it
     if (!fs) out.push({ fact, action: 'add', type, value });
-    else if (value.date !== String(fs.date || '').trim() || value.place !== String(fs.place || '').trim()) {
+    // not for FS's date in another form or its place's spacing alone
+    else if (!sameDateText(fs.date, value.date) || value.place !== placeText(fs.place)) {
       out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), value });
     }
   }
@@ -1373,13 +1388,25 @@ function fsCheckedText(fs) {
   const standard = (fs.fields || []).filter((f) => (f.name === 'date' || f.name === 'place'));
   if (!standard.length) return t('Checked with FamilySearch.');
   return t('Checked with FamilySearch: {fields}', {
-    fields: standard.map((f) => t(f.name === 'date' ? 'Date' : 'Place') + ': ' + (f.picked ? f.value : t('{value} (not standardized)', { value: f.value }))).join('; ')
+    fields: standard.map((f) => t(f.name === 'date' ? 'Date' : 'Place') + ': ' + checkedValue(f)).join('; ')
   });
+}
+function checkedValue(f) {
+  if (f.picked) return f.value;
+  // a place kept as the record writes it (fs_attach.js fillFactForm()), with the place
+  // FS would take it for, its kind and years after it
+  if (f.standard !== undefined) {
+    const standard = String(f.standard || '').replace(/\s+/g, ' ').trim();
+    return standard ? t('{value} (kept as written; FamilySearch\'s standard place: {standard})', { value: f.value, standard })
+      : t('{value} (kept as written; not one of FamilySearch\'s standard places)', { value: f.value });
+  }
+  return t('{value} (not standardized)', { value: f.value });
 }
 
 // The ticked additions filled in FS's own dialogs in the hidden window, each cancelled:
-// FS's standard date and place (the place of the record's year) go into the boxes, to
-// be looked over before anything is saved. run() picks them again the same way.
+// FS's standard date goes into the box, to be looked over before anything is saved; the
+// place stays as the record writes it (FS recognizes most and standardizes them itself),
+// the note naming FS's standard place for it. run() fills them the same way.
 async function prepareAdditions() {
   if (state.running || state.preparing) return;
   const store = state.additionEdits || {};
@@ -2182,11 +2209,15 @@ function readPlan(attach) {
   const parallel = state.parallel ? sourceOf('g', 1) : null;
   if (parallel && !parallel.title) throw new Error(t('The source of the other church book needs a title.'));
   if (parallel && parallel.title === source.title) throw new Error(t('The two sources need different titles: FamilySearch would take them for one.'));
+  // Without attaching ("Create source only", "Update source only"): only the pairs with
+  // facts ticked, added for those who have the source already (report #11: they were
+  // dropped without a word)
   const pairs = [];
-  if (attach) {
+  {
     for (const row of state.rows) {
       const pid = row.pid();
       if (!pid) continue;
+      if (!attach && !(row.additions ? row.additions() : []).length) continue;
       if (!PID_PATTERN.test(pid)) throw new Error(t('"{pid}" (for {name}) is not a FamilySearch ID like XXXX-XXX.', { pid, name: row.label() }));
       if (pairs.some((p) => p.pid === pid)) throw new Error(t('{pid} is chosen for two people in the record.', { pid }));
       const tags = row.tags();
@@ -2204,9 +2235,10 @@ function readPlan(attach) {
       // person hasn't it yet, or has another (a residence of another year)
       const later = additions.filter((a) => a.action === 'add').map((a) => a.fact);
       const now = tags.filter((tag) => !later.includes(tag));
-      pairs.push({ pid, label: row.label(), reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions });
+      pairs.push(attach ? { pid, label: row.label(), reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions }
+        : { pid, label: row.label(), reason: row.reason(), tags: [], residence: false, additions });
     }
-    if (!pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
+    if (attach && !pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
   }
   return parallel ? { source, parallel, pairs } : { source, pairs };
 }
@@ -2770,7 +2802,9 @@ function onTreeAlready(tree, a) {
   const vital = Object.keys(VITAL_TYPES).find((k) => VITAL_TYPES[k] === a.type);
   if (vital) {
     const fs = tree[vital.toLowerCase()];
-    return Boolean(fs && (fs.date || fs.place) && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
+    // FS's place without its Norwegian letters isn't the one to be saved with them
+    const respelled = fs && placeText(fs.place) !== norwegianSpelling(fs.place) && placeText(fs.place) !== placeText(v.place);
+    return Boolean(fs && (fs.date || fs.place) && !respelled && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
   }
   const year = fsYear(v.date);
   if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year);
@@ -2881,7 +2915,7 @@ async function run(attach) {
       const persons = [...known.persons];
       checked.push({ title: source.title, book: state.books[i] || '', id: sourceId, ids: known.ids.length ? known.ids : [sourceId], persons });
       const attached = [];
-      for (const pair of pairs) {
+      for (const pair of attach ? pairs : []) {
         // Partly attached before: only those who lack it, and their tags stay as they are
         if (has.has(pair.pid.toUpperCase())) {
           log(t('{name} ({pid}) already has this source on FamilySearch; left as it is.', { name: pair.label, pid: pair.pid }), 'ok');
@@ -2908,7 +2942,8 @@ async function run(attach) {
         for (const pair of pairs) {
           if (!(pair.additions || []).length) continue;
           if (!withSource.has(pair.pid.toUpperCase())) {
-            log(t('Nothing added to {name} ({pid}): the source is not attached.', { name: pair.label, pid: pair.pid }), 'bad');
+            if (attach) log(t('Nothing added to {name} ({pid}): the source is not attached.', { name: pair.label, pid: pair.pid }), 'bad');
+            else log(t('Nothing added to {name} ({pid}): the source is not attached to them yet. "{button}" attaches it and adds the changes.', { name: pair.label, pid: pair.pid, button: $('attach').textContent }), 'near');
             continue;
           }
           const made = await saveAdditions(tabId, pair, sourceId, source.title);
@@ -3270,7 +3305,10 @@ async function findNewPerson() {
 function showMatches(found) {
   const results = $('np-results');
   const items = [];
-  const unpicked = (found.fields || []).filter((f) => f.value && f.picked === '');
+  // the places as written, with FS's standard place for each (fs_attach.js keeps them)
+  const kept = (found.fields || []).filter((f) => f.value && f.standard !== undefined);
+  if (kept.length) items.push(el('p', { class: 'muted small', text: kept.map((f) => t('Place') + ': ' + checkedValue(f)).join('; ') }));
+  const unpicked = (found.fields || []).filter((f) => f.value && f.picked === '' && f.standard === undefined);
   if (unpicked.length) items.push(el('p', { class: 'small near', text: t('FamilySearch suggested nothing for: {fields}. They stay as typed.', { fields: unpicked.map((f) => f.value).join('; ') }) }));
   const picked = (found.fields || []).filter((f) => f.picked);
   if (picked.length) items.push(el('p', { class: 'muted small', text: t('As FamilySearch has them: {fields}', { fields: picked.map((f) => f.picked).join('; ') }) }));

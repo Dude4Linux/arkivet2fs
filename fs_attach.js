@@ -550,13 +550,15 @@ if (!window.__arkivet2fsAttach) {
     return list;
   }
 
-  async function comboField(form, name, value, year) {
+  // `keep`: the text stays as typed, nothing picked; the place FS would pick is
+  // given as `standard` (a fact's place: the record's name, which FS recognizes)
+  async function comboField(form, name, value, year, keep) {
     const input = form.querySelector('input[name="' + name + '"]');
     if (!input || !value) return { name, value: input ? input.value : '' };
-    const { clicked, ...field } = await comboInput(input, name, value, year);
+    const { clicked, ...field } = await comboInput(input, name, value, year, keep);
     return field;
   }
-  async function comboInput(input, name, value, year) {
+  async function comboInput(input, name, value, year, keep) {
     input.focus();
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -573,10 +575,17 @@ if (!window.__arkivet2fsAttach) {
     found = await settledOptions(options, found);
     if (!found.length) return { name, value, picked: '' };
     const option = pickSuggestion(found, value, year);
-    if (!option) return { name, value: input.value, picked: '' };
     // The text as typed is not a standard form
-    const typed = clean(option.textContent).toLowerCase() === clean(value).toLowerCase();
-    const picked = typed ? '' : clean(option.textContent);
+    const asTyped = (o) => clean(o.textContent).toLowerCase() === clean(value).toLowerCase();
+    const picked = option && !asTyped(option) ? clean(option.textContent) : '';
+    if (keep) {
+      // FS's own entry for the text as typed, its first, chosen (a value only typed in
+      // can be saved as none, as a SourceBox date was)
+      const own = found.find(asTyped);
+      if (own) { own.click(); await sleep(300); }
+      return { name, value: input.value, picked: '', standard: picked };
+    }
+    if (!option) return { name, value: input.value, picked: '' };
     option.click();
     await sleep(300);
     return { name, value: input.value, picked, clicked: true };
@@ -636,7 +645,9 @@ if (!window.__arkivet2fsAttach) {
     const fields = [];
     const yearOf = (date) => { const m = String(date || '').match(/\b(\d{4})\b/); return m ? Number(m[1]) : null; };
     const years = { birthPlace: yearOf(person.birthDate), deathPlace: yearOf(person.deathDate) };
-    for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) fields.push(await comboField(form, name, person[name], years[name]));
+    // FS's standard dates; the places as the linker has them, the record's names kept
+    // (FS standardizes them itself), FS's pick given as `standard`
+    for (const name of ['birthDate', 'birthPlace', 'deathDate', 'deathPlace']) fields.push(await comboField(form, name, person[name], years[name], /Place$/.test(name)));
     await sleep(300);
     const heading = clean(((form.querySelector('h1, h2, h3, [role="heading"]') || {}).textContent) || '');
     (await waitFor(() => byTestId('next-button', addDialog()), 'the Next button')).click();
@@ -848,7 +859,8 @@ if (!window.__arkivet2fsAttach) {
       if (v.description && input('description')) { setValue(input('description'), v.description); fields.push({ name: 'description', value: v.description }); }
       const year = yearIn(v.date);
       if (v.date) fields.push(await comboField(form, 'date', v.date, year));
-      if (v.place) fields.push(await comboField(form, 'place', v.place, year));
+      // FS's standard date; the place as the linker has it, the record's names kept
+      if (v.place) fields.push(await comboField(form, 'place', v.place, year, true));
     }
     setValue(byTestId('conclusionDetailOverlay:reason', conclusionDialog() || form), reason || '');
     return fields;

@@ -460,28 +460,30 @@ test('findPerson(): fills FS\'s Add Child form in the couple\'s card, picks FS\'
   assert.equal(filled.sex, 'male');
   assert.equal(filled.status, 'deceased');
   assert.equal(filled.birthDate, '16 July 1846');
-  assert.equal(filled.birthPlace, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
+  assert.equal(filled.birthPlace, 'Vågå, Oppland, Norway');  // the place as written, not FS's pick
   assert.equal(filled.deathDate, '');
   assert.deepEqual(plain(answer.matches), []);
   const place = answer.fields.find((f) => f.name === 'birthPlace');
-  assert.equal(place.picked, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
+  assert.equal(place.picked, '');
+  assert.equal(place.standard, 'Vågå, Oppland, Norway Municipality, 1781 - 2019');
   assert.equal(filled.created, undefined, 'nothing is created');
 });
 
-test('findPerson(): skips the text as typed and takes the standard place of the record\'s years', async () => {
+test('findPerson(): FS\'s standard date; the place as typed (FS\'s own entry for it chosen), FS\'s standard place of the record\'s years told', async () => {
   const { step, filled } = personPage({ lists: FS_LISTS });
   const person = { ...LARS, birthDate: '16 jul 1846', birthPlace: 'Vågå', deathDate: '1921', deathPlace: 'Vågå' };
   const answer = await step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person });
   assert.equal(answer.ok, true, answer.error);
   assert.equal(filled.birthDate, '16 July 1846');
-  assert.equal(filled.birthPlace, 'Vågå, Oppland, Norway', 'the municipality of 1781–2019, not the text as typed');
-  assert.equal(filled.deathPlace, 'Vågå, Oppland, Norway');
-  const later = personPage({ lists: FS_LISTS });
-  await later.step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '2021', deathDate: '' } });
-  assert.equal(later.filled.birthPlace, 'Vågå, Innlandet, Norway', 'from 2020 the place is in Innlandet');
-  const undated = personPage({ lists: FS_LISTS });
-  await undated.step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '', deathDate: '' } });
-  assert.equal(undated.filled.birthPlace, 'Vågå, Innlandet, Norway', 'no year: the first standard form');
+  assert.equal(filled.birthPlace, 'Vågå', 'the record\'s place kept');
+  assert.equal(filled.deathPlace, 'Vågå');
+  const standard = (a, name) => a.fields.find((f) => f.name === name).standard;
+  assert.match(standard(answer, 'birthPlace'), /^Vågå, Oppland, Norway ?Municipality, 1781 - 2019$/, 'the municipality of 1781–2019');
+  assert.match(standard(answer, 'deathPlace'), /^Vågå, Oppland, Norway ?Municipality, 1781 - 2019$/);
+  const later = await personPage({ lists: FS_LISTS }).step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '2021', deathDate: '' } });
+  assert.match(standard(later, 'birthPlace'), /^Vågå, Innlandet, Norway/, 'from 2020 the place is in Innlandet');
+  const undated = await personPage({ lists: FS_LISTS }).step('findPerson', { relation: 'child', anchor: 'TEST-HAL', other: 'TEST-AST', person: { ...person, birthDate: '', deathDate: '' } });
+  assert.match(standard(undated, 'birthPlace'), /^Vågå, Innlandet, Norway/, 'no year: the first standard form');
 });
 
 test('findPerson(): FS\'s possible matches, each with PID, lifespan, events and spouses', async () => {
@@ -775,13 +777,15 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
 const CHRISTENING = { fact: 'Christening', action: 'add', type: 'CHRISTENING', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
 const REASON = 'From "Lars Halvorsen - Vågå - Birth", Digitalarkivet, Permanent ID pd99000000000001.';
 
-test('addFact(): prepared, a missing christening is filled with FS\'s standard place, then cancelled: nothing saved', async () => {
+test('addFact(): prepared, a missing christening is filled with FS\'s standard date and the place as typed (FS\'s standard one told), then cancelled: nothing saved', async () => {
   const { step, saved, log } = factPage();
   const answer = await step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
   assert.equal(answer.ok, true, answer.error);
   const place = answer.fields.find((f) => f.name === 'place');
   assert.equal(place.value, 'Vågå, Oppland, Norway');
-  assert.match(place.picked, /^Vågå, Oppland, Norway ?Municipality, 1781 - 2019$/);
+  assert.equal(place.picked, '');  // the record's place kept, as the user prefers (report #11)
+  assert.match(place.standard, /^Vågå, Oppland, Norway ?Municipality, 1781 - 2019$/);
+  assert.equal(answer.fields.find((f) => f.name === 'date').value, '23 August 1846');
   assert.deepEqual(saved, []);
   assert.deepEqual(log, ['cancel CHRISTENING']);
 });
@@ -863,11 +867,11 @@ test('addFact(): a farm\'s place stays as typed unless FS has that farm in that 
   const { step, saved } = factPage();
   const residence = (place) => ({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1846', place, description: 'Bakken' } });
   const unknown = await step('addFact', { pid: 'TEST-LAR', addition: residence('Bakken nedre, Vågå, Oppland, Norway'), reason: REASON, save: false });
-  assert.deepEqual(plain(unknown.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Bakken nedre, Vågå, Oppland, Norway', picked: '' });
+  assert.deepEqual(plain(unknown.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Bakken nedre, Vågå, Oppland, Norway', picked: '', standard: '' });
   const known = await step('addFact', { pid: 'TEST-LAR', addition: residence('Bakken, Vågå, Oppland, Norway'), reason: REASON, save: true });
   assert.equal(known.ok, true, known.error);
   assert.equal(saved[0].place, 'Bakken, Vågå, Oppland, Norway');
-  assert.match(known.fields.find((f) => f.name === 'place').picked, /Farm, 1781 - 2019/, 'the farm in Vågå, not Bakkom in Gausdal');
+  assert.match(known.fields.find((f) => f.name === 'place').standard, /Farm, 1781 - 2019/, 'the farm in Vågå, not Bakkom in Gausdal');
 });
 
 test('addFact(): a place below a municipality is never taken for the municipality (or a farm elsewhere) of its first word', async () => {
@@ -875,7 +879,7 @@ test('addFact(): a place below a municipality is never taken for the municipalit
   const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1840', place: 'Lom, byens grund, Vågå, Oppland, Norway', description: 'Lom, byens grund' } };
   const answer = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: false });
   assert.equal(answer.ok, true, answer.error);
-  assert.deepEqual(plain(answer.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Lom, byens grund, Vågå, Oppland, Norway', picked: '' });
+  assert.deepEqual(plain(answer.fields.find((f) => f.name === 'place')), { name: 'place', value: 'Lom, byens grund, Vågå, Oppland, Norway', picked: '', standard: '' });
 });
 
 test('addFact(): a residence, its fields inside divs of the same name, as FS has them', async () => {
@@ -1028,13 +1032,13 @@ test('addFact(), tagFact(): a fact\'s view left open is closed first, not waited
   assert.deepEqual(plain(tagged.map((t) => t.type)), ['CHRISTENING']);
 });
 
-test('addFact(): the place is picked from FS\'s list for the typed text, not the list still shown for the old value', async () => {
+test('addFact(): FS\'s standard place is read from its list for the typed text, not the list still shown for the old value', async () => {
   const changed = factPage({ late: true });
   const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846', place: 'Vågå, Oppland, Norway' } };
   const edit = await changed.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: false });
   assert.equal(edit.ok, true, edit.error);
-  assert.match(edit.fields.find((f) => f.name === 'place').picked, /Municipality, 1781 - 2019/);
+  assert.match(edit.fields.find((f) => f.name === 'place').standard, /Municipality, 1781 - 2019/);
   // An empty field: at first only the text as typed
   const added = await factPage({ late: true }).step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
-  assert.match(added.fields.find((f) => f.name === 'place').picked, /Municipality, 1781 - 2019/);
+  assert.match(added.fields.find((f) => f.name === 'place').standard, /Municipality, 1781 - 2019/);
 });
