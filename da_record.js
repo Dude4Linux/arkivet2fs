@@ -288,9 +288,10 @@ function extractRecord(document, pageUrl) {
     return map;
   }
 
-  // --- Helper: Drop DA's name variants, marked %...% ("Ommund %Ole% Olsen %Olsen%") ---
+  // --- Helper: A name without the words the source struck out, which DA marks %...%
+  // ("Ommund %Ole% Olsen %Olsen%"); two readings DA gives ("Even@Sven") as "Even/Sven" ---
   function stripNameVariants(name) {
-    return (name || '').replace(/%[^%]*%/g, ' ').replace(/\s+/g, ' ').trim();
+    return (name || '').replace(/%[^%]*%/g, ' ').replace(/(\S)@(?=\S)/g, '$1/').replace(/\s+/g, ' ').trim();
   }
 
   // --- Helper: Get the permanent ID from a person link's href ---
@@ -668,9 +669,10 @@ function extractRecord(document, pageUrl) {
     return principal.persons.map(function(p) { return stripNameVariants(p.name); }).join(' and ');
   }
 
-  // --- Helper: a child whose name DA couldn't read ---
-  // DA writes "!!" for a name not read; a baptized or buried child's then has no name of
-  // its own ("!! Halvorsd.*", the starred patronymic the transcriber's, no more): it is
+  // --- Helper: a child without a name in the source ---
+  // DA writes "!!" alone for what the source doesn't give; a baptized or buried child
+  // without a name (an unbaptized child's burial; "!! Halvorsd.*", the starred patronymic
+  // the transcriber's, not the book's) is
   // "child of Halvor Larsen" ("son"/"daughter" by the child's own gender field), '' when
   // it has a name or no parent is named
   function childsParent(people) {
@@ -790,6 +792,21 @@ function extractRecord(document, pageUrl) {
     return out;
   }
 
+  // --- Helper: What DA's special signs in a text mean, one line for each used ---
+  // (its key: digitalarkivet.no/en/content/abbreviations-census). The notes' own " *",
+  // after the open person's name, isn't DA's: its "*" follows the value
+  function signsLegend(text) {
+    const signs = [
+      [/\?\?/, '"??" letters illegible in the source'],
+      [/!!/, '"!!" evidently wrong in the source; alone, missing from it'],
+      [/\S\*/, '"*" after a value: not in the source, added by the transcriber from the persons around it'],
+      [/%[^%\n]*%/, '"%...%" struck out in the source'],
+      [/\S@\S/, '"@" between two readings the transcriber couldn\'t choose between'],
+      [/(^|\s)E:\s/m, '"E:" the transcriber\'s note, not in the source']
+    ];
+    return signs.filter(function(sign) { return sign[0].test(text); }).map(function(sign) { return sign[1]; });
+  }
+
   function buildNotes(permanentId, people, recordDetails, primaryDetails, others, recordDate, censusLines) {
     // Full dates like "1812-10-11" read as "11 October 1812"; codes and
     // abbreviations get their English (see translateFieldValue)
@@ -866,14 +883,20 @@ function extractRecord(document, pageUrl) {
       household.forEach(function(person) { lines.push(personLine(person)); });
     });
 
+    // What DA's signs in the lines above mean, those used
+    const legend = signsLegend(lines.join('\n'));
+    if (legend.length) lines.push('', '--- Signs in DigitalArkivet\'s transcription ---', ...legend);
+
     return lines.join('\n');
 
     // "Role: Name (position, b. 1841 or age 35, birthplace, res. ...)"
     function personLine(person) {
       const role = person.roleEnglish || person.role || 'Unknown';
-      // DA's marks for what it couldn't read: "!!" a whole name, "??" letters (report #10)
-      const name = String(person.name || '').replace(/(^|\s)!!(?=\s|$)/g, '$1!! [name not read]')
-        .replace(/(\S*\?\?\S*)/g, '$1 [letters not read]');
+      // DA's signs for what the source lacks (report #10): "!!" alone a name it doesn't
+      // give, after a word one evidently wrong; "??" letters illegible
+      const name = String(person.name || '').replace(/(^|\s)!!(?=\s|$)/g, '$1!! [no name in the source]')
+        .replace(/(\S+!!)(?=\s|$)/g, '$1 [evidently wrong in the source]')
+        .replace(/(\S*\?\?\S*)/g, '$1 [illegible]');
       let line = role + ': ' + name + (person.primary ? ' *' : '');
       const details = [];
       if (person.position) details.push(expandAbbreviations(person.position));
@@ -1096,7 +1119,7 @@ function extractRecord(document, pageUrl) {
     if (principal && principal.event === 'household') {
       titleName = [titleName + ' household', census.residence, census.district].filter(Boolean).join(', ');
     }
-    // A child DA couldn't read the name of ("!! Halvorsd.*": "!!" for the name, the
+    // A child without a name in the source ("!! Halvorsd.*": "!!" for the name, the
     // starred patronymic the transcriber's) is "child of Halvor Larsen", baptized or buried
     const unnamed = unnamedChild(principal, people, ownFields['gender']);
     if (unnamed) titleName = unnamed;
@@ -1179,8 +1202,8 @@ function onDigitalArkivet(address) {
   }
 }
 
-// A census's full date of birth (1910's "Age/born: 1845-04-06", once with the age
-// after it, "1892-11-14@17") as {year, month, day}; null for a year or an age
+// A census's full date of birth (1910's "Age/born: 1845-04-06"; of two readings,
+// DA's "1892-11-14@17", the first) as {year, month, day}; null for a year or an age
 function fullBirthDate(text) {
   const m = String(text || '').trim().match(/^(1[5-9]\d\d)-(\d{1,2})-(\d{1,2})(?![\d?.])/);
   if (!m) return null;

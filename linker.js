@@ -30,7 +30,11 @@ const PID_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/i;
 
 // --- Names ----------------------------------------------------------------------------
 
-function stripVariants(name) { return (name || '').replace(/%[^%]*%/g, ' ').replace(/\s+/g, ' ').trim(); }
+// A name without what the source struck out (DA's "%...%"), two readings DA gives
+// ("Even@Sven") as "Even/Sven", as da_record.js writes them in the title
+function stripVariants(name) {
+  return (name || '').replace(/%[^%]*%/g, ' ').replace(/(\S)@(?=\S)/g, '$1/').replace(/\s+/g, ' ').trim();
+}
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The given names of an FS name: up to the patronymic, else all but the last word
@@ -62,9 +66,10 @@ function renamePhrase(text, oldName, newName) {
 // A person's line in the notes: "Child: Ole *", "Father: Halvor Larsen (b. 1810)"
 function renameNoteLine(notes, role, oldName, newName) {
   if (!oldName || oldName === newName) return notes;
-  // (with da_record.js's notes on DA's "!!" and "??": "!! [name not read]")
-  const written = oldName.split(' ').map((w) => escapeRe(w) + (w === '!!' ? '(?: \\[name not read\\])?'
-    : /\?\?/.test(w) ? '(?: \\[letters not read\\])?' : '')).join(' ');
+  // (with da_record.js's notes on DA's "!!" and "??": "!! [no name in the source]")
+  const written = oldName.split(' ').map((w) => escapeRe(w) + (w === '!!' ? '(?: \\[no name in the source\\])?'
+    : /!!$/.test(w) ? '(?: \\[evidently wrong in the source\\])?'
+    : /\?\?/.test(w) ? '(?: \\[illegible\\])?' : '')).join(' ');
   const re = new RegExp('^(' + escapeRe(role) + ': )' + written + '(?= \\*| \\(|$)', 'm');
   return notes.replace(re, (all, before) => before + newName);
 }
@@ -172,7 +177,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       if (byName) pair(byName, relative, t(relation + ', same given name'));
       // DA couldn't read the given name, the surname agrees (report #10)
       else if (!census && candidates.length === 1 && unreadGivenFits(candidates[0], fsNameParts(relative.name))) {
-        pair(candidates[0], relative, t(relation + ', given name not read on DA, same surname'));
+        pair(candidates[0], relative, t(relation + ', no legible given name on DA, same surname'));
       } else if (!census && candidates.length === 1) other(candidates[0], relative, relation);
     };
     single('father', tree.father);
@@ -183,7 +188,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       if (match) pair(match, x, t('spouse, same given name'));
     }
     if (spouses.length === 1 && !census && found.spouse.length === 1) {
-      if (unreadGivenFits(found.spouse[0], fsNameParts(spouses[0].name))) pair(found.spouse[0], spouses[0], t('spouse, given name not read on DA, same surname'));
+      if (unreadGivenFits(found.spouse[0], fsNameParts(spouses[0].name))) pair(found.spouse[0], spouses[0], t('spouse, no legible given name on DA, same surname'));
       else other(found.spouse[0], spouses[0], 'spouse');
     }
     // Each record child with the FS child that fits best: the first given name before a
@@ -901,7 +906,7 @@ const KIN_ABBREVIATION = '(?:d\\.? ?b|p\\.? ?b|b|s|d|dr|dtr|dat|hustr)';
 // where "Corp." is a corporal
 const MARRIED_WORD = /^(?:cop|copul|copulerede?|copuleret|copulert|copulirt|corp)$/u;
 function occupationOf(position, marriage = false) {
-  const text = String(position || '').replace(/^(?:u?gift)\s+(?=\S)/iu, '').trim();
+  const text = asInSource(position).replace(/^(?:u?gift)\s+(?=\S)/iu, '').trim();
   const bare = text.replace(/[.,;:]+$/u, '').replace(/\s+/g, ' ').toLowerCase();
   const kin = new RegExp('^(?:hj\\. ?|(?:hjemmev\\.?|hjemmeværende|' + REFERRING + '|\\p{L}+s) )?' + KIN_WORD + '$', 'iu');
   const relation = new RegExp('(?:^|\\s)\\p{L}+s\\s+(?:' + KIN_WORD + '|' + KIN_ABBREVIATION + ')$', 'iu');
@@ -1039,7 +1044,7 @@ function mergeDate(da, approx, fsText) {
 
 // DA's place name without its marks: "Vågå herred*" → "Vågå", "1029P Audnedal" → "Audnedal"
 function cleanPlace(place) {
-  return String(place || '').replace(/\*/g, '').replace(/^\d{3,4}[A-Z]?\s+/, '')
+  return asInSource(place).replace(/\*/g, '').replace(/^\d{3,4}[A-Z]?\s+/, '')
     .replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
 }
 // Whether FS's place names the record's (by any of its names: Vaage, Vågå, Vaga)
@@ -1191,8 +1196,9 @@ const fsYear = (text) => (parseFsDate(text) || {}).year || Number((String(text |
 // has no surname: its last word isn't one, and it's no other name.
 function otherName(person, record, full, name) {
   const asWritten = name || stripVariants(person.name);
-  // (DA's "!!" and "??" for what it couldn't read are no name to keep: report #10)
-  if (asWritten.split(/\s+/).some(unreadableWord)) return null;
+  // (DA's "!!" and "??", missing or illegible in the source, are no name to keep: report
+  // #10; nor is a word of two readings, "Even/Sven")
+  if (asWritten.split(/\s+/).some((w) => unreadableWord(w) || readingsOf(w).length > 1)) return null;
   const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
   const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
   const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
@@ -2961,7 +2967,7 @@ function fsDateText(d, approx) {
 // is in Hordaland as FS has it; Oslo is Kristiania when the record names it so
 // (Kristiania, Christiania or a clerk's abbreviation: Chra., Kria., ...).
 function fsPlace(place, record, elsewhere) {
-  const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
+  const name = asInSource(place).replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name) return '';
   if (/,/.test(name)) return name;
   const county = record.county && !/,/.test(record.county) ? record.county : '';
@@ -2970,7 +2976,7 @@ function fsPlace(place, record, elsewhere) {
 // The municipality a place names, as FS writes it ("Vågå, Oppland, Norway"), or ''
 // (a farm, a place DA's tables don't have)
 function fsMunicipality(place, record, elsewhere) {
-  const name = (place || '').replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
+  const name = asInSource(place).replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name || /,/.test(name)) return '';
   const county = record.county && !/,/.test(record.county) ? record.county : '';
   // "Chr", as clerks wrote Christiania, in a record of Oslo or Akershus
@@ -3012,10 +3018,14 @@ function newPersonDraft(row) {
   const record = state.record;
   const facts = recordFacts(person, record);
   const notes = [];
-  // DA's "!!" and "??" for what it couldn't read (report #10) are left out
+  // DA's "!!" and "??", missing, wrong or illegible in the source (report #10), are left
+  // out; of two readings ("Even/Sven") the first is taken
   const written = (row.name || stripVariants(person.name)).split(/\s+/).filter(Boolean);
-  const words = written.filter((w) => !unreadableWord(w));
-  if (words.length < written.length) notes.push(t('Not read on DigitalArkivet, left out of the name: {words}.', { words: written.filter(unreadableWord).join(' ') }));
+  const kept = written.filter((w) => !unreadableWord(w));
+  if (kept.length < written.length) notes.push(t('Missing, wrong or illegible on DigitalArkivet, left out of the name: {words}.', { words: written.filter(unreadableWord).join(' ') }));
+  const twoReadings = kept.filter((w) => readingsOf(w).length > 1);
+  if (twoReadings.length) notes.push(t('Two readings on DigitalArkivet, the first taken: {words}.', { words: twoReadings.join(' ') }));
+  const words = kept.map((w) => readingsOf(w)[0]);
   // The patronymic is the surname; a word after it (a farm, an address) is left out
   let { given, surname, rest } = nameParts(words.join(' '));
   if (rest) notes.push(t('Left out of the name: {rest} (a farm is an address; add it if it is a family name).', { rest }));

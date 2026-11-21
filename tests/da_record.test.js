@@ -220,7 +220,7 @@ test("englishPageUrl(): DA's English page of a Bokmål or Nynorsk address", () =
     'https://www.digitalarkivet.no/en/census/person/pf99000000000155');
 });
 
-// Report #10: DA's "!!" (a name not read) and "??" (letters not read) say so in the notes
+// Report #10: DA's "!!" (alone: not in the source) and "??" (illegible) say so in the notes
 test("the notes say what DA's \"!!\" and \"??\" in a name mean", () => {
   const file = 'da/baptism-1846.html';
   const doc = fixtureDoc(w, file);
@@ -232,6 +232,44 @@ test("the notes say what DA's \"!!\" and \"??\" in a name mean", () => {
   swap('Astri Larsdatter', '!! Larsdatter');
   swap('Halvor Larsen', 'Hal?? Larsen');
   const notes = w.extractRecord(doc, fixtureUrl(file)).notes;
-  assert.match(notes, /: !! \[name not read\] Larsdatter/);
-  assert.match(notes, /: Hal\?\? \[letters not read\] Larsen/);
+  assert.match(notes, /: !! \[no name in the source\] Larsdatter/);
+  assert.match(notes, /: Hal\?\? \[illegible\] Larsen/);
+});
+
+// DA's key of special signs: "??" illegible, "!!" wrong (alone: missing), "*" added by the
+// transcriber, "%...%" struck out, "@" two readings, "E:" the transcriber's note. The notes
+// keep DA's text and end with what the signs used in it mean
+test('the notes end with what the special signs used in them mean', () => {
+  const file = 'da/baptism-1846.html';
+  const plain = w.extractRecord(fixtureDoc(w, file), fixtureUrl(file));
+  // the open person's own " *" is the notes' mark, not DA's
+  assert.match(plain.notes, / \*$/m);
+  assert.doesNotMatch(plain.notes, /Signs in DigitalArkivet/);
+  const doc = fixtureDoc(w, file);
+  const swap = (from, to) => {
+    for (const a of doc.querySelectorAll('#collapse-section-0 .data-item .ssp-semibold')) {
+      if (a.textContent.includes(from)) a.textContent = a.textContent.replace(from, to);
+    }
+  };
+  swap('Astri Larsdatter', 'Astri@Anne Larsdatter');
+  swap('Halvor Larsen', 'Halvor %Lars% Larsen*');
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.match(r.notes, /Astri@Anne Larsdatter/);          // DA's text as it is
+  const legend = r.notes.split('--- Signs in DigitalArkivet\'s transcription ---')[1];
+  assert.ok(legend, r.notes);
+  assert.match(legend, /"@" between two readings/);
+  assert.match(legend, /"%\.\.\.%" struck out in the source/);
+  assert.match(legend, /"\*" after a value: not in the source, added by the transcriber/);
+  assert.doesNotMatch(legend, /"\?\?"|"!!"|"E:"/);           // only the signs used
+});
+
+test('a name: what the source struck out is left out, two readings are "Even/Sven"', () => {
+  const file = 'da/baptism-1846.html';
+  const doc = fixtureDoc(w, file);
+  const child = [...doc.querySelectorAll('#collapse-section-0 .data-item.current .ssp-semibold')]
+    .find((a) => a.textContent.trim() === 'Lars');
+  child.textContent = 'Lars@Ole %Hans%';
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.ok(r.title.startsWith('Lars/Ole'), r.title);
+  assert.doesNotMatch(r.title, /Hans|%|@/);
 });

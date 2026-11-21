@@ -335,3 +335,26 @@ test("nameMatch(), nameClose(), scoreHit(): DA's \"!!\" and \"??\" are never a m
   const letters = score('La?? Halvorsen');
   assert.equal(reason(letters, /^La\?\?/).ok, null, JSON.stringify(letters.reasons));
 });
+
+// DA's "@" between two readings the transcriber couldn't choose between ("Even@Sven"):
+// the word is a name of either reading, close by either; as the linker shows it, "Even/Sven"
+test('nameMatch(), nameNear(), illegibleFits(): a word of two readings is a name of either', () => {
+  assert.equal(w.nameMatch('Even@Sven', 'Sven'), true);
+  assert.equal(w.nameMatch('Even@Sven', 'Even'), true);
+  assert.equal(w.nameMatch('Even/Sven', 'Sven'), true);
+  assert.equal(w.nameMatch('Sven', 'Even@Sven'), true);
+  assert.equal(w.nameMatch('Even@Sven', 'Ole'), false);
+  assert.equal(w.nameNear('Sigvart@Ole', 'Sigvard'), true);
+  assert.equal(w.illegibleFits('Ann??@Ole', 'Anne'), true);
+  assert.equal(w.nameClose('Astri@Ole', 'Astrid'), true);
+});
+
+test('asInSource(): a value without struck-out words and the transcriber\'s note, of two readings the first', () => {
+  assert.equal(w.asInSource('Vågå %Lom%'), 'Vågå');
+  assert.equal(w.asInSource('Peder%Hans%'), 'Peder');
+  assert.equal(w.asInSource('Vågå@Lom'), 'Vågå');
+  assert.equal(w.asInSource('Husmand E: the rest of the line is torn off'), 'Husmand');
+  assert.equal(w.asInSource('Vågå herred*'), 'Vågå herred*');   // the star stays, for the caller
+  assert.deepEqual([...w.readingsOf('Even@Sven')], ['Even', 'Sven']);
+  assert.deepEqual([...w.readingsOf('Ole')], ['Ole']);
+});

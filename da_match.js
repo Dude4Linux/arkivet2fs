@@ -105,6 +105,7 @@ function jaroWinkler(x, y) {
 // Only ever a close name (≈), never a match, and never a reason against a record.
 const SHORT_FORMS = [['hans', 'johannes']];
 function nameNear(x, y) {
+  if (readingsOf(x).length > 1 || readingsOf(y).length > 1) return eitherReading(nameNear, x, y);
   if (unreadableWord(x) || unreadableWord(y)) return false;
   const a = fold(x).replace(/[^\p{L}]/gu, ''), b = fold(y).replace(/[^\p{L}]/gu, '');
   if (SHORT_FORMS.some((pair) => pair.includes(a) && pair.includes(b) && a !== b)) return true;
@@ -134,8 +135,13 @@ function sameFather(x, y) {
 // consonants (Magdalen for Magdaline; not for names with fewer than two, like Ole).
 // Å and the older aa are one letter (Aase for Åse).
 const foldAa = (s) => fold(s).replace(/å/g, 'aa');
+// A word DA gives two readings of ("Even@Sven": readingsOf()) is a name of either
+function eitherReading(test, x, y) {
+  return readingsOf(x).some((a) => readingsOf(y).some((b) => test(a, b)));
+}
 function nameMatch(word, name) {
-  // (DA's "!!" and "??", letters not read, are never a name: illegibleFits())
+  if (readingsOf(word).length > 1 || readingsOf(name).length > 1) return eitherReading(nameMatch, word, name);
+  // (DA's "!!" and "??", missing or illegible in the source, are never a name: illegibleFits())
   if (unreadableWord(word) || unreadableWord(name)) return false;
   if (foldAa(word) === foldAa(name)) return true;
   const forms = nameForms(name);
@@ -190,6 +196,7 @@ function nameClose(word, name) {
 // A record's name with letters DA couldn't read ("Ann??": unreadableWord()) whose
 // letters read, at least two, start FS's name (Anne): close, never a match (report #10)
 function illegibleFits(word, name) {
+  if (readingsOf(word).length > 1 || readingsOf(name).length > 1) return eitherReading(illegibleFits, word, name);
   if (!/\?\?/.test(word || '') || unreadableWord(name)) return false;
   const start = legibleStart(word);
   return start.length >= 2 && foldAa(name).startsWith(foldAa(start));

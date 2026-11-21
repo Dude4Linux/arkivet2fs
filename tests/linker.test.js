@@ -1035,6 +1035,32 @@ test('newPersonDraft(): the patronymic is the surname, a farm after it left out;
   assert.match(draft.notes[0], /Left out of the name: Holt-Sletten/);
 });
 
+// DA's signs in a name: "!!" and "??" (missing, wrong or illegible) are left out, of two
+// readings ("Even@Sven", shown "Even/Sven") the first is taken, each said in a note
+test('newPersonDraft(): of two readings the first; no other name offered for one', () => {
+  const { win, state, rowOf } = pairedPage(undefined, 'burial-1854', {});
+  const row = rowOf('Lars Larsen Holt-Sletten');
+  row.name = 'Lars@Ole Larsen';
+  const draft = plain(win.newPersonDraft(row));
+  assert.equal(draft.given, 'Lars');
+  assert.equal(draft.surname, 'Larsen');
+  assert.ok(draft.notes.some((n) => /Two readings on DigitalArkivet, the first taken: Lars@Ole/.test(n)), draft.notes.join(' | '));
+  const r = state.record;
+  assert.equal(win.otherName(row.person, r, { pid: 'TEST-LARS', name: 'Lars Halvorsen', altNames: [] }, 'Lars/Ole Larsen'), null);
+});
+
+// The places and occupations taken as data are the source's: without struck-out words
+// ("%...%"), the transcriber's note ("E: ...") and the second of two readings ("@")
+test('occupationOf(), cleanPlace(), fsPlace(): the value as the source has it', () => {
+  assert.equal(w.occupationOf('Husmand %Inderst%'), 'Husmand');
+  assert.equal(w.occupationOf('Skomager@Skolemester'), 'Skomager');
+  assert.equal(w.occupationOf('E: not in the book'), '');
+  assert.equal(w.cleanPlace('Vågå herred* %Lom%'), 'Vågå');
+  const c = record('census-1865');
+  assert.equal(w.fsPlace('Vaage@Lom', c), 'Vågå, Oppland, Norway');
+  assert.equal(w.fsPlace('Vaage E: the parish written in the margin', c), 'Vågå, Oppland, Norway');
+});
+
 test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', () => {
   assert.equal(w.fsDateText({ year: 1846, month: 7, day: 16 }), '16 July 1846');
   assert.equal(w.fsDateText({ year: 1846, month: 7 }), 'July 1846');
@@ -2120,7 +2146,7 @@ test("suggestPairs(), otherName(), compareFact(), renameNoteLine(): a parent who
   const { pairs, why } = w.suggestPairs(r, people, w.findSelf(people, LARS_1846, true), LARS_1846);
   const mother = people.find((p) => p.name === '!! Larsdatter');
   assert.equal(pairs[mother.key], 'TEST-AST');
-  assert.match(why[mother.key], /given name not read on DA/);
+  assert.match(why[mother.key], /no legible given name on DA/);
   // another patronymic: only named, as before
   const r2 = record('baptism-1846');
   r2.people.find((p) => p.role === 'mor').name = '!! Pedersdatter';
@@ -2131,6 +2157,6 @@ test("suggestPairs(), otherName(), compareFact(), renameNoteLine(): a parent who
   assert.equal(w.otherName(mother, r, { pid: 'TEST-AST', name: 'Astrid Larsdatter', altNames: [] }), null);
   assert.equal(w.compareFact('Name', { text: mother.name }, { text: 'Astrid Larsdatter' }, mother, { pid: 'TEST-AST', name: 'Astrid Larsdatter' }, r), '');
   // the notes' line, as da_record.js marks it, follows a name filled in
-  assert.equal(w.renameNoteLine('Mother: !! [name not read] Larsdatter\nFather: Halvor Larsen', 'Mother', '!! Larsdatter', 'Astrid Larsdatter'),
+  assert.equal(w.renameNoteLine('Mother: !! [no name in the source] Larsdatter\nFather: Halvor Larsen', 'Mother', '!! Larsdatter', 'Astrid Larsdatter'),
     'Mother: Astrid Larsdatter\nFather: Halvor Larsen');
 });

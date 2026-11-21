@@ -69,11 +69,30 @@ function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(
 
 function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
 
-// DA's marks for what its transcribers couldn't read (report #10): "!!" in place of a
-// name not read at all ("!! Halvorsdatter": the given name), "??" for letters not read in a
-// name ("Ann??"). Such a word is no name to match, search or offer as one; the letters
-// before a "??" are its start (legibleStart(): "Ann?? " → "Ann", "!!" → "").
+// DA's special signs in its transcriptions (its key: digitalarkivet.no/en/content/
+// abbreviations-census): "??" letters illegible in the source ("Kristi??"); "!!"
+// something evidently wrong in the source, and alone in its place missing from it ("!!
+// Halvorsdatter": no given name; an unbaptized child's burial); "*" after a value: not in
+// the source, added by the transcriber from the persons around it ("Halvorsd.*"); "%...%"
+// struck out in the source ("Peder%Hans%"); "@" between two readings the transcriber
+// couldn't choose between ("Even@Sven"); "E:" before the transcriber's own note.
+//
+// A word with "!!" or "??" is no name to match, search or offer as one (report #10); the
+// letters before a "??" are its start (legibleStart(): "Ann?? " → "Ann", "!!" → "").
 function unreadableWord(word) { return /!!|\?\?/.test(word || ''); }
+// The readings of a word DA gives two of ("Even@Sven", or "Even/Sven" as the linker
+// shows it): ["Even", "Sven"]; a word of one reading: [word]
+function readingsOf(word) {
+  const parts = String(word || '').split(/[@/]/).filter(Boolean);
+  return parts.length > 1 ? parts : [String(word || '')];
+}
+// A value as the source has it, for use as data (a place, an occupation): without the
+// words struck out ("%Lom%") and the transcriber's note ("E: ..."), and with the first
+// of two readings ("Vågå@Lom" → "Vågå"). DA's "*" stays, for the caller.
+function asInSource(text) {
+  return String(text || '').replace(/%[^%]*%/g, ' ').replace(/(^|\s)E:\s[\s\S]*$/, '')
+    .replace(/(\S+?)@\S+/g, '$1').replace(/\s+/g, ' ').trim();
+}
 function legibleStart(word) {
   const w = String(word || '').trim();
   const at = w.search(/!!|\?\?/);

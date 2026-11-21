@@ -291,7 +291,7 @@ function checkRecord(record, P) {
     if (match) add(3, t('{relation} {name} in the record', { relation, name: match.name }), true);
     else if (near) add(2, t('{relation} {name} at the same residence', { relation, name: near.name }), true);
     else if (close) add(2, t('{relation} {name} in the record, for {fs}', { relation, name: close.name, fs: relative.given.split(/\s+/)[0] }), null);
-    else if (unread) add(1, t('{relation} {name} in the record, the given name not read on DA', { relation, name: unread.name }), null);
+    else if (unread) add(1, t('{relation} {name} in the record, no legible given name on DA', { relation, name: unread.name }), null);
     else if (candidates.length && !census) differs(relation, candidates[0], [relative]);
   };
   // Another person where FS has a relative: -3 with another given name (Anne for
@@ -311,7 +311,7 @@ function checkRecord(record, P) {
     const close = !match && !census && inRecord.spouse.find((p) => P.spouses.some((s) => isRelative(p, s, record, true)));
     const unread = !match && !close && !census && inRecord.spouse.find((p) => P.spouses.some((s) => unreadGivenFits(p, s)));
     if (match) add(3, t('{relation} {name} in the record', { relation: t('spouse'), name: match.name }), true);
-    else if (unread) add(1, t('{relation} {name} in the record, the given name not read on DA', { relation: t('spouse'), name: unread.name }), null);
+    else if (unread) add(1, t('{relation} {name} in the record, no legible given name on DA', { relation: t('spouse'), name: unread.name }), null);
     else if (close) {
       const spouse = P.spouses.find((s) => isRelative(close, s, record, true));
       add(2, t('{relation} {name} in the record, for {fs}', { relation: t('spouse'), name: close.name, fs: spouse.given.split(/\s+/)[0] }), null);
