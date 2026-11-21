@@ -211,6 +211,13 @@ test("patronymicDiffers(): Johannesdat. for Johansdr, Gudbrandsen for Gulbrandse
   assert.equal(w.patronymicDiffers({ name: 'Halvor Olsen Moen' }, 'Larsen'), true);
 });
 
+test('patronymicDiffers(): Toyesdr, Tøiesen, Tojesen are one father\'s (y, i and j between vowels)', () => {
+  for (const name of ['Astri Tøiesen', 'Astri Tojesen', 'Astri Toyesdatter']) {
+    assert.equal(w.patronymicDiffers({ name }, 'Toyesdr'), false, name);
+  }
+  assert.equal(w.patronymicDiffers({ name: 'Astri Tostesen' }, 'Toyesdr'), true);
+});
+
 test('patronymicDiffers(): a farm in the patronymic\'s place says nothing', () => {
   assert.equal(w.patronymicDiffers({ name: 'Halvor Moen' }, 'Larsen'), false);
   assert.equal(w.patronymicDiffers({ name: 'Halvor Halvorsrud' }, 'Halvorsen'), false);

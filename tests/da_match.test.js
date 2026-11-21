@@ -91,6 +91,17 @@ test('skeleton(): the consonants, spelled one way', () => {
   assert.equal(w.skeleton('Christine'), w.skeleton('Kristina'));
 });
 
+test('skeleton(): a y or i between two vowels is j, the old glide written either way', () => {
+  assert.equal(w.skeleton('Toye'), w.skeleton('Toje'));
+  assert.equal(w.skeleton('Tøie'), w.skeleton('Toje'));
+  assert.equal(w.skeleton('Kaia'), w.skeleton('Kaja'));
+  assert.equal(w.skeleton('Eyolf'), w.skeleton('Eiolf'));
+  assert.equal(w.sameFather(w.patronymicBase('Eyolfsdatter'), w.patronymicBase('Ejolfsen')), true);
+  assert.equal(w.sameFather(w.patronymicBase('Toyesdr'), w.patronymicBase('Tøiesen')), true);
+  // not after a consonant: Maria isn't Marja's spelling by this rule
+  assert.notEqual(w.skeleton('Maria'), w.skeleton('Marja'));
+});
+
 test("skeleton(): Norphone's silent j and h at the start, x and a final dt", () => {
   for (const [a, b] of [['Kjetil', 'Kittil'], ['Kjersti', 'Kirsti'], ['Gjermund', 'Jermund'], ['Hjalmar', 'Jalmar'],
     ['Arndt', 'Arnt'], ['Alexander', 'Aleksander'], ['Kristen', 'Kirsten']]) {

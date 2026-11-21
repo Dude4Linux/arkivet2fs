@@ -60,10 +60,11 @@ function hasWord(text, word) {
 // (Biørn = Bjørn, Torius = Torjus); not before a or e, where it's a vowel of its own
 // (Maria, Marie, Christian). Gi and gj before a vowel are j (Giermund = Gjermund =
 // Jermund, Ingiald = Ingjald, Torgius = Torjus). F after l or r is v (Rolf = Rolv,
-// Halfdan = Halvdan). Not its g → k, d → t, nd → n, ld → l or the final d
+// Halfdan = Halvdan). A y or i between two vowels is j (Eyolf = Eiolf = Ejolf, Kaia =
+// Kaja: the old glide written either way). Not its g → k, d → t, nd → n, ld → l or the final d
 // after a vowel: they make Guri Kari, Gunder Gunnar, Ingrid Inger.
 function skeleton(name) {
-  return fold(name).replace(/[^\p{L}]/gu, '').replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i')
+  return fold(name).replace(/[^\p{L}]/gu, '').replace(/(?<=[^aeiouyæøåäöüé])j$/, 'i').replace(/(?<=[aeiouyæøåäöüé])[iy](?=[aeiouyæøåäöüé])/g, 'j')
     .replace(/^(sch|sj|si(?=[aeouæøå])|sk(?=[iyøæ]|ei))/, 'sk').replace(/(?<=[^aeiouyæøåäöüé])i(?=[oøåu])/g, 'j').replace(/g[ij](?=[aeouæøå])/g, 'j').replace(/^(s?k)j/, '$1').replace(/^[gh]j/, 'j').replace(/dt$/, 't')
     .replace(/ch|c|q/g, 'k').replace(/th/g, 't').replace(/ph/g, 'f').replace(/(?<=[lr])f/g, 'v').replace(/w/g, 'v').replace(/z/g, 's').replace(/x/g, 'ks')
     .replace(/(?<=.)h(?![aeiouyæøåäöüé])|(?<=[^aeiouyæøåäöüé])h/g, '').replace(/[aeiouyæøåäöüé]/g, '').replace(/(.)\1+/g, '$1');
