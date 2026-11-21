@@ -6,6 +6,9 @@
 #      signatures and SHA256SUMS) and GitHub's attestation, and unzip it there for you
 #      to load in Chrome and Brave.
 #   3. Publish, when you say so; then check the published files as a user gets them.
+#   4. The stores: send the checked package to the Chrome Web Store and to Firefox
+#      Add-ons, asking for each (node tools/stores.mjs; its keys are in
+#      ~/.config/arkivet2fs/stores.json, and a store not set up there is left out).
 #
 # Run it in a terminal, in the clone:
 #
@@ -14,9 +17,10 @@
 #
 # The tag defaults to v + manifest.json's version. A step that's done is skipped. On a
 # published release only the check is run, which anyone can do (with curl when gh isn't
-# signed in). --keep DIR copies the checked packages and their signatures to DIR. The
-# key defaults to keys/release.pub of this clone; its fingerprint is in the README.
-# Needs OpenSSL 3, and curl or gh; signing and publishing need gh signed in, and Node.
+# signed in), then step 4 for a store that hasn't this version yet. --keep DIR copies
+# the checked packages and their signatures to DIR. The key defaults to
+# keys/release.pub of this clone; its fingerprint is in the README. Needs OpenSSL 3, and
+# curl or gh; signing, publishing and the stores need Node, the first two gh signed in.
 # The temporary folder is removed at the end.
 set -eu
 
@@ -24,7 +28,7 @@ REPO=Dude4Linux/arkivet2fs
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 die() { echo "release: $*" >&2; exit 1; }
-usage() { sed -n '2,20s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,24s/^# \{0,1\}//p' "$0"; }
 ask() { # question; true for yes
   [ -t 0 ] || die "run it in a terminal to answer: $1"
   printf '%s [y/N] ' "$1"
@@ -114,12 +118,46 @@ keep_packages() {
   echo "Kept in $keep: $(echo "$packages" | tr '\n' ' ')"
 }
 
+# 4. The stores: the package just checked as published, to each store set up in
+# stores.json that hasn't this version, when you say so. With "quiet" (the check of a
+# published release) nothing is said when no store is set up.
+stores() {
+  [ -t 0 ] && command -v node >/dev/null || return 0
+  config=${ARKIVET2FS_STORES:-$HOME/.config/arkivet2fs/stores.json}
+  if [ ! -f "$config" ]; then
+    [ "${1:-}" = quiet ] || echo "(No $config, so no store uploads; tools/stores.mjs says how to set them up.)"
+    return 0
+  fi
+  pkg=$tmp/published/arkivet2fs-${tag#v}.zip
+  [ -f "$pkg" ] || die "no checked $pkg to send to the stores"
+  echo
+  echo "== 4. The stores"
+  for store in chrome firefox; do
+    case $store in chrome) name='the Chrome Web Store' ;; *) name='Firefox Add-ons' ;; esac
+    rc=0
+    node "$root/tools/stores.mjs" has "$store" "$tag" || rc=$?
+    case $rc in
+      0) continue ;;
+      1) ;;
+      3) continue ;;
+      *) echo "Couldn't ask $name which version it has; skipping it (run this again to retry)."; continue ;;
+    esac
+    if ask "Send $tag to $name for review now?"; then
+      node "$root/tools/stores.mjs" upload "$store" "$pkg" "$tag" ||
+        echo "Sending $tag to $name failed (above); run this again to retry, or upload $(basename "$pkg") by hand."
+    else
+      echo "Not sent to $name."
+    fi
+  done
+}
+
 if [ -z "$draft" ]; then
   # published: the check only, as a user gets the files
   echo "== Check: $tag is published; downloading it to $tmp"
   if [ -n "$use_gh" ]; then check published gh; else from=$base; check published curl; fi
   keep_packages
   echo "All good: $tag is signed by this key."
+  stores quiet
   exit 0
 fi
 
@@ -167,3 +205,4 @@ from=$public use_gh=''
 command -v curl >/dev/null || die "no curl to check the published files"
 check published curl
 echo "All good: $tag is published and signed by this key."
+stores

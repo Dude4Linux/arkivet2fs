@@ -495,9 +495,46 @@ AMO's listed channel updates Firefox and LibreWolf users by itself.
     Send.
   - **Descriptions** in English and Norwegian (`_locales` has the short ones); the
     store icon (icon128.png).
-- **Later:** uploads from release.yml through the stores' APIs (Chrome's and AMO's take a zip and keys as secrets); until then by hand, after `tools/release`.
+- **Uploads:** `tools/release`'s step 4 (`tools/stores.mjs`) sends the published
+  release's checked zip to each store, asking for each; see "Store uploads" below.
+  On the maintainer's machine, not in release.yml: the keys stay off GitHub.
 - **Test:** install from each store once its listing is public; the update from one
   store version to the next.
+
+#### Store uploads
+
+After publishing, `sh tools/release` offers to send the package to each store set up
+in `~/.config/arkivet2fs/stores.json` (mode 600) that hasn't the version yet; on a
+release published before, running it again offers the same. Chrome: uploaded and
+submitted, live once approved. Firefox: uploaded to the listed channel and the
+version made with the CHANGELOG's notes, live once reviewed. A store left out of
+stores.json isn't offered. To set them up (once):
+
+- **Chrome Web Store** (a service account):
+  1. In the Google Cloud console (console.cloud.google.com), make a project (or use
+     one), and under APIs & Services → Library enable the **Chrome Web Store API**.
+  2. IAM & Admin → Service Accounts → Create service account (no roles needed). On it,
+     Keys → Add key → Create new key → JSON. Save the download as
+     `~/.config/arkivet2fs/chrome-service-account.json` and `chmod 600` it.
+  3. In the Chrome Web Store developer dashboard, Account: add the service account's
+     e-mail address (…@….iam.gserviceaccount.com) as the service account (one per
+     publisher).
+  4. The publisher ID: the dashboard's Account (or Publisher → Settings) page.
+- **Firefox Add-ons:** addons.mozilla.org → Developer Hub → Tools → Manage API Keys
+  (https://addons.mozilla.org/en-US/developers/addon/api/key/): generate credentials.
+  The JWT issuer (`user:…`) and the JWT secret go in stores.json.
+- **stores.json** (`chmod 600 ~/.config/arkivet2fs/stores.json`):
+
+  ```json
+  {
+    "chrome": {"publisher": "<publisher ID>", "item": "malggmddihmieaipddkjemajhiembnkm",
+               "serviceAccount": "chrome-service-account.json"},
+    "firefox": {"issuer": "user:…", "secret": "…", "addon": "arkivet2fs@dude4linux"}
+  }
+  ```
+
+  Check it with `node tools/stores.mjs has chrome v1.8.1` and `… has firefox v1.8.1`:
+  each says which version the store has (exit 0), or what's wrong.
 
 ### Phase 8: A call for testers
 

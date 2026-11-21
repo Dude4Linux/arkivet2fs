@@ -1,5 +1,6 @@
-// tools/: the release build (which files ship, a reproducible zip), the signatures and
-// tools/verify.sh. The build reads git, so these run in a clone.
+// tools/: the release build (which files ship, a reproducible zip), the signatures,
+// tools/verify.sh and the store uploads (stores.mjs, against fake stores). The build
+// reads git, so these run in a clone.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,6 +12,7 @@ const { execFileSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const tools = Promise.all([import('../tools/build.mjs'), import('../tools/sign.mjs')]);
+const stores = import('../tools/stores.mjs');
 
 test('selectFiles(): the extension ships; docs, tests and tools stay out; anything else stops the build', async () => {
   const [b] = await tools;
@@ -172,6 +174,175 @@ test('tools/release: a published release is downloaded to a temporary folder, ch
   fs.rmSync(path.join(files, 'SHA256SUMS.sig'));
   assert.throws(() => run(), (e) => /can't download SHA256SUMS\.sig/.test(e.stderr.toString()));
   assert.throws(() => run('v1'), (e) => /unknown argument v1/.test(e.stderr.toString()));
+  fs.rmSync(dir, { recursive: true });
+});
+
+// A fake store: answers fetch() from handlers by "METHOD path" and records each request
+function fakeStore(handlers) {
+  const calls = [];
+  const fetch = async (url, opts = {}) => {
+    const u = new URL(url);
+    const key = (opts.method || 'GET') + ' ' + u.origin + u.pathname;
+    calls.push({ key, url, opts });
+    const handler = handlers[key];
+    if (!handler) return new Response(JSON.stringify({ error: { message: 'no such fake: ' + key } }), { status: 404 });
+    const [status, body] = await handler(opts, calls.filter((c) => c.key === key).length);
+    return new Response(body === undefined ? '' : JSON.stringify(body), { status });
+  };
+  return { fetch, calls };
+}
+
+const storeDeps = (fetch, more = {}) => ({ fetch, now: () => 1_800_000_000_000, nonce: () => 'nonce-' + Math.random(), sleep: async () => {}, log: () => {}, ...more });
+
+function jwtParts(token) {
+  const [h, c, sig] = token.split('.');
+  return { header: JSON.parse(Buffer.from(h, 'base64url')), claims: JSON.parse(Buffer.from(c, 'base64url')), data: h + '.' + c, sig: Buffer.from(sig, 'base64url') };
+}
+
+test('stores.mjs: Google\'s service account JWT (RS256, the store\'s scope, an hour) and AMO\'s (HS256, a minute)', async () => {
+  const st = await stores;
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const account = { client_email: 'release@test.iam.gserviceaccount.com', private_key_id: 'k1', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) };
+  const g = jwtParts(st.googleAssertion(account, 1_800_000_000_500));
+  assert.deepEqual(g.header, { alg: 'RS256', typ: 'JWT', kid: 'k1' });
+  assert.deepEqual(g.claims, { iss: account.client_email, scope: 'https://www.googleapis.com/auth/chromewebstore', aud: 'https://oauth2.googleapis.com/token', iat: 1_800_000_000, exp: 1_800_003_600 });
+  assert.ok(crypto.verify('RSA-SHA256', Buffer.from(g.data), publicKey, g.sig));
+
+  const a = jwtParts(st.amoToken('user:1:2', 'the-secret', 1_800_000_000_000, 'n1'));
+  assert.deepEqual(a.header, { alg: 'HS256', typ: 'JWT' });
+  assert.deepEqual(a.claims, { iss: 'user:1:2', jti: 'n1', iat: 1_800_000_000, exp: 1_800_000_060 });
+  assert.ok(a.sig.equals(crypto.createHmac('sha256', 'the-secret').update(a.data).digest()));
+});
+
+test('stores.mjs: stores.json and the service account key must be the owner\'s alone; a store left out isn\'t set up', async (t) => {
+  if (process.platform === 'win32') return t.skip('no file modes');
+  const st = await stores;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arkivet2fs-stores-'));
+  const file = path.join(dir, 'stores.json');
+  const key = path.join(dir, 'sa.json');
+  fs.writeFileSync(file, JSON.stringify({ chrome: { publisher: 'pub', item: 'item', serviceAccount: 'sa.json' } }), { mode: 0o600 });
+  fs.writeFileSync(key, JSON.stringify({ client_email: 'a@b', private_key: 'PEM' }), { mode: 0o644 });
+  assert.equal(st.storeConfig(path.join(dir, 'none.json'), 'chrome'), null);
+  assert.equal(st.storeConfig(file, 'firefox'), null);
+  assert.throws(() => st.storeConfig(file, 'chrome'), /sa\.json can be read by others; chmod 600/);
+  fs.chmodSync(key, 0o600);
+  assert.deepEqual(st.storeConfig(file, 'chrome'), { publisher: 'pub', item: 'item', account: { client_email: 'a@b', private_key: 'PEM' } });
+  fs.chmodSync(file, 0o640);
+  assert.throws(() => st.storeConfig(file, 'chrome'), /stores\.json can be read by others/);
+  fs.writeFileSync(file, JSON.stringify({ firefox: { issuer: 'user:1' } }), { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+  assert.throws(() => st.storeConfig(file, 'firefox'), /"firefox" needs secret, addon/);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('stores.mjs: Chrome: signs in, uploads the zip, waits while it\'s processed, submits it to go live once approved', async () => {
+  const st = await stores;
+  const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const c = { publisher: 'pub-1', item: 'item-1', account: { client_email: 'release@test', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) } };
+  const item = 'https://chromewebstore.googleapis.com/v2/publishers/pub-1/items/item-1';
+  const zip = Buffer.from('the zip');
+  const store = fakeStore({
+    'POST https://oauth2.googleapis.com/token': (opts) => {
+      const body = new URLSearchParams(opts.body);
+      assert.equal(body.get('grant_type'), 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+      assert.equal(jwtParts(body.get('assertion')).claims.iss, 'release@test');
+      return [200, { access_token: 'tok', token_type: 'Bearer', expires_in: 3600 }];
+    },
+    'POST https://chromewebstore.googleapis.com/upload/v2/publishers/pub-1/items/item-1:upload': (opts) => {
+      assert.ok(opts.body.equals(zip));
+      return [200, { itemId: 'item-1', uploadState: 'IN_PROGRESS' }];
+    },
+    [`GET ${item}:fetchStatus`]: (opts, n) => [200, { lastAsyncUploadState: n < 2 ? 'IN_PROGRESS' : 'SUCCEEDED' }],
+    [`POST ${item}:publish`]: (opts) => {
+      assert.deepEqual(JSON.parse(opts.body), { publishType: 'DEFAULT_PUBLISH' });
+      return [200, { state: 'PENDING_REVIEW', warningInfo: { warnings: [{ reason: 'R', description: 'a warning' }] } }];
+    },
+  });
+  const log = [];
+  assert.equal(await st.chromeUpload(c, zip, '1.8.2', storeDeps(store.fetch, { log: (l) => log.push(l) })), 'PENDING_REVIEW');
+  assert.deepEqual(store.calls.map((x) => x.key.replace(/^(\w+) https:\/\/[^/]+/, '$1 ')), [
+    'POST /token', 'POST /upload/v2/publishers/pub-1/items/item-1:upload',
+    'GET /v2/publishers/pub-1/items/item-1:fetchStatus', 'GET /v2/publishers/pub-1/items/item-1:fetchStatus', 'POST /v2/publishers/pub-1/items/item-1:publish']);
+  assert.ok(store.calls.slice(1).every((x) => x.opts.headers.Authorization === 'Bearer tok'));
+  assert.match(log.join('\n'), /Warning: R: a warning/);
+  assert.doesNotMatch(log.join('\n'), /tok\b|BEGIN/, 'no secret is printed');
+
+  const failed = fakeStore({
+    'POST https://oauth2.googleapis.com/token': () => [200, { access_token: 'tok' }],
+    'POST https://chromewebstore.googleapis.com/upload/v2/publishers/pub-1/items/item-1:upload': () => [200, { uploadState: 'FAILED' }],
+  });
+  await assert.rejects(st.chromeUpload(c, zip, '1.8.2', storeDeps(failed.fetch)), /did not take the package \(upload FAILED\)/);
+  assert.ok(!failed.calls.some((x) => /:publish/.test(x.key)), 'nothing submitted');
+  const refused = fakeStore({ 'POST https://oauth2.googleapis.com/token': () => [400, { error: 'invalid_grant', error_description: 'Invalid JWT Signature.' }] });
+  await assert.rejects(st.chromeUpload(c, zip, '1.8.2', storeDeps(refused.fetch)), /Google sign-in for the service account: HTTP 400 \(invalid_grant: Invalid JWT Signature\.\)/);
+
+  // has: a version submitted or published, this one or newer; a rejected one doesn't count
+  const status = (body) => fakeStore({ 'POST https://oauth2.googleapis.com/token': () => [200, { access_token: 'tok' }], [`GET ${item}:fetchStatus`]: () => [200, body] });
+  const has = async (body, v) => st.chromeHas(c, v, storeDeps(status(body).fetch));
+  const live = { publishedItemRevisionStatus: { state: 'PUBLISHED', distributionChannels: [{ deployPercentage: 100, crxVersion: '1.8.1' }] } };
+  assert.deepEqual(await has(live, '1.8.2'), { has: false, text: 'the Chrome Web Store has 1.8.1 (live)' });
+  assert.equal((await has(live, '1.8.1')).has, true);
+  assert.equal((await has(live, '1.7.0')).has, true);
+  assert.equal((await has({ ...live, submittedItemRevisionStatus: { state: 'PENDING_REVIEW', distributionChannels: [{ crxVersion: '1.8.2' }] } }, '1.8.2')).has, true);
+  assert.equal((await has({ ...live, submittedItemRevisionStatus: { state: 'REJECTED', distributionChannels: [{ crxVersion: '1.8.2' }] } }, '1.8.2')).has, false);
+});
+
+test('stores.mjs: Firefox: uploads to the listed channel, waits for the validation, makes the version with the notes', async () => {
+  const st = await stores;
+  const f = { issuer: 'user:1:2', secret: 's3cret', addon: 'arkivet2fs@dude4linux' };
+  const zip = Buffer.from('the zip');
+  const addon = 'https://addons.mozilla.org/api/v5/addons/addon/arkivet2fs%40dude4linux';
+  const store = fakeStore({
+    'POST https://addons.mozilla.org/api/v5/addons/upload/': async (opts) => {
+      assert.equal(opts.body.get('channel'), 'listed');
+      assert.equal(opts.body.get('upload').name, 'arkivet2fs-1.8.2.zip');
+      assert.ok(Buffer.from(await opts.body.get('upload').arrayBuffer()).equals(zip));
+      return [201, { uuid: 'u-1', processed: false }];
+    },
+    'GET https://addons.mozilla.org/api/v5/addons/upload/u-1/': (opts, n) => [200, n < 2 ? { uuid: 'u-1', processed: false } : { uuid: 'u-1', processed: true, valid: true, version: '1.8.2' }],
+    [`POST ${addon}/versions/`]: (opts) => {
+      assert.deepEqual(JSON.parse(opts.body), { upload: 'u-1', release_notes: { 'en-US': 'Fixes' } });
+      return [201, { id: 7, version: '1.8.2', file: { status: 'unreviewed' } }];
+    },
+  });
+  assert.equal(await st.firefoxUpload(f, zip, '1.8.2', 'Fixes', storeDeps(store.fetch)), 'unreviewed');
+  assert.equal(store.calls.length, 4);
+  for (const call of store.calls) {
+    const { claims, data, sig } = jwtParts(call.opts.headers.Authorization.replace(/^JWT /, ''));
+    assert.equal(claims.iss, 'user:1:2');
+    assert.ok(sig.equals(crypto.createHmac('sha256', 's3cret').update(data).digest()));
+  }
+  assert.equal(new Set(store.calls.map((c) => jwtParts(c.opts.headers.Authorization.slice(4)).claims.jti)).size, 4, 'a new token for each request');
+
+  const invalid = fakeStore({
+    'POST https://addons.mozilla.org/api/v5/addons/upload/': () => [201, { uuid: 'u-2', processed: true, valid: false, validation: { messages: [{ type: 'warning', message: 'meh' }, { type: 'error', message: 'Bad manifest', file: 'manifest.json' }] } }],
+  });
+  await assert.rejects(st.firefoxUpload(f, zip, '1.8.2', '', storeDeps(invalid.fetch)), /refused the package:\n- Bad manifest manifest\.json$/);
+  assert.equal(invalid.calls.length, 1, 'no version made');
+
+  const has = (status, body) => st.firefoxHas(f, '1.8.2', storeDeps(fakeStore({ [`GET ${addon}/versions/1.8.2/`]: () => [status, body] }).fetch));
+  assert.deepEqual(await has(404, { detail: 'Not found.' }), { has: false, text: 'Firefox Add-ons hasn\'t 1.8.2' });
+  assert.deepEqual(await has(200, { version: '1.8.2', file: { status: 'unreviewed' } }), { has: true, text: 'Firefox Add-ons has 1.8.2 (in review)' });
+  await assert.rejects(has(401, { detail: 'Incorrect authentication credentials.' }), /HTTP 401 \(Incorrect authentication credentials\.\)/);
+});
+
+test('stores.mjs: the command sends only the package of the tag\'s version; notes without Markdown', async (t) => {
+  if (process.platform === 'win32') return t.skip('no file modes');
+  const [b, , st] = await Promise.all([...(await tools), stores]);
+  assert.equal(st.storeNotes('- **Places** as `written`\n'), '- Places as written');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arkivet2fs-stores-'));
+  const zipFile = path.join(dir, 'arkivet2fs-1.8.2.zip');
+  fs.writeFileSync(zipFile, b.makeZip([{ name: 'manifest.json', data: Buffer.from('{"version": "1.8.2"}') }], 1_800_000_000));
+  assert.equal(st.zipVersion(fs.readFileSync(zipFile)), '1.8.2');
+  const env = { ARKIVET2FS_STORES: path.join(dir, 'stores.json') };
+  const log = [];
+  const deps = storeDeps(async () => { throw new Error('no network in this test'); }, { env, log: (l) => log.push(l), notes: () => '' });
+  assert.equal(await st.main(['has', 'chrome', 'v1.8.2'], deps), 3, 'not set up');
+  assert.match(log[0], /the Chrome Web Store isn't set up in .*stores\.json/);
+  fs.writeFileSync(env.ARKIVET2FS_STORES, JSON.stringify({ firefox: { issuer: 'i', secret: 's', addon: 'a@b' } }), { mode: 0o600 });
+  await assert.rejects(st.main(['upload', 'firefox', zipFile, 'v1.8.3'], deps), /is version 1\.8\.2, not 1\.8\.3/);
+  await assert.rejects(st.main(['upload', 'opera', zipFile, 'v1.8.2'], deps), /usage/);
+  await assert.rejects(st.main(['has', 'firefox', '1.8.2'], deps), /usage/);
   fs.rmSync(dir, { recursive: true });
 });
 
