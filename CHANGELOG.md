@@ -22,6 +22,12 @@ fixes, new features, changes that break what users have).
 - **Children's burials:** a new search, and a group of its own, for the burials of
   the person's children, which church books often record under the father's name
   alone. Before, they turned up only under "All records under the name", if at all.
+- **A child the record gives no name:** in a burial or baptism of an unnamed child
+  ("!! Halvorsd.*"), the linker no longer pairs the child with the FamilySearch child
+  whose name looks like the patronymic DA added. Which child it is, the record can't
+  tell, so the row names the children it could be (born by the burial, not dead in
+  another year) for you to choose from, and the search page no longer counts it as
+  one of your children.
 - **"ektemann"** (the husband, in a church book's churching list) is "Husband" in the
   notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,

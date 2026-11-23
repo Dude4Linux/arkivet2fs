@@ -156,9 +156,17 @@ function birthYearOf(person, record) {
   return baptism && recordYear && /^(child|barn)$/i.test(person.roleEnglish || person.role || '') ? Number(recordYear) : null;
 }
 
+// A record person the source gives no name: DA's "!!" in the given name's place ("!!
+// Halvorsd.*", an unnamed child, the patronymic the transcriber's). The words after it
+// are no given name: "Halvorsd." isn't the child Halvor.
+function namelessInSource(person) {
+  return /^!!(\s|$)/.test(String((person && person.name) || '').trim());
+}
+
 // Does a record person have an FS relative's given name (any of the FS given names
 // against any word of the record name)?
 function hasGivenName(person, given) {
+  if (namelessInSource(person)) return false;
   const words = (person.name || '').replace(/[%*,]/g, ' ').split(/\s+/).filter(Boolean);
   const names = (given || '').split(/\s+/).filter(Boolean);
   return names.length > 0 && words.some((w) => names.some((n) => nameMatch(w, n)));
@@ -169,6 +177,7 @@ function hasGivenName(person, given) {
 // Johan and Johanne one name), 0 none. Among a couple's children the first given name
 // tells them apart, so a child is paired with the FS child that fits best.
 function givenFit(person, given) {
+  if (namelessInSource(person)) return 0;
   const words = (person.name || '').replace(/[%*,]/g, ' ').split(/\s+/).filter(Boolean);
   const names = (given || '').split(/\s+/).filter(Boolean);
   if (!words.length || !names.length) return 0;
@@ -337,6 +346,7 @@ function checkRecord(record, P) {
   }
 
   const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
+  const burial = record.recordTypeInfo && record.recordTypeInfo.prefix === 'pg';
   // Each record child counts once, for the FS child that fits it best (the first given
   // name, then the year), so a baptism of Johan isn't also FS's Marte Johanne's
   const fits = [];
@@ -346,6 +356,8 @@ function checkRecord(record, P) {
       const fit = child.given ? givenFit(p, child.given) : 0.5;
       const year = birthYearOf(p, record);
       if (!fit || (child.year && year && Math.abs(year - child.year) > 2)) continue;
+      // (a child isn't buried before they were born)
+      if (burial && child.year && recordYear && child.year > recordYear) continue;
       fits.push({ i, p, fit, off: child.year && year ? Math.abs(year - child.year) : 3 });
     }
   });

@@ -2241,3 +2241,27 @@ test("suggestPairs(), otherName(), compareFact(), renameNoteLine(): a parent who
   assert.equal(w.renameNoteLine('Mother: !! [no name in the source] Larsdatter\nFather: Halvor Larsen', 'Mother', '!! Larsdatter', 'Astrid Larsdatter'),
     'Mother: Astrid Larsdatter\nFather: Halvor Larsen');
 });
+
+// Bug: a child's burial that gives the child no name ("!! Halvorsd.*", the patronymic
+// the transcriber's) was paired with the FS child named Halvor, since "Halvorsd." has
+// Halvor's letters; the record can't tell which child it is, so the hint names the FS
+// children it could be: born by the burial, not dead in another year
+test('suggestPairs(): an unnamed child in a burial is not paired; the FS children it could be are named', () => {
+  const r = w.extractRecord(unnamedBurial(w), fixtureUrl('da/burial-1854.html'));
+  const people = w.recordPeople(r);
+  people.forEach((p) => { p.current = p.name === 'Halvor Larsen'; });
+  const fs = HALVOR_FAMILY([
+    { pid: 'TEST-HJR', name: 'Halvor Halvorsen', gender: 'Male', lifespan: '1853-1854' },
+    { pid: 'TEST-OLE', name: 'Ole Halvorsen', gender: 'Male', lifespan: '1852-1900' },
+    { pid: 'TEST-PER', name: 'Peder Halvorsen', gender: 'Male', lifespan: '1851' },
+    { pid: 'TEST-NIL', name: 'Nils Halvorsen', gender: 'Male', lifespan: '1856-1930' },
+    MARTE
+  ]);
+  const { pairs, why } = w.suggestPairs(r, people, w.findSelf(people, fs, true), fs);
+  const child = people.find((p) => p.name === '!! Halvorsd.*');
+  assert.equal(pairs[child.key], undefined);
+  assert.equal(byName(people, pairs)['Halvor Larsen'], 'TEST-HAL');
+  assert.match(why[child.key], /^no name in the source; FamilySearch children it could be: Halvor Halvorsen \(1853-1854\) or Peder Halvorsen \(1851\)\./);
+  assert.equal(w.hasGivenName(child, 'Halvor'), false);
+  assert.equal(w.givenFit(child, 'Halvor'), 0);
+});

@@ -209,6 +209,29 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       }
       if (best) pair(child, best.c, t(year ? 'child, same given name and birth year' : 'child, same given name'));
     }
+    // A child the source gives no name ("!! Halvorsd.*", an unnamed child's burial or
+    // baptism): the record can't tell which FS child it is, so the ones it could be are
+    // named in the hint, not paired: of the child's sex, born by the burial (for a
+    // baptism, that year or the one before), and not dead in another year
+    const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
+    const prefix = record.recordTypeInfo && record.recordTypeInfo.prefix;
+    for (const child of found.child) {
+      if (!namelessInSource(child) || pairs[child.key] || why[child.key] || blocked.has(child.key)) continue;
+      const sex = childSex(child, record);
+      const could = children.filter((c) => {
+        if (used.has(c.pid) || (sex && c.gender && c.gender !== sex)) return false;
+        const [born, died] = (String(c.lifespan || '').match(/\b1[5-9]\d\d\b/g) || []).map(Number);
+        const dead = /[–-]\s*\d{4}/.test(c.lifespan || '') ? died || null : null;
+        if (!recordYear) return true;
+        if (prefix === 'pd') return !born || (born >= recordYear - 1 && born <= recordYear);
+        if (prefix === 'pg') return (!born || born <= recordYear) && (!dead || Math.abs(dead - recordYear) <= 1);
+        return true;
+      });
+      const names = could.map((c) => stripVariants(c.name) + (c.lifespan ? ' (' + c.lifespan + ')' : '')).join(t(' or '));
+      why[child.key] = reason(names
+        ? t('no name in the source; FamilySearch children it could be: {names}. Choose one if you know which', { names })
+        : t('no name in the source, and no FamilySearch child fits'));
+    }
   };
   // From the FS person's entry, then outward through the paired relatives whose FS
   // families have been read

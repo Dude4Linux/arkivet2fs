@@ -34,6 +34,23 @@ test("relativesInRecord(): in a child's burial, the father's child is the deceas
   assert.ok(reasons.some((r) => r.ok && r.kind === 'child'), 'the FS child in the record');
 });
 
+// Bug: an unnamed child's burial ("!! Halvors.*") counted as FS's child Halvor in the
+// record, and a child buried before FS's birth year as that child
+test('checkRecord(): a burial\'s unnamed child, or one buried before they were born, is no FS child', () => {
+  const burial = (name) => ({ recordTypeInfo: { type: 'burial', prefix: 'pg' }, recordDate: '1722-09-26', fields: {}, people: [
+    { name, role: 'avdød', roleEnglish: 'Deceased' },
+    { name: 'Halvor Larsen', role: 'far', roleEnglish: 'Father', current: true }
+  ] });
+  const P = (given, year) => w.profile(criteria({
+    name: [{ givenName: 'Halvor', surname: 'Larsen' }], sex: [{ sex: 'Male' }],
+    child: [{ childGivenName: given, childBirthYear: year }]
+  }));
+  const child = (record, profile) => plain(w.checkRecord(record, profile)).some((r) => r.kind === 'child' && r.ok);
+  assert.equal(child(burial('!! Halvors.*'), P('Halvor', '1720')), false);
+  assert.equal(child(burial('Ole Halvorsen'), P('Ole', '1726')), false);
+  assert.equal(child(burial('Ole Halvorsen'), P('Ole', '1720')), true);
+});
+
 // Bug: the linker gave age 22 in the 1865 census as about 1843, the search page (DA's
 // hit) 1844: that census was counted on 31 December, and DA counts its ages from 1866
 test('birthYearOf(): a census age gives the year DA calculates on the person\'s own page', () => {
