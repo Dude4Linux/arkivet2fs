@@ -22,6 +22,11 @@ fixes, new features, changes that break what users have).
 - **Children's burials:** a new search, and a group of its own, for the burials of
   the person's children, which church books often record under the father's name
   alone. Before, they turned up only under "All records under the name", if at all.
+- **A namesake brother or sister:** when FamilySearch has the person you came from
+  dead before the record, or christened years from it (a child named after a brother
+  who died), the linker no longer pairs them with the record's person. It reads the
+  parents' families on FamilySearch and pairs the brother or sister of that name who
+  fits instead, and the row says why; you can still choose the first one by hand.
 - **A child the record gives no name:** in a burial or baptism of an unnamed child
   ("!! Halvorsd.*"), the linker no longer pairs the child with the FamilySearch child
   whose name looks like the patronymic DA added. Which child it is, the record can't

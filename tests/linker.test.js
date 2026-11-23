@@ -2265,3 +2265,32 @@ test('suggestPairs(): an unnamed child in a burial is not paired; the FS childre
   assert.equal(w.hasGivenName(child, 'Halvor'), false);
   assert.equal(w.givenFit(child, 'Halvor'), 0);
 });
+
+// Bug: a baptism opened from FS's Lars, christened and buried two years before it,
+// paired him with the record's child, when the parents' FS family has the brother of
+// the same name born that year (a child named after one who died)
+test('suggestPairs(): the FS person buried before the baptism is not paired; the namesake brother is', () => {
+  const r = record('baptism-1846');
+  const people = w.recordPeople(r);
+  const dead = { ...LARS_1846, pid: 'TEST-LA1', christening: { date: '10 February 1844' }, birth: undefined, burial: { date: '6 March 1844' },
+    mother: { pid: 'TEST-AST', name: 'Astri Larsdatter', lifespan: '1815-1890' } };
+  const self = w.findSelf(people, dead, true);
+  const first = w.suggestPairs(r, people, self, dead);
+  assert.equal(first.pairs[self.key], undefined);
+  assert.match(first.why[self.key], /^FamilySearch Lars Halvorsen was buried 6 March 1844: not paired/);
+  assert.equal(byName(people, first.pairs)['Halvor Larsen'], 'TEST-HAL');
+  assert.ok(first.need.includes('TEST-HAL'), 'the father\'s family is read');
+  const trees = { 'TEST-HAL': HALVOR_FAMILY([
+    { pid: 'TEST-LA1', name: 'Lars Halvorsen', gender: 'Male', lifespan: '1844-1844' },
+    { pid: 'TEST-LA2', name: 'Lars Halvorsen', gender: 'Male', lifespan: '1846-1920' }
+  ]) };
+  const next = w.suggestPairs(r, people, self, dead, trees);
+  assert.equal(next.pairs[self.key], 'TEST-LA2');
+  assert.match(next.why[self.key], /not FamilySearch Lars Halvorsen, who was buried 6 March 1844$/);
+  // Chosen by hand, the FS person stands
+  assert.equal(w.suggestPairs(r, people, self, dead, trees, { [self.key]: 'TEST-LA1' }).pairs[self.key], 'TEST-LA1');
+  // Nothing against them: paired as before
+  assert.equal(w.selfContradicted(r, self, LARS_1846), '');
+  assert.equal(w.selfContradicted(r, self, { christening: { date: '3 May 1843' } }), 'was christened 3 May 1843');
+  assert.equal(w.selfContradicted(r, self, { birth: { date: 'about 1846' }, death: { date: '1846' } }), '');
+});

@@ -120,6 +120,35 @@ function findSelf(people, fs, trusted) {
   return people.find((p) => hasGivenName(p, given)) || null;
 }
 
+// What the record says against the FS person being the record person opened: buried
+// before this record (a father a year before his child's baptism), or, as a baptism's
+// child, christened more than a year from it or born years from it, a child named
+// after a brother who died ("was buried 6 March 1753"); '' when nothing does
+function selfContradicted(record, person, fs) {
+  if (!record || !person || !fs) return '';
+  const at = String(record.recordDate || '').match(/^(\d{4})(?:-(\d\d)-(\d\d))?/);
+  if (!at) return '';
+  const year = Number(at[1]);
+  const day = at[2] ? Date.UTC(year, at[2] - 1, at[3]) : null;
+  const dayOf = (d) => (d && d.exact ? Date.UTC(d.year, d.month - 1, d.day) : null);
+  const kind = roleKind(person);
+  const fact = (key) => (fs[key] && fs[key].date ? { text: fs[key].date, date: parseFsDate(fs[key].date) } : null);
+  const dead = [['death', 'died {date}'], ['burial', 'was buried {date}']].map(([key, text]) => ({ f: fact(key), text }))
+    .find((d) => d.f && d.f.date && d.f.date.year);
+  if (dead && kind !== 'deceased') {
+    const spare = kind === 'father' ? 1 : 0;
+    const d = dead.f.date;
+    if (d.year + spare < year || (!spare && d.year === year && day && dayOf(d) && dayOf(d) < day)) return t(dead.text, { date: dead.f.text });
+  }
+  if (record.recordTypeInfo && record.recordTypeInfo.prefix === 'pd' && kind === 'child') {
+    const chr = fact('christening');
+    if (chr && chr.date && day && dayOf(chr.date) && Math.abs(dayOf(chr.date) - day) > 366 * 86400000) return t('was christened {date}', { date: chr.text });
+    const born = fact('birth');
+    if (born && born.date && born.date.year && Math.abs(born.date.year - year) > 2) return t('was born {date}', { date: born.text });
+  }
+  return '';
+}
+
 // Suggested pairs {key: pid}: the FS person, and the relatives the record names (by
 // relativesInRecord() from the FS person's entry) with an FS relative's given name
 // (children by the best fitting given name and birth year ±2, and the sex where both
@@ -142,9 +171,14 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   for (const [key, pid] of Object.entries(chosen)) {
     if (pid) { pairs[key] = pid; used.add(pid); } else blocked.add(key);
   }
+  // The record against the FS person (buried before this baptism): not paired, but
+  // their parents are still the record person's, and the parents' FS families, read
+  // as `need`, can pair the namesake brother or sister who fits
+  const against = self && !(self.key in chosen) && !used.has(fs.pid) && !census ? selfContradicted(record, self, fs) : '';
   if (self && !(self.key in chosen) && !used.has(fs.pid)) {
-    pairs[self.key] = fs.pid;
-    why[self.key] = t('the FamilySearch person');
+    if (!against) pairs[self.key] = fs.pid;
+    why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripVariants(fs.name), what: against })
+      : t('the FamilySearch person');
     used.add(fs.pid);
   }
   const relativesOf = (person) => {
@@ -154,8 +188,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
     return Object.fromEntries(Object.entries(found).map(([k, list]) => [k, list.map(back)]));
   };
   // From one paired person's entry, with their FS family
-  const pairFrom = (person, tree) => {
-    const own = tree === fs;
+  const pairFrom = (person, tree, own = tree === fs) => {
     const found = relativesOf(person);
     const reason = (text) => (own ? text : t('{why} (of {name} in FamilySearch)', { why: text, name: tree.name }));
     const pair = (p, relative, text) => {
@@ -246,9 +279,13 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   };
   const me = people.find((p) => pairs[p.key] === fs.pid);
   if (me) from(me);
+  else if (against) pairFrom(self, { ...fs, families: [] }, true);  // their parents only
   for (let more = true; more;) {
     more = false;
     for (const p of people) if (from(p)) more = true;
+  }
+  if (against && pairs[self.key] && !(self.key in chosen)) {
+    why[self.key] = t('{why}; not FamilySearch {name}, who {what}', { why: why[self.key], name: stripVariants(fs.name), what: against });
   }
   // Someone unpaired whom only their entry reaches (the bride's father: not the
   // groom's), so a baptism's new child doesn't have the mother's family read too

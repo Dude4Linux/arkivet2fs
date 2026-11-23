@@ -394,6 +394,12 @@ function i18nTable() {
     'Two readings on DigitalArkivet, the first taken: {words}.': ['To lesninger på Digitalarkivet, den første er brukt: {words}.', 'To lesingar på Digitalarkivet, den første er brukt: {words}.'],
     'child, same given name': ['barn, samme fornavn', 'barn, same førenamn'],
     'no name in the source; FamilySearch children it could be: {names}. Choose one if you know which': ['uten navn i kilden; barn på FamilySearch det kan være: {names}. Velg ett hvis du vet hvem', 'utan namn i kjelda; born på FamilySearch det kan vere: {names}. Vel eitt om du veit kven'],
+    'died {date}': ['døde {date}', 'døydde {date}'],
+    'was buried {date}': ['ble begravet {date}', 'vart gravlagd {date}'],
+    'was christened {date}': ['ble døpt {date}', 'vart døypt {date}'],
+    'was born {date}': ['ble født {date}', 'vart fødd {date}'],
+    'FamilySearch {name} {what}: not paired; choose them if it\'s the same person': ['{name} på FamilySearch {what}: ikke paret; velg personen hvis det er den samme', '{name} på FamilySearch {what}: ikkje para; vel personen om det er den same'],
+    '{why}; not FamilySearch {name}, who {what}': ['{why}; ikke {name} på FamilySearch, som {what}', '{why}; ikkje {name} på FamilySearch, som {what}'],
     'no name in the source, and no FamilySearch child fits': ['uten navn i kilden, og ingen barn på FamilySearch passer', 'utan namn i kjelda, og ingen born på FamilySearch passar'],
     'child, same given name and birth year': ['barn, samme fornavn og fødselsår', 'barn, same førenamn og fødselsår'],
     'FamilySearch {relation} is {name}, another name: choose them if it\'s the same person': [
