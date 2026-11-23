@@ -125,6 +125,17 @@ function givenStem(name) {
   return cut !== s && cut.length >= 3 ? cut + '*' : s;
 }
 
+// The person's own given name in a search: givenStem(), or the shared start of the
+// name's forms (relatedStem()) when it leaves out no more than the last letter: Boye
+// and Boie → Boj*, finding the church book's Boj, which DA doesn't link; Knut → Knu*.
+// A shorter start (Ing* for Ingeborg) would find other names.
+function ownStem(name) {
+  const s = (name || '').trim();
+  const related = relatedStem(s);
+  const start = related.slice(0, -1);
+  return related.endsWith('*') && start.length < s.length && start.length >= s.length - 1 ? related : givenStem(s);
+}
+
 // Forms of one given name that DA doesn't treat as variants and whose consonants
 // differ too (so skeleton() in da_match.js doesn't match them): FS has Ingeborg
 // where the church book writes Ingbjør. Lowercase; each group's shared start is its
@@ -463,7 +474,7 @@ function buildQueries(criteria) {
   const emigrated = leavingText(P);
   const gone = (from, to) => (left && from && to && from > to ? t('After {what}.', { what: emigrated }) : '');
   const span = (from, to) => (from || to ? (from || '…') + '–' + (to || '…') : t('any year'));
-  const given = givenStem(P.given);
+  const given = ownStem(P.given);
   const nameText = [given, stem].filter(Boolean).join(' ');
   const byRole = (male, female) => (P.sex === 'Male' ? [male] : P.sex === 'Female' ? [female] : [male, female]);
   const roleText = { brudgom: 'groom', brud: 'bride', far: 'father', mor: 'mother', barn: 'child', konfirmant: 'confirmand', 'avdød': 'deceased',
@@ -675,6 +686,17 @@ function buildQueries(criteria) {
         [as(roles), span(from, to)], { ...(goal ? { goal } : {}), ...(s ? { counts: namesRelative } : {}) });
       if (abroad) q.skip = abroad;
     });
+
+    // Children's burials: DA's burial lists (lt[]=gr) with the person as father or
+    // mother, in the same years and places. Church books often name only the father
+    // of a child they bury, so the person alone first; the couple (each FS spouse's
+    // strictest step) only finds more when that search has too many hits to read.
+    const couples = P.spouses.map((spouse) => relative(spouse, relation, other)).filter(Boolean)
+      .map((s) => (P.sex === 'Female' ? pairSteps(me, s) : pairSteps(s, me))[0]).filter(Boolean)
+      .map(({ then, ...st }) => st);
+    const q = query('childburial', t("Children's burials"), { 'roles[]': roles, 'lt[]': 'gr', ...years(from, to) },
+      [...alone(me), ...couples], levels, [as(roles), span(from, to)]);
+    if (abroad) q.skip = abroad;
   }
 
   // Children's marriages: church books name the couple's fathers (not mothers), so FS
@@ -753,7 +775,7 @@ function buildQueries(criteria) {
   {
     const candidates = [
       P.patronymic && { firstname: given, lastname: searchStem(P.patronymic) },
-      ...P.alternates.map((a) => ({ firstname: givenStem(a.given), lastname: searchStem(a.surname) || stem })),
+      ...P.alternates.map((a) => ({ firstname: ownStem(a.given), lastname: searchStem(a.surname) || stem })),
       ...[P.surname, ...P.alternates.map((a) => a.surname)].flatMap(surnameSpellings).map((lastname) => ({ firstname: given, lastname }))
     ];
     const seen = new Set([given + ' ' + stem]);

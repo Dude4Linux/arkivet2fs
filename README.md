@@ -227,6 +227,7 @@ The extension doesn't run one broad search. It runs one search for each life eve
 - confirmation
 - marriage (one per spouse)
 - the children's baptisms
+- the children's burials
 - censuses
 - emigration
 - moving away
@@ -239,7 +240,7 @@ hits are narrowed to the person's municipalities. Each search is listed with its
 count and an **Open on DA** link to the same search on Digitalarkivet.
 
 The hits are merged, so each record appears once. They're grouped (Baptism,
-Confirmation, Marriage, Children's baptisms, Census, Emigration, Moving, Burial,
+Confirmation, Marriage, Children's baptisms, Children's burials, Census, Emigration, Moving, Burial,
 Other) and ranked by a score. Each hit shows the reasons for its score:
 
 - ✓ matches the FS person: a name, a year, a place, a farm, a relative

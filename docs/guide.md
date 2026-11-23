@@ -45,7 +45,7 @@ Halvor Larsen and Astri Larsdatter, who emigrated to America.
    Arkivet**. The search page opens in a new tab.
 
 The page searches Digitalarkivet for each event of the person's life in turn: the
-baptism, confirmation, marriages, the children's baptisms, censuses, emigration,
+baptism, confirmation, marriages, the children's baptisms and burials, censuses, emigration,
 moving away, burial, and everything under the name. Each search starts in the
 person's own municipalities and widens to the county and then all of Norway only when
 it finds nothing. The hits come in as the searches run.

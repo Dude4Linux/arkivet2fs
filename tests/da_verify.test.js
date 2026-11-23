@@ -20,6 +20,20 @@ const lars = (more = {}) => w.profile(criteria({
   ...more
 }));
 
+test("relativesInRecord(): in a child's burial, the father's child is the deceased", () => {
+  const burial = { recordTypeInfo: { type: 'burial', prefix: 'pg' }, recordDate: '1722-09-26', fields: {}, people: [
+    { name: 'Ole Halvorsen', role: 'avdød', roleEnglish: 'Deceased' },
+    { name: 'Halvor Larsen', role: 'far', roleEnglish: 'Father', current: true }
+  ] };
+  const found = w.relativesInRecord(burial);
+  assert.deepEqual(names(found.child), ['Ole Halvorsen']);
+  const reasons = plain(w.checkRecord(burial, w.profile(criteria({
+    name: [{ givenName: 'Halvor', surname: 'Larsen' }], sex: [{ sex: 'Male' }],
+    child: [{ childGivenName: 'Ole', childBirthYear: '1721' }]
+  }))));
+  assert.ok(reasons.some((r) => r.ok && r.kind === 'child'), 'the FS child in the record');
+});
+
 // Bug: the linker gave age 22 in the 1865 census as about 1843, the search page (DA's
 // hit) 1844: that census was counted on 31 December, and DA counts its ages from 1866
 test('birthYearOf(): a census age gives the year DA calculates on the person\'s own page', () => {

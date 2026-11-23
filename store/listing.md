@@ -78,7 +78,7 @@ Find your Norwegian ancestors in Digitalarkivet and cite them on FamilySearch. A
 
 This extension connects FamilySearch's Family Tree with Digitalarkivet, the National Archives of Norway's online archive of church books, censuses and emigrant protocols. It is an independent, free project, not affiliated with or endorsed by FamilySearch or the National Archives of Norway.
 
-- Search from the tree: on a person's page in FamilySearch, a "Digital Arkivet" entry in Search Records searches Digitalarkivet for their baptism, confirmation, marriages, children's baptisms, censuses, emigration, moves and burial, using their names, years, places, farms and relatives.
+- Search from the tree: on a person's page in FamilySearch, a "Digital Arkivet" entry in Search Records searches Digitalarkivet for their baptism, confirmation, marriages, children's baptisms and burials, censuses, emigration, moves and burial, using their names, years, places, farms and relatives.
 - Ranked hits with reasons: names in their old spellings and patronymics (Pedersdatter, Pedersdtr., Persdatter), farms, years and relatives are scored, with a ✓, ≈ or ✗ for each, and the best hits are checked on their record pages. Records you have attached already are marked.
 - Review before anything is saved: "Review & Attach" opens the record with a source ready to edit: the title, an Evidence Explained-style citation, and notes with the record's details. The record's people are paired with your tree persons, and each person's facts are shown beside the record's, as FamilySearch's Source Linker does.
 - See what FamilySearch has: whether the source is already in your SourceBox, who it is attached to, and which of its fields differ.

@@ -8,11 +8,11 @@
 
 // How many hits of each group are checked, best first (more of the children's
 // baptisms, each a different child), and the lowest score checked
-const CHECK_PER_GROUP = { "Children's baptisms": 12, "Children's marriages": 6 };
+const CHECK_PER_GROUP = { "Children's baptisms": 12, "Children's burials": 6, "Children's marriages": 6 };
 const CHECK_DEFAULT = 3;
 const CHECK_MIN_SCORE = 0;
 // Groups whose records name the person's relatives (or, emigration, the destination)
-const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial'];
+const CHECKED_GROUPS = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's burials", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial'];
 
 // Kinds of role, from DA's role or census family position, in Norwegian or English.
 // A word ends where no letter follows (`(?!\p{L})`, not \b, which takes ø for a
@@ -94,7 +94,8 @@ function relativesInRecord(record) {
       if (theirs === 'mother') found.mother.push(other);
     } else if (mine === 'father' || mine === 'mother') {
       if (theirs === 'father' || theirs === 'mother') found.spouse.push(other);
-      if (theirs === 'child') found.child.push(other);
+      // (a child's burial: the deceased is the child)
+      if (theirs === 'child' || theirs === 'deceased') found.child.push(other);
     } else if (mine === 'groom' || mine === 'bride') {
       if (theirs === 'groom' || theirs === 'bride') found.spouse.push(other);
       // The church book names the couple's fathers: the groom's and the bride's

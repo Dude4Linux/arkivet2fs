@@ -14,8 +14,14 @@ fixes, new features, changes that break what users have).
 - **Royal resolutions (Danske kanselli):** a letter's title and source date no longer
   hold the letter's permanent ID ("Type of letter, oc…"). They now name it a letter and
   give the record's year, and "Hele Norge" (all of Norway) is not used as a county.
-- **Boje written Boj:** a search with Boje (or Boye, Boie) as a parent or spouse now
-  finds the records that write him "Boj".
+- **Boje written Boj:** a search for Boje (or Boye, Boie), or with him as a parent or
+  spouse, now finds the records that write him "Boj".
+- **Children's baptisms in birth order:** the baptisms that name a child you have in
+  FamilySearch come first, eldest first, even when one scores lower (a first child's
+  baptism that names no mother).
+- **Children's burials:** a new search, and a group of its own, for the burials of
+  the person's children, which church books often record under the father's name
+  alone. Before, they turned up only under "All records under the name", if at all.
 - **"ektemann"** (the husband, in a church book's churching list) is "Husband" in the
   notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,

@@ -27,6 +27,7 @@ function i18nTable() {
     "Children's baptisms": ['Barnedåper', 'Barnedåpar'],
     "Children's baptisms with {name}": ['Barnedåper med {name}', 'Barnedåpar med {name}'],
     "Children's marriages": ['Barnas vielser', 'Vigslane til borna'],
+    "Children's burials": ['Barnas begravelser', 'Gravferdene til borna'],
     'Records at farms': ['Oppføringer på gårder', 'Oppføringar på gardar'],
     'All records under the name': ['Alle oppføringer under navnet', 'Alle oppføringar under namnet'],
 

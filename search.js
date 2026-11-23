@@ -52,7 +52,7 @@ const param = (field, k) => 'q.' + field.name + suffix(k);
 // id up to the first '-' (baptism-place is a baptism)
 const KINDS = [
   ['baptism', 'Baptism'], ['confirmation', 'Confirmation'], ['marriage', 'Marriage'],
-  ['children', "Children's baptisms"], ['childmarriage', "Children's marriages"], ['census', 'Census'], ['emigration', 'Emigration'],
+  ['children', "Children's baptisms"], ['childburial', "Children's burials"], ['childmarriage', "Children's marriages"], ['census', 'Census'], ['emigration', 'Emigration'],
   ['moving', 'Moving away'], ['burial', 'Burial'], ['farm', 'Records at farms'], ['other', 'All records under the name']
 ];
 

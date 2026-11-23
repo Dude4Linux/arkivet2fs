@@ -20,6 +20,46 @@ function scored(name) {
 }
 const reason = (hit, re) => hit.reasons.find((r) => re.test(r.text));
 
+test("groupHits(): a burial with the person as father is a child's, and its year isn't a child's birth", () => {
+  const father = w.profile(criteria({
+    name: [{ givenName: 'Halvor', surname: 'Larsen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1690', 'birthLikeDate.to': '1692' }],
+    child: [{ childGivenName: 'Ole', childBirthYear: '1722' }]
+  }));
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, [
+    { id: 'pg99000000000971', name: 'Halvor Larsen', role: 'Father', type: 'Burial', date: '1722-09-26', source: '' },
+    { id: 'pd99000000000972', name: 'Halvor Larsen', role: 'Father', type: 'Baptism', date: '1722-03-16', source: '' }
+  ]);
+  const groups = plain(w.groupHits(merged, father));
+  const burials = groups.find((g) => g.title === "Children's burials");
+  assert.deepEqual(burials.hits.map((h) => h.id), ['pg99000000000971']);
+  assert.ok(!burials.hits[0].reasons.some((r) => /child Ole/.test(r.text)), 'no child of the burial year');
+  const baptism = groups.find((g) => g.title === "Children's baptisms").hits[0];
+  assert.ok(baptism.reasons.some((r) => /child Ole/.test(r.text)), 'the baptism has it');
+});
+
+test("groupHits(): children's baptisms that name an FS child come in birth order, the rest after by score", () => {
+  // Bug (a report): the first child's baptism names no mother ("!!"), so it scored
+  // lower and was listed after all the younger children's
+  const father = w.profile(criteria({
+    name: [{ givenName: 'Halvor', surname: 'Larsen' }], sex: [{ sex: 'Male' }],
+    child: [{ childGivenName: 'Ole', childBirthYear: '1718' }, { childGivenName: 'Marit', childBirthYear: '1720' }]
+  }));
+  const child = (points) => [{ points, text: 'child in the record', ok: true, checked: true, kind: 'child' }];
+  const hits = [
+    { id: 'pd99000000000961', date: '1720-05-13', checks: [...child(2), { points: 5, text: 'spouse in the record', ok: true, checked: true }] },
+    { id: 'pd99000000000962', date: '1718-03-11', checks: child(2) },
+    { id: 'pd99000000000963', date: '1719-01-02', checks: [{ points: 9, text: 'spouse in the record', ok: true, checked: true }] },
+    { id: 'pd99000000000964', date: '1717-06-01', checks: [] }
+  ];
+  const merged = new Map();
+  w.mergeHits(merged, { reasons: [] }, hits.map((h) => ({ name: 'Halvor Larsen', role: 'Father', type: 'Baptism', source: '', ...h })));
+  for (const hit of merged.values()) hit.checks = hits.find((h) => h.id === hit.id).checks;
+  const group = plain(w.groupHits(merged, father)).find((g) => g.title === "Children's baptisms");
+  assert.deepEqual(group.hits.map((h) => h.id), ['pd99000000000962', 'pd99000000000961', 'pd99000000000963', 'pd99000000000964']);
+});
+
 test('scoreHit(): another given name is a variant only when the search asked for the given name (bug: a mother found by surname and husband scored as the person)', () => {
   const astri = w.profile(criteria({
     name: [{ givenName: 'Astri', surname: 'Johansdatter' }], sex: [{ sex: 'Female' }],

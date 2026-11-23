@@ -71,6 +71,21 @@ const nils = (wife = 'Johansdr') => criteria({
 });
 const children = (c) => w.buildQueries(c).find((q) => q.kind === 'children');
 
+// A report: a child's burial naming only the father was found only under "All
+// records", if at all; DA's burial lists (lt[]=gr) with the person as father find them
+test("buildQueries(): children's burials, the person as parent alone first, then with the spouse", () => {
+  const queries = w.buildQueries(nils());
+  const q = queries.find((x) => x.kind === 'childburial');
+  const baptisms = children(nils());
+  assert.equal(q.base.get('lt[]'), 'gr');
+  assert.deepEqual(plain(q.base.getAll('roles[]')), ['far']);
+  for (const key of ['event_year_from', 'event_year_to']) assert.equal(q.base.get(key), baptisms.base.get(key), key);
+  assert.equal(q.steps[0].fields.related_first_name, undefined);
+  assert.equal(q.steps[0].fields.firstname, 'Nils');
+  assert.ok(q.steps[1].fields.related_first_name, 'then the couple');
+  assert.equal(q.steps.length, 2);
+});
+
 test("buildQueries(): children's baptisms find the mother under every spelling of Johansdr", () => {
   const q = children(nils());
   assert.equal(q.steps[0].text, 'Nils Ols* + mother Gunhild Johan*');
@@ -240,6 +255,23 @@ test("relatedStem() is the shared start of a name's forms", () => {
   for (const name of ['Boj', 'Boye', 'Boie']) assert.equal(w.nameMatch(name, 'Boje'), true, name);
 });
 
+test("ownStem(): the person's own given name by its forms' start only when that is nearly the whole name", () => {
+  // Bug (a report): FS's Boye was searched as "Boye", which misses the church book's
+  // "Boj Jensøn" (a child's burial); Boj* finds Boje, Boie, Boye and Boj
+  for (const name of ['Boye', 'Boie', 'Boje']) assert.equal(w.ownStem(name), 'Boj*', name);
+  assert.equal(w.ownStem('Knut'), 'Knu*');
+  // a start that cuts more would find other names; otherwise givenStem()
+  assert.equal(w.ownStem('Ingeborg'), 'Ingeborg');
+  assert.equal(w.ownStem('Eli'), 'Eli');
+  assert.equal(w.ownStem('Anna'), 'Ann*');
+  assert.equal(w.ownStem('Ole'), 'Ole');
+  const q = w.buildQueries(criteria({
+    name: [{ givenName: 'Boye', surname: 'Jensen' }], sex: [{ sex: 'Male' }],
+    birth: [{ 'birthLikeDate.from': '1688', 'birthLikeDate.to': '1692' }]
+  })).find((x) => x.kind === 'other');
+  assert.equal(q.steps[0].text, 'Boj* Jens*');
+});
+
 test('patronymics: recognized, and their base', () => {
   assert.equal(w.isPatronymic('Larsdatter'), true);
   assert.equal(w.isPatronymic('Halvorsen'), true);
@@ -295,7 +327,7 @@ test('profile(): no birth, so one estimated from the marriage and children', () 
 
 test('buildQueries(): one query per life event, in order', () => {
   assert.deepEqual(plain(w.buildQueries(lars()).map((q) => q.kind)),
-    ['baptism', 'confirmation', 'marriage', 'children', 'childmarriage', 'census', 'emigration', 'moving', 'burial', 'other']);
+    ['baptism', 'confirmation', 'marriage', 'children', 'childburial', 'childmarriage', 'census', 'emigration', 'moving', 'burial', 'other']);
 });
 
 test('buildQueries(): what can only be found after emigrating is skipped, with the reason', () => {

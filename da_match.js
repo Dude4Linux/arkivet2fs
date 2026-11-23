@@ -4,7 +4,7 @@
 // placeAliases() from da_places.js.
 
 // The groups, in the order they're shown
-const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial', 'Other'];
+const GROUP_ORDER = ['Baptism', 'Confirmation', 'Marriage', "Children's baptisms", "Children's burials", "Children's marriages", 'Census', 'Emigration', 'Moving', 'Burial', 'Other'];
 
 // The youngest a person can be in a role; younger means a namesake
 const MIN_AGE = { Groom: 16, Bride: 16, Father: 16, Mother: 15, Godparent: 12, Confirmand: 12, Witness: 16, "Groom's father": 34, "Bride's father": 34 };
@@ -18,7 +18,7 @@ function groupOf(hit) {
     case 'Confirmation': return hit.role === 'Confirmand' ? 'Confirmation' : 'Other';
     case 'Marriage': return hit.role === 'Groom' || hit.role === 'Bride' ? 'Marriage'
       : hit.role === "Groom's father" || hit.role === "Bride's father" ? "Children's marriages" : 'Other';
-    case 'Burial': return hit.role === 'Deceased' ? 'Burial' : 'Other';
+    case 'Burial': return hit.role === 'Deceased' ? 'Burial' : hit.role === 'Father' || hit.role === 'Mother' ? "Children's burials" : 'Other';
     case 'Census': return 'Census';
     case 'Emigration': return 'Emigration';
     case 'Out-migration': case 'In-migration': return 'Moving';
@@ -344,7 +344,8 @@ function scoreHit(hit, P) {
       add(-4, t('{role} at about {age}', { role: t(hit.role).toLowerCase(), age: Math.max(0, event - Math.round((P.birth.from + P.birth.to) / 2)) }), false);
     }
 
-    if (hit.role === 'Father' || hit.role === 'Mother') {
+    // (a baptism's year is the child's birth; a burial's says nothing of it)
+    if ((hit.role === 'Father' || hit.role === 'Mother') && hit.type !== 'Burial') {
       const child = P.children.find((c) => c.year && Math.abs(c.year - event) <= 1);
       if (child) add(2, t('child') + ' ' + [child.given, t('b.') + ' ' + child.year].filter(Boolean).join(' '), true);
     }
@@ -406,8 +407,13 @@ function groupHits(merged, P) {
     groups.get(groupOf(hit)).push({ ...hit, ...scoreHit(hit, P) });
   }
   const order = (a, b) => b.score - a.score || (dateKey(a) - dateKey(b) || 0);
+  // In children's baptisms, the records that name an FS child (checkRecord()'s ✓ child
+  // in the record) come first in birth order, the family's children as FS has them:
+  // a baptism that names no mother ("!!") scores lower, but isn't a lesser child
+  const named = (h) => h.score > 0 && (h.checks || []).some((r) => r.ok && r.kind === 'child');
+  const childOrder = (a, b) => (named(b) - named(a)) || (named(a) ? dateKey(a) - dateKey(b) || b.score - a.score : order(a, b));
   return [...groups].filter(([, hits]) => hits.length)
-    .map(([title, hits]) => ({ title, hits: hits.sort(order) }));
+    .map(([title, hits]) => ({ title, hits: hits.sort(title === "Children's baptisms" ? childOrder : order) }));
 }
 
 // --- One event in two church books ---------------------------------------------------
