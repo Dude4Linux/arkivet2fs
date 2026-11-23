@@ -56,6 +56,14 @@ fixes, new features, changes that break what users have).
   patronymic counts against. A mother or wife of another given name that only starts
   the same (Maria, Mari or Marie for Marte) no longer counts as close to her, so other
   men's children's baptisms aren't listed among the person's.
+- **A changed birth date saved as the old one:** when the linker changed a date
+  FamilySearch has (a birth year that is wrong there), FamilySearch's list of dates
+  could still show the old date, and the linker picked it, saved the fact unchanged,
+  and logged it as done. It now picks only the date the record gives, and if
+  FamilySearch shows another year after saving, the log says so instead.
+- **"Continue without explaining your changes?":** FamilySearch asks this when a fact
+  is changed with the reason it has already (one an earlier run saved), and the
+  linker stopped there until you clicked Yes. It now answers Yes itself.
 
 ## 1.8.2 - 2026-11-21
 

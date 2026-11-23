@@ -550,6 +550,19 @@ if (!window.__arkivet2fsAttach) {
     return (year && named.find(holds)) || named[0];
   }
 
+  // A date of FS's list that is the typed one: the same year, and the same day and
+  // month where the typed one gives them ("15 October 1850", "15 OCT 1850")
+  function sameDay(text, typed) {
+    const parts = (t) => {
+      const s = String(t || '').toLowerCase();
+      return { year: (s.match(/\b(\d{3,4})\b/) || [])[1], day: (s.match(/(?:^|\s)(\d{1,2})(?=\s)/) || [])[1], month: (s.match(/\b([a-z]{3})[a-z]*\b/) || [])[1] };
+    };
+    const a = parts(text), b = parts(typed);
+    if (!b.year || a.year !== b.year) return false;
+    if (b.day && Number(a.day) !== Number(b.day)) return false;
+    return !b.month || a.month === b.month;
+  }
+
   // Polls of 100 ms, counted (not timed), so the tests' fast timers run them at once
   async function settledOptions(options, first) {
     const texts = (list) => list.map((o) => clean(o.textContent)).join('\n');
@@ -588,10 +601,27 @@ if (!window.__arkivet2fsAttach) {
     // place, 2026-11-09: FS's answer for the typed place came 100 ms later): the list
     // once it changes and holds still, or as first shown when it doesn't change
     found = await settledOptions(options, found);
+    // A date is only picked from a list for that date: the list still shown for the old
+    // value ("15 October 1849" for 1850, FS slow to answer) is waited out, and with no
+    // date that agrees the text stays as typed
+    const asTyped = (o) => clean(o.textContent).toLowerCase() === clean(value).toLowerCase();
+    if (name === 'date') {
+      // FS's forms of the date, not the entry of the text as typed
+      const agree = (list) => list.filter((o) => !asTyped(o) && sameDay(clean(o.textContent), value));
+      let dates = agree(found);
+      if (!dates.length) {
+        try { dates = await waitFor(() => { const o = agree(options()); return o.length ? o : null; }, 'the date', 5000); } catch (e) { dates = []; }
+      }
+      if (!dates.length) {
+        const own = options().find(asTyped);
+        if (own) { own.click(); await sleep(300); }
+        return { name, value: input.value, picked: '' };
+      }
+      found = dates;
+    }
     if (!found.length) return { name, value, picked: '' };
     const option = pickSuggestion(found, value, year);
     // The text as typed is not a standard form
-    const asTyped = (o) => clean(o.textContent).toLowerCase() === clean(value).toLowerCase();
     const picked = option && !asTyped(option) ? clean(option.textContent) : '';
     if (keep) {
       // FS's own entry for the text as typed, its first, chosen (a value only typed in
@@ -894,6 +924,18 @@ if (!window.__arkivet2fsAttach) {
     }
   }
 
+  // The Yes of FS's question whether to save without explaining the changes, only that
+  // question's (its box: the nearest ancestor holding the question)
+  function noReasonYes() {
+    for (const button of document.querySelectorAll('button, [role="button"]')) {
+      if (!/^yes$/i.test(clean(button.textContent))) continue;
+      for (let box = button.parentElement, k = 0; box && k < 8; box = box.parentElement, k++) {
+        if (/without explaining your changes/i.test(box.textContent || '')) return button;
+      }
+    }
+    return null;
+  }
+
   // Out of the form, and the fact's view (after an edit) closed
   async function closeFactDialog() {
     const d = conclusionDialog();
@@ -956,21 +998,37 @@ if (!window.__arkivet2fsAttach) {
       throw new Error('FamilySearch did not take the ' + factName(type) + (why ? ': ' + why : '.'));
     }
     submit.click();
-    // Saved: the form closes (an edit's back to its view, closed then); still open: FS's message
+    // Saved: the form closes (an edit's back to its view, closed then); still open: FS's message.
+    // FS asks "Are you sure that you want to continue without explaining your changes?"
+    // when the reason is the one the fact has (saved by an earlier run): Yes
     try {
-      await waitFor(() => !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog()), 'the form to close', 20000);
+      await waitFor(() => {
+        const yes = noReasonYes();
+        if (yes) { yes.click(); return null; }
+        return !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog());
+      }, 'the form to close', 20000);
     } catch (error) {
       const why = problem();
       await closeFactDialog();
       throw new Error('FamilySearch did not save the ' + factName(type) + (why ? ': ' + why : '.'));
     }
     await closeFactDialog();
-    // The fact as FS shows it now: the one not there before (an edit: the only one)
+    // The fact as FS shows it now: the one not there before (an edit: the only one, once
+    // it holds the date's year)
+    const date = addition.action !== 'name' && (addition.value || {}).date;
+    const year = yearIn(date);
+    const holds = (el) => !year || yearIn(clean((el.querySelector('[data-testid="conclusion-date"]') || el).textContent)) === year;
     let shown = '';
     try {
-      const el = await waitFor(() => (addition.action === 'edit' ? displays(type)[0] : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
+      const el = await waitFor(() => (addition.action === 'edit' ? displays(type).find(holds) : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
       shown = clean(el.textContent);
-    } catch (e) { /* saved, not seen yet */ }
+    } catch (e) {
+      // Saved, but FS shows another year: FS's list gave it another date
+      const now = addition.action === 'edit' && displays(type)[0];
+      if (now && !holds(now)) {
+        throw new Error('FamilySearch saved the ' + factName(type) + ' as "' + clean(now.textContent) + '", not ' + date + '. Change it by hand.');
+      }
+    }
     return { ok: true, fields, shown };
   }
 

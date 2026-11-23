@@ -706,7 +706,7 @@ test('findPerson(): only a PID goes into the page check', async () => {
 // Close does), as FS has it. `late`: FS's list for the typed text comes 100 ms after
 // the list for the field's old value (with the text as typed first).
 const FACT_LISTS = {
-  'Vågå, Oppland, Norway': FS_LISTS['Vågå'], '23 August 1846': [['23 August 1846']], '1846': [['1846']],
+  'Vågå, Oppland, Norway': FS_LISTS['Vågå'], '23 August 1846': [['23 August 1846']], '1846': [['1846']], '23 August 1847': [['23 August 1847']],
   // As FS lists a farm it doesn't know: the municipality, and farms of a like name elsewhere
   'Bakken nedre, Vågå, Oppland, Norway': [['Vågå, Oppland, Norway', 'Municipality, 1781 - 2019'], ['Bakken, Oppland, Norway', 'Populated Place,'],
     ['Bakkom, Gausdal, Kristians, Norway', 'Farm, 1781 - 1879</div><div>Alternate Name: Bakken']],
@@ -719,7 +719,7 @@ const FACT_LISTS = {
 
 // `saveOff`: Save off while the date and place are what the form opened with (FS's
 // edit form, 2026-11-09); `stuck`: Save does nothing
-function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, saveOff = false, stuck = false } = {}) {
+function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, saveOff = false, stuck = false, savedAs = null, sameReason = false } = {}) {
   const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-LAR',
     '<div id="vitals"><div data-testid="conclusionDisplay:BIRTH"><div data-testid="conclusion-body"><span data-testid="conclusion-date">1846</span> ' +
     '<span data-testid="conclusion-place">Norway</span></div><button data-testid="pencil-edit-button">Edit</button></div>' +
@@ -765,7 +765,8 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
         if (late) {
           // The old value's places (a church in Lom) under the text as typed, at first
           show(typed, old ? (FACT_LISTS[old] || [['Lom stavkirke, Lom, Oppland, Norway', 'Place of Worship, 1158 - Present']]) : []);
-          w.setTimeout(() => show(typed, FACT_LISTS[typed] || []), 100);
+          // `late` a number: FS's list for the typed text that much later (Infinity: never)
+          if (late !== Infinity) w.setTimeout(() => show(typed, FACT_LISTS[typed] || []), late === true ? 100 : late);
         } else show(typed, FACT_LISTS[typed] || []);
         old = typed;
         dirty();
@@ -783,9 +784,23 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
       if (onCancel) onCancel();
     });
     if (direct) box.querySelector('[aria-label="Close"]').addEventListener('click', () => { log.push('close ' + type); box.remove(); });
+    let asked = false;
     submit.addEventListener('click', () => {
       if (stuck || submit.disabled) return;
-      const v = values();
+      // `sameReason`: FS asks first, as for a reason the fact has already; Yes saves
+      if (sameReason && !asked) {
+        asked = true;
+        const ask = d.createElement('div');
+        ask.setAttribute('role', 'dialog');
+        ask.innerHTML = '<div><p>Are you sure that you want to continue without explaining your changes?</p><div><button>No</button><button>Yes</button></div></div>';
+        const [no, yes] = ask.querySelectorAll('button');
+        no.addEventListener('click', () => { log.push('no'); ask.remove(); });
+        yes.addEventListener('click', () => { log.push('yes'); ask.remove(); submit.click(); });
+        d.body.append(ask);
+        return;
+      }
+      // `savedAs`: FS saves another date than the form's (as it did one its list still had)
+      const v = { ...values(), ...(savedAs ? { date: savedAs } : {}) };
       saved.push({ type, ...v });
       box.remove();
       onSave(v);
@@ -1108,6 +1123,40 @@ test('addFact(), tagFact(): a fact\'s view left open is closed first, not waited
   const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'CHRISTENING', match: ['1846'], sourceId: 'TEST-S01' });
   assert.equal(answer.ok, true, answer.error);
   assert.deepEqual(plain(tagged.map((t) => t.type)), ['CHRISTENING']);
+});
+
+test('addFact(): a date is picked only from FS\'s list for that date, not the old date\'s list still shown', async () => {
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1847' } };
+  // FS's list for the new date comes after the list has held still for a while
+  const slow = factPage({ late: 3000 });
+  const answer = await slow.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(slow.saved[0].date, '23 August 1847');
+  assert.match(answer.shown, /23 August 1847/);
+  // No list for the new date at all: the date as typed, never the old one
+  const none = factPage({ late: Infinity });
+  const typed = await none.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(typed.ok, true, typed.error);
+  assert.equal(none.saved[0].date, '23 August 1847');
+});
+
+test('addFact(): FS\'s question whether to save without explaining the changes is answered Yes', async () => {
+  const page = factPage({ sameReason: true });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1846' } };
+  const answer = await page.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(page.saved[0].date, '23 August 1846');
+  assert.ok(page.log.includes('yes') && !page.log.includes('no'));
+  assert.equal(page.w.document.querySelector('[role="dialog"]'), null);
+});
+
+test('addFact(): a change FS saved with another year is an error, not reported as done', async () => {
+  const page = factPage({ savedAs: '1846' });
+  const birth = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '23 August 1847' } };
+  const answer = await page.step('addFact', { pid: 'TEST-LAR', addition: birth, reason: REASON, save: true });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /^FamilySearch saved the birth as ".*1846.*", not 23 August 1847\. Change it by hand\.$/);
+  assert.ok(!answer.unsaved);
 });
 
 test('addFact(): FS\'s standard place is read from its list for the typed text, not the list still shown for the old value', async () => {

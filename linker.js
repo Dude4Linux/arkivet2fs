@@ -2360,6 +2360,9 @@ function fsMessage(text) {
     return m[2] === undefined ? t('FamilySearch did not save the {fact}.', { fact: fact(m[1]) })
       : t('FamilySearch did not save the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
   }
+  if ((m = text.match(/^FamilySearch saved the ([a-z ]+) as "(.*)", not (.*)\. Change it by hand\.$/s))) {
+    return t('FamilySearch saved the {fact} as "{shown}", not {value}. Change it by hand.', { fact: fact(m[1]), shown: m[2], value: m[3] });
+  }
   if ((m = text.match(/^FamilySearch did not take the ([a-z ]+)(?:\.|: (.*))$/s))) {
     return m[2] === undefined ? t('FamilySearch did not take the {fact}.', { fact: fact(m[1]) })
       : t('FamilySearch did not take the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
