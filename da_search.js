@@ -152,7 +152,10 @@ const GIVEN_NAME_FORMS = [
   ['ragnhild', 'ragnild', 'rangdi', 'ragni'],
   ['engebret', 'engebrigt', 'ingebret', 'ingebrigt'],
   ['eli', 'elin'],
-  ['leiv', 'leif', 'lev']
+  ['leiv', 'leif', 'lev'],
+  // Boj is how a church book can write Boje, which DA doesn't link (Boie and Boye it
+  // does, and nameKey() reads them as boje): searched by Boj*, a father "Boj Jensøn"
+  ['boje', 'boj']
 ];
 
 // Dialect forms that start differently (Imbjør for Ingebjørg, as in Gudbrandsdalen):
@@ -160,10 +163,12 @@ const GIVEN_NAME_FORMS = [
 // (relatedStem()), which they would cut to one letter
 const GIVEN_NAME_DIALECT = { imbjør: 'ingeborg', imbjor: 'ingeborg', imbjørg: 'ingeborg' };
 
-// A given name as GIVEN_NAME_FORMS lists it: lowercase, and an old final j or y for
-// i (Sirj, Siry → siri), so a group needn't list those spellings
+// A given name as GIVEN_NAME_FORMS lists it: lowercase, an old final j or y for i
+// (Sirj, Siry → siri), and a y or i between two vowels for j (Boye, Boie → boje), as
+// skeleton() reads them, so a group needn't list those spellings
 function nameKey(name) {
-  return (name || '').toLowerCase().replace(/[.,*]/g, '').trim().replace(/(?<=[^aeiouyæøå])[jy]$/, 'i');
+  return (name || '').toLowerCase().replace(/[.,*]/g, '').trim().replace(/(?<=[^aeiouyæøå])[jy]$/, 'i')
+    .replace(/(?<=[aeiouyæøå])[iy](?=[aeiouyæøå])/g, 'j');
 }
 
 // The forms of a given name (its group and the group's dialect forms, or just the

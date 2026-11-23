@@ -234,6 +234,10 @@ test("relatedStem() is the shared start of a name's forms", () => {
   assert.equal(w.relatedStem('Ingbjør'), 'Ing*');
   const forms = plain(w.nameForms('Ingeborg'));
   for (const form of ['ingeborg', 'ingebjørg', 'ingbjør']) assert.ok(forms.includes(form), form);
+  // DA doesn't link Boj to Boje (a father "Boj Jensøn"), but Boj* finds Boje, Boie and
+  // Boye too: every spelling of the name is searched by it
+  for (const name of ['Boje', 'Boye', 'Boie', 'Boj']) assert.equal(w.relatedStem(name), 'Boj*', name);
+  for (const name of ['Boj', 'Boye', 'Boie']) assert.equal(w.nameMatch(name, 'Boje'), true, name);
 });
 
 test('patronymics: recognized, and their base', () => {

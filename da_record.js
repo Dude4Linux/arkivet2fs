@@ -225,6 +225,7 @@ function extractRecord(document, pageUrl) {
       'fadder': 'Godparent',
       'brudgom': 'Groom',
       'brur': 'Bride', 'brud': 'Bride',
+      'ektemann': 'Husband', 'ektemand': 'Husband',
       'brudgommens far': "Groom's Father",
       'bruras far': "Bride's Father",
       'brudgommens mor': "Groom's Mother",

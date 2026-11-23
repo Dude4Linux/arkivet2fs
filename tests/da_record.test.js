@@ -290,3 +290,14 @@ test('a royal resolution\'s letter: the header names the letter it belongs to, n
   assert.doesNotMatch(r.citation + r.title, /oc99/);
   assert.deepEqual(people(r), ['Eiulf Mikkelsen (Groom)', 'Alhild Engvik (Bride)']);
 });
+
+// The book's churching list ("Introduced women", py) names the woman's husband
+// "ektemann"; it stayed Norwegian in the notes
+test('the role ektemann is Husband', () => {
+  const file = 'da/letter-1712.html';
+  const doc = fixtureDoc(w, file);
+  for (const div of doc.querySelectorAll('.ssp-semibold')) if (div.textContent.trim() === 'brudgom') div.textContent = 'ektemann';
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.equal(r.people[0].roleEnglish, 'Husband');
+  assert.match(r.notes, /^Role: Husband$/m);
+});

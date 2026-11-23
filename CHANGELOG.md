@@ -14,6 +14,10 @@ fixes, new features, changes that break what users have).
 - **Royal resolutions (Danske kanselli):** a letter's title and source date no longer
   hold the letter's permanent ID ("Type of letter, oc…"). They now name it a letter and
   give the record's year, and "Hele Norge" (all of Norway) is not used as a county.
+- **Boje written Boj:** a search with Boje (or Boye, Boie) as a parent or spouse now
+  finds the records that write him "Boj".
+- **"ektemann"** (the husband, in a church book's churching list) is "Husband" in the
+  notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,
   and the notes give "[betrothed]" after it.
 
