@@ -363,6 +363,30 @@ function scoreHit(hit, P) {
       placeMatches++;
     }
   }
+  // Distance, when the hit names no FS place: how far its municipality (hitPlace())
+  // lies from the nearest known one (P.anchors: the FS places', and the search page's
+  // records found of the person). The same municipality +2, under 25 km ≈ +1, up to
+  // 100 km 0, up to 300 km ✗ -1, further ✗ -2 (another end of the country). A record
+  // is not its own anchor.
+  if (!placeMatches && P.anchors && P.anchors.length) {
+    const code = hitPlace(hit);
+    let best = null;
+    for (const a of code ? P.anchors : []) {
+      if (a.id && (a.id === hit.id || (hit.parallel && a.id === hit.parallel.id))) continue;
+      const d = municipalityDistance(code, a.code);
+      if (d !== null && (!best || d < best.d)) best = { d, a };
+    }
+    if (best) {
+      const place = municipalityName(code);
+      const km = Math.round(best.d);
+      const text = t('{place}, {km} km from {anchor}', { place, km, anchor: best.a.label });
+      if (best.a.code === code) add(2, t('in {places}', { places: place }), true);
+      else if (km < 25) add(1, text, null);
+      else if (km <= 100) add(0, text, null);
+      else add(km <= 300 ? -1 : -2, text, false);
+    }
+  }
+
   // Farms: in the residence, the birthplace, or the name itself, also spelled with the
   // same consonants (Hægbostad, Hæggebostad for Hægebostad)
   const farmText = [hit.name, hit.born, hit.domicile].join(' ');
@@ -425,6 +449,27 @@ function groupHits(merged, P) {
 // event in a source (twins: the father's row in two baptisms of one day), only the
 // checked records' principals (`hit.record`, the baptized child's name) tell which go
 // together; until then they stay apart.
+
+// The municipality a hit (or a record read) is from, a DA code with a place in
+// DA_COORDS, '' for none: the code in a church book's or census's source title
+// ("… 1842-1856 (0515P)", "1801 census for 1029P Audnedal", "1891 census for 0515
+// Vågå"), else the place it names ("1865 census for Vågå", "Church book from Vågå
+// parish"); an emigration's source is the port's police, so there the emigrant's
+// residence, else the birthplace ("1845, Aurland")
+function hitPlace(hit) {
+  const source = String(hit.source || '');
+  const code = (source.match(/\((\d{4})[A-Z]\w*\)\s*$/) || source.match(/\bcensus for (\d{4})[A-Z]?\b/) || [])[1];
+  if (code && DA_COORDS[code]) return code;
+  const named = source.match(/\bcensus for (?:\d{4}[A-Z]?\s+)?([^,(]+)/) || source.match(/^Church book from (.+?) parish\b/);
+  const fromName = named && municipalityOf(named[1].trim());
+  if (fromName) return fromName;
+  if (hit.type !== 'Emigration') return '';
+  for (const text of [hit.domicile, String(hit.born || '').replace(/^[\d*]+,?\s*/, '')]) {
+    const found = municipalityOf(asInSource(String(text || '').split(/[:,]/)[0]).replace(/\*/g, '').trim());
+    if (found) return found;
+  }
+  return '';
+}
 
 // The parish code a church book's source title ends with: "… 1842-1851 (1001P)"
 function parishCode(source) {

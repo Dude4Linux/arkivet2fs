@@ -39,6 +39,13 @@ fixes, new features, changes that break what users have).
   namesake elsewhere could end the search (an 1801 census entry under a family name
   was never looked for). The alternate names and other spellings are now searched in
   the person's places first.
+- **Hits weighed by distance:** a hit that names none of the person's places is now
+  scored by how far its parish lies from the nearest place known to be theirs: the
+  places in FamilySearch, the records you have attached to them with the linker, and
+  the records whose page names their parents or spouse. A neighbouring parish counts a
+  little in its favour ("Heidal, 19 km from Vågå"), one 100 km away a little against,
+  and the other end of the country more, so the person's own records rise above a
+  namesake's far away when the search had to look in all of Norway.
 - **"ektemann"** (the husband, in a church book's churching list) is "Husband" in the
   notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,

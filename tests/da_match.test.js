@@ -409,3 +409,47 @@ test('asInSource(): a value without struck-out words and the transcriber\'s note
   assert.deepEqual([...w.readingsOf('Even@Sven')], ['Even', 'Sven']);
   assert.deepEqual([...w.readingsOf('Ole')], ['Ole']);
 });
+
+test('hitPlace(): the municipality a hit is from: the source\'s code or name; an emigrant\'s residence, else birthplace', () => {
+  assert.equal(w.hitPlace({ type: 'Baptism', source: 'Church book from Lom parish, Skjåk local parish 1726-1783 (0514Q)' }), '0514');
+  assert.equal(w.hitPlace({ type: 'Census', source: '1801 census for 1029P Audnedal' }), '1029');
+  assert.equal(w.hitPlace({ type: 'Census', source: '1891 census for 0515 Vågå' }), '0515');
+  assert.equal(w.hitPlace({ type: 'Census', source: '1865 census for Vågå', domicile: 'Vaage: Toftum' }), '0515');
+  assert.equal(w.hitPlace({ type: 'Baptism', source: 'Church book from Vågå parish' }), '0515');
+  // an emigrant protocol is the port's: the residence, else the birthplace
+  assert.equal(w.hitPlace({ type: 'Emigration', source: 'Bergen politikammer, Reisekontroll, Emigrasjon, no. 242', domicile: 'Bykle', born: '1851' }), '0941');
+  assert.equal(w.hitPlace({ type: 'Emigration', source: "Ships' lists for Bergen-Quebec (Canada) 1865-1873", domicile: '', born: '1844, Hemsedal' }), '0618');
+  assert.equal(w.hitPlace({ type: 'Emigration', source: 'Oslo police district, Mobility control, Emigrant protocols, no. 20', domicile: 'Amerika', born: '1843*' }), '');
+  // other records' residences are farms: not looked up
+  assert.equal(w.hitPlace({ type: 'Probate', source: 'Probate court records', domicile: 'Bykle' }), '');
+});
+
+test('scoreHit(): a hit naming no FS place is weighed by its distance from the nearest known municipality', () => {
+  const person = w.profile(criteria({
+    name: [{ givenName: 'Lars', surname: 'Halvorsen' }],
+    birth: [{ 'birthLikeDate.from': '1845', 'birthLikeDate.to': '1847', birthLikePlace: 'Vågå, Oppland, Norway' }]
+  }));
+  assert.deepEqual(plain(person.anchors), [{ code: '0515', label: 'Vågå' }]);
+  const hit = (source) => ({ id: 'pf99000000000931', name: 'Lars Halvorsen', role: 'Head', type: 'Census', date: '1875', source, domicile: '', born: '', queries: [] });
+  const distance = (source, P = person) => w.scoreHit(hit(source), P).reasons.find((r) => / km from |^in /.test(r.text));
+  // the next municipality, under 25 km: ≈ +1
+  assert.deepEqual(plain(distance('1875 census for 0516P Heidal')), { points: 1, text: 'Heidal, 19 km from Vågå', ok: null });
+  // 25–100 km: said, no points
+  assert.equal(distance('1875 census for 0514P Lom').points, 0);
+  // 100–300 km ✗ -1, further ✗ -2
+  const oslo = distance('1875 census for 0301P Oslo');
+  assert.equal(oslo.points, -1);
+  assert.equal(oslo.ok, false);
+  assert.equal(distance('1875 census for 1029P Audnedal').points, -2);
+  // a hit naming the FS place has its place match, no distance
+  assert.equal(distance('1875 census for 0515P Vågå'), undefined);
+  assert.ok(w.scoreHit(hit('1875 census for 0515P Vågå'), person).reasons.some((r) => r.text === 'Vågå' && r.points === 2));
+  // a record's anchor (search.js recordAnchors()): the same municipality +2; not its own
+  const withRecord = { ...person, anchors: [...person.anchors, { code: '1029', label: 'Sør-Audnedal', id: 'pf99000000000932' }] };
+  assert.deepEqual(plain(distance('1875 census for 1029P Audnedal', withRecord)), { points: 2, text: 'in Sør-Audnedal', ok: true });
+  const own = { ...person, anchors: [...person.anchors, { code: '1029', label: 'Sør-Audnedal', id: 'pf99000000000931' }] };
+  assert.equal(distance('1875 census for 1029P Audnedal', own).points, -2);
+  // no Norwegian place known: nothing
+  const abroad = w.profile(criteria({ name: [{ givenName: 'Lars', surname: 'Halvorsen' }], birth: [{ birthLikePlace: 'Decorah, Iowa, United States' }] }));
+  assert.equal(distance('1875 census for 1029P Audnedal', abroad), undefined);
+});

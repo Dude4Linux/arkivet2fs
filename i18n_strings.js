@@ -242,6 +242,7 @@ function i18nTable() {
     '{name} at {farm}': ['{name} på {farm}', '{name} på {farm}'],
     'farm {farm}': ['gård {farm}', 'gard {farm}'],
     'in {places}': ['i {places}', 'i {places}'],
+    '{place}, {km} km from {anchor}': ['{place}, {km} km fra {anchor}', '{place}, {km} km frå {anchor}'],
     'Turned off under Record kinds.': ['Slått av under Typer oppføringer.', 'Slått av under Typar oppføringar.'],
     'Digital Arkivet is refusing requests ({status}). No more requests are sent to it until {until}.': ['Digitalarkivet avviser forespørsler ({status}). Ingen flere forespørsler sendes dit før {until}.', 'Digitalarkivet avviser førespurnader ({status}). Ingen fleire førespurnader blir sende dit før {until}.'],
     'Digital Arkivet is not answering ({status}), and its front page fails too: it seems to be down. No more requests are sent to it until {until}.': ['Digitalarkivet svarer ikke ({status}), og forsiden feiler også: det ser ut til å være nede. Ingen flere forespørsler sendes dit før {until}.', 'Digitalarkivet svarar ikkje ({status}), og framsida feilar òg: det ser ut til å vere nede. Ingen fleire førespurnader blir sende dit før {until}.'],

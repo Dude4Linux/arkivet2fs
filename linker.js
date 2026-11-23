@@ -2907,6 +2907,17 @@ function doneIds() {
   for (const name of ['rec', 'also']) add(((params.get(name) || '').match(/([a-z]{2}\d{14,})(?:[/?#]|$)/) || [])[1]);
   return [...ids];
 }
+// The municipality the record is from (da_match.js hitPlace()), for the search page's
+// distances: the code in its source title, else an emigrant's residence or birthplace
+function recordMunicipality(record) {
+  if (!record) return '';
+  const fields = record.fields || {};
+  const type = (record.recordTypeInfo || {}).type;
+  return hitPlace({
+    source: record.sourceTitle, type: type === 'emigration' ? 'Emigration' : type,
+    domicile: fields.residence || '', born: fields['birth place'] || fields['place of birth'] || ''
+  });
+}
 async function rememberDone({ sources, changes, ok, attach }) {
   const ids = doneIds();
   if (!ids.length) return;
@@ -2914,7 +2925,8 @@ async function rememberDone({ sources, changes, ok, attach }) {
   const entry = {
     key, ids, time: Date.now(), ok, attach,
     sources: sources.map((s) => ({ id: s.id, title: s.title, book: s.book || '', persons: s.persons.map((p) => ({ pid: p.pid, name: p.name || '' })) })),
-    changes
+    changes,
+    place: recordMunicipality(state.record)
   };
   if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
   try {

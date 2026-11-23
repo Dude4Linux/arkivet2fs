@@ -212,3 +212,26 @@ test('DA down: the search stops with a warning, sends nothing more, and "Try aga
   assert.equal(warning(), null);
   assert.ok(da.asked.length > 2);
 });
+
+test("recordAnchors(): the places of the FS person's records done in the linker, and of hits whose record names a relative", () => {
+  const w = load([...SHARED, 'search.js'], { html: 'search.html', url: 'https://arkivet2fs.test/search.html', fast: true });
+  w.setDone([
+    { key: 'pd99000000000941', ids: ['pd99000000000941'], time: 2, ok: true, place: '1029',
+      sources: [{ id: 'TEST-S07', title: 'A', persons: [{ pid: 'test-001', name: 'Lars Halvorsen' }] }] },
+    // another person's record, and one done before the place was kept
+    { key: 'pd99000000000942', ids: ['pd99000000000942'], time: 1, ok: true, place: '1301', sources: [{ id: 'TEST-S08', title: 'B', persons: [{ pid: 'TEST-HAL' }] }] },
+    { key: 'pd99000000000943', ids: ['pd99000000000943'], time: 0, ok: true, sources: [{ id: 'TEST-S09', title: 'C', persons: [{ pid: 'TEST-001' }] }] }
+  ]);
+  const merged = new Map([
+    ['pf99000000000944', { id: 'pf99000000000944', type: 'Census', source: '1865 census for Vågå', checks: [{ points: 3, text: 'father Halvor Larsen', ok: true, checked: true }] }],
+    // a relative close (≈ +2) only, or one named and one contradicted: not known to be the person's
+    ['pf99000000000945', { id: 'pf99000000000945', type: 'Census', source: '1801 census for 0514P Lom', checks: [{ points: 2, text: 'mother Astri', ok: null, checked: true }] }],
+    ['pf99000000000946', { id: 'pf99000000000946', type: 'Census', source: '1801 census for 0301P Oslo',
+      checks: [{ points: 3, text: 'father Halvor Larsen', ok: true }, { points: -3, text: 'mother Kari', ok: false }] }]
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(w.recordAnchors(merged, 'TEST-001'))), [
+    { code: '1029', label: 'Sør-Audnedal', id: 'pd99000000000941' },
+    { code: '0515', label: 'Vågå', id: 'pf99000000000944' }
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(w.recordAnchors(merged, ''))), [{ code: '0515', label: 'Vågå', id: 'pf99000000000944' }]);
+});

@@ -54,8 +54,10 @@ it finds nothing. The hits come in as the searches run.
 events, why it matches, and a score. The reasons are what to look at:
 
 - ✓ agrees with FamilySearch: a name, a year, a place, a farm, a relative
-- ≈ close: another spelling (Astri for Astrid), a year one off
-- ✗ disagrees: a year far off, another given name for a parent, too young for the role
+- ≈ close: another spelling (Astri for Astrid), a year one off, a parish near the
+  person's ("Heidal, 19 km from Vågå")
+- ✗ disagrees: a year far off, another given name for a parent, too young for the role,
+  a parish far from any of the person's
 
 After the searches, the page opens the best hits' records and checks the people in them
 against the family: the parents in a baptism, the couple in a marriage, the household in

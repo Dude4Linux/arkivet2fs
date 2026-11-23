@@ -1495,6 +1495,7 @@ test('run(): what was done is kept for the search page, by the record\'s permane
   assert.equal(entry.key, state.record.primaryPersonId);
   assert.equal(entry.ok, true);
   assert.equal(entry.attach, true);
+  assert.equal(entry.place, '0515');  // Vågå, from the source title's (0515P), for the search page's distances
   assert.deepEqual(entry.sources.map((s) => [s.id, s.persons.map((p) => p.pid)]), [['TEST-S05', ['TEST-LAR', 'TEST-HAL']]]);
   assert.deepEqual(entry.changes.map((c) => c.pid), ['TEST-LAR']);
   assert.match(entry.changes[0].what, /christening/);

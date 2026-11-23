@@ -364,6 +364,9 @@ function profile(criteria) {
   }
   P.birthYear = P.birthDate ? P.birthDate.year : null;
   P.places = unique([P.birthPlace, P.marriagePlace, P.deathPlace, ...P.residences].filter(Boolean));
+  // their municipalities, to weigh hits by distance (da_match.js scoreHit()); the
+  // search page adds those of records found (search.js recordAnchors())
+  P.anchors = placeAnchors(P.places);
   P.estBirth = estimatedBirth(P);
   // The last year to search Norway's records in: the end of the emigration range
   // (FS's latest emigration or immigration year + 2, for stray records), or FS's

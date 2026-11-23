@@ -373,3 +373,15 @@ test('site-pages.mjs: docs/privacy.html and docs/guide.html are their Markdown a
   const body = page.slice(page.indexOf('<h1>'), page.indexOf('</main>'));
   assert.deepEqual(words(body), words(markdown));
 });
+
+test("da-coords.mjs: Wikidata's item of DA's number and name, a successor's name, Kartverket's place over Wikidata's", async () => {
+  const { coordinates, table } = await import('../tools/da-coords.mjs');
+  const row = (num, label, lon, lat) => ({ num: { value: num }, itemLabel: { value: label }, coord: { value: `Point(${lon} ${lat})` } });
+  const { coords, missing } = coordinates(
+    { '0515': 'Vågå', '1101': 'Egersund', '1806': 'Svolvær', '0999': 'Nowhere' },
+    [row('0515', 'Lom', 8.57, 61.84), row('0515', 'Vågå kommune', 9.1012, 61.8751), row('1101', 'Eigersund', 6.0, 58.45),
+      row('1806', 'Narvik', 17.4, 68.4), row('0999', 'Elsewhere', 10, 60)]);
+  assert.deepEqual(coords, { '0515': [61.88, 9.1], '1101': [58.45, 6], '1806': [68.24, 14.56] });
+  assert.deepEqual(missing, ['0999 Nowhere']);
+  assert.equal(table({ '0515': [61.88, 9.1] }), "const DA_COORDS = {\n  '0515': [61.88, 9.10]\n};");
+});

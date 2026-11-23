@@ -278,6 +278,7 @@ const eventLine = (label, text) => el('div', {}, [el('strong', { text: label }),
 // IDs, says what was done and links to who has the source on FS; the rows shown are
 // redrawn when a run ends, in any search.
 let doneById = new Map();
+let doneList = [];
 const rowHits = new WeakMap();  // a shown row's hit, to redraw it
 function doneIndex(list) {
   const map = new Map();
@@ -315,6 +316,7 @@ function doneLine(entry, treeref) {
 function setDone(list) {
   const before = doneById;
   doneById = doneIndex(list);
+  doneList = Array.isArray(list) ? list : [];
   for (const row of document.querySelectorAll('li.hit')) {
     const hit = rowHits.get(row);
     if (!hit) continue;
@@ -525,9 +527,32 @@ function groupSection(group) {
   return section;
 }
 
+// The places of records known to be the person's, besides the FS places, to weigh
+// the hits by distance (da_match.js scoreHit()): the records the linker attached to
+// the FS person searched for (treeref; `place` in the done entry), and the hits whose
+// record page names an FS relative or the FS birth date (a check ✓ of 3 points or
+// more, none ✗). [{ code, label, id }]; a record is not its own anchor (`id`).
+function recordAnchors(merged, treeref) {
+  const out = [];
+  const pid = String(treeref || '').toUpperCase();
+  for (const entry of pid ? doneList : []) {
+    const mine = (entry.sources || []).some((s) => (s.persons || []).some((p) => String(p.pid).toUpperCase() === pid));
+    if (mine && entry.place && DA_COORDS[entry.place]) out.push({ code: entry.place, label: municipalityName(entry.place), id: entry.key });
+  }
+  for (const hit of merged.values()) {
+    const checks = hit.checks || [];
+    if (!checks.some((r) => r.ok === true && r.points >= 3) || checks.some((r) => r.ok === false)) continue;
+    const code = hitPlace(hit);
+    if (code) out.push({ code, label: municipalityName(code), id: hit.id });
+  }
+  return out;
+}
+
 // The groups, an event in both of a parish's church books shown once (pairParallel())
 function renderGroups(container, merged, person) {
-  container.replaceChildren(...groupHits(merged, person).map((g) => ({ ...g, hits: pairParallel(g.hits) })).map(groupSection));
+  const treeref = new URLSearchParams(location.search).get('treeref');
+  const P = { ...person, anchors: [...(person.anchors || []), ...recordAnchors(merged, treeref)] };
+  container.replaceChildren(...groupHits(merged, P).map((g) => ({ ...g, hits: pairParallel(g.hits) })).map(groupSection));
 }
 
 async function renderResults(criteria) {
