@@ -33,6 +33,12 @@ fixes, new features, changes that break what users have).
   tell, so the row names the children it could be (born by the burial, not dead in
   another year) for you to choose from, and the search page no longer counts it as
   one of your children.
+- **Alternate names searched in the person's places first:** when a record wasn't
+  found under the person's name in their parish or county, the search tried that name
+  in all of Norway before the alternate names you have in FamilySearch, and a
+  namesake elsewhere could end the search (an 1801 census entry under a family name
+  was never looked for). The alternate names and other spellings are now searched in
+  the person's places first.
 - **"ektemann"** (the husband, in a church book's churching list) is "Husband" in the
   notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,

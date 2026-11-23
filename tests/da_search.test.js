@@ -238,6 +238,30 @@ test("runQuery(): the person alone under another name while a child's baptism is
   assert.deepEqual(plain(result.missing), [w.t('a baptism for {child}', { child: 'Marit (b. 1866)' })]);
 });
 
+test("runQuery(): FS's other names in the person's places before the name in all of Norway", async () => {
+  // DA has the 1865 census entry under Lindemann, in Oslo; a namesake Lars Jørgensen
+  // of that census lives elsewhere in Norway and mustn't meet the goal first
+  const census = (id, name) => `<div id="searchResultList"><div class="unit"><div class="name"><a href="/en/census/person/${id}">${name}</a></div>`
+    + `<div class="action"><span>H:</span> 1865-12-31</div><div class="source"><a href="/en/source/1">1865 census for 0301 Kristiania</a></div></div></div><p>Your search resulted in 1 hits</p>`;
+  const asked = [];
+  const fetch = async (url) => {
+    const p = new URL(String(url)).searchParams;
+    const local = p.getAll('m[]').length || p.getAll('c[]').length;
+    asked.push(p.get('lastname') + ' ' + (local ? 'local' : 'Norway'));
+    const html = p.get('lastname') === 'Jørgens*' && !local ? census('pf99000000000921', 'Lars Jørgensen')
+      : p.get('lastname') === 'Lindem*' && local ? census('pf99000000000922', 'Lars Lindemann') : '<div id="searchResultList"></div>';
+    return new Response(html);
+  };
+  const wq = load(SHARED, { fetch, fast: true });
+  const q = wq.buildQueries(jorgensen()).find((x) => x.kind === 'census');
+  const result = await wq.runQuery(q);
+  const ids = new Set(result.found.flatMap((f) => f.hits.map((h) => h.id)));
+  assert.ok(ids.has('pf99000000000922'), JSON.stringify(asked));
+  // found in the person's places: the name isn't searched in all of Norway
+  assert.ok(!asked.includes('Jørgens* Norway'), JSON.stringify(asked));
+  assert.deepEqual(plain(result.missing), []);
+});
+
 test("patronymicOf() makes the patronymic from the father's given name", () => {
   assert.equal(w.patronymicOf('Aslak', 'Male'), 'Aslaksen');
   assert.equal(w.patronymicOf('Ole'), 'Olsen');

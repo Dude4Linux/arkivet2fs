@@ -993,13 +993,17 @@ const firstPage = async (params) => parseResults(await fetchResultPage(daSearchU
 
 // The order of a query's searches: a step with a surname (the person's or a
 // relative's, or a farm) is "named". First the named steps at each place level,
-// narrowest first (the parish, then its county); then, while nothing is found, the
-// named steps in all of Norway (a rare surname is found anywhere; a step that
-// counts for the goal, the couple, while the goal isn't met); then, while the
-// goal isn't met (a child's baptism or a census still missing), the other names
-// (fallback steps) in the widest of those places; last, the steps by given names only, in the narrowest place: they find
-// everyone of that name, so in the county they'd bury the person's records (and
-// meet the goal with other people's) before the named steps had widened.
+// narrowest first (the parish, then its county); then, while the goal isn't met (a
+// child's baptism or a census still missing), the other names (fallback steps: FS's
+// alternate names, other spellings) in the widest of those places, before leaving
+// them: a record in the person's places under another name ("Lars Lindem*" in the
+// census of the town) is theirs more likely than a namesake's elsewhere, which
+// would meet the goal first; then, while nothing is found, the named steps in all
+// of Norway (a rare surname is found anywhere; a step that counts for the goal, the
+// couple, while the goal isn't met); last, the steps by given names only, in the
+// narrowest place: they find everyone of that name, so in the county they'd bury the
+// person's records (and meet the goal with other people's) before the named steps
+// had widened.
 // → [{ step, level, ifNone }]
 function searchPlan(query) {
   const local = query.levels.filter((l) => !l.fallback);
@@ -1012,8 +1016,8 @@ function searchPlan(query) {
   const plan = [];
   for (const level of local) for (const step of strict) plan.push({ step, level });
   const widest = local[local.length - 1] || wide[0];
-  for (const level of wide) for (const step of strict) plan.push({ step, level, ifNone: !(query.counts && query.counts(step)) });
   for (const step of query.steps.filter((s) => s.fallback)) plan.push({ step, level: widest });
+  for (const level of wide) for (const step of strict) plan.push({ step, level, ifNone: !(query.counts && query.counts(step)) });
   for (const step of loose) plan.push({ step, level: local[0] || wide[0] });
   return plan;
 }
