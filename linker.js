@@ -893,12 +893,13 @@ function recordFacts(person, record) {
 // The occupation a position gives: none for a family word or a marital status alone,
 // which censuses and church books write in its place (1900's "Søn", "Datter", a
 // baptism's "Pige", "Barnet", "Hustru", 1865's "Smedens Kone"), and without a leading
-// marital status ("Gift Murerarbeider"); none either for a relation to someone named
+// marital status ("Gift Murerarbeider"), or a betrothed ("Kiæresten", a baptism's mother
+// before the wedding); none either for a relation to someone named
 // before it, which church books write there ("Serg. Halvor Larsens D.B.", the sergeant's
 // boy child; "Husmand Ole Olsens Enke"), also abbreviated: D.B. and P.B. (drengebarn,
 // pigebarn), B., S., D., Dr., Dtr., Dat., Hustr. That is the family the tree's links
 // hold, and the occupation in it someone else's
-const KIN_WORD = '(?:søn|sønn|datter|dotter|barn|barnet|børn|pige|pigen|pigebarn|dreng|drengen|drengebarn|gut|guten|hustru|hustrue|hustr|kone|konen|ugift|ugifte|gift|enke|enkemand|enkemann)';
+const KIN_WORD = '(?:søn|sønn|datter|dotter|barn|barnet|børn|pige|pigen|pigebarn|dreng|drengen|drengebarn|gut|guten|hustru|hustrue|hustr|kone|konen|ugift|ugifte|gift|enke|enkemand|enkemann|kiæreste|kiæresten|kjæreste|kjæresten|kiereste|kieresten)';
 // (after the final full stop is dropped: "D.B." is "d.b")
 const KIN_ABBREVIATION = '(?:d\\.? ?b|p\\.? ?b|b|s|d|dr|dtr|dat|hustr)';
 // In a marriage, "Cop." (copulerede, married), as the book notes the couple's wedding,

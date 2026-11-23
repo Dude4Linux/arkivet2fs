@@ -4,6 +4,19 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.8.3 - not released yet
+
+- **A new source mixed up with the one made just before it:** after "Create source",
+  the linker could take the source created a moment earlier for the new one, and
+  attach that one instead (report #13). It now takes only the new source with this
+  record's title, and stops before attaching anything when FamilySearch doesn't list
+  it.
+- **Royal resolutions (Danske kanselli):** a letter's title and source date no longer
+  hold the letter's permanent ID ("Type of letter, oc…"). They now name it a letter and
+  give the record's year, and "Hele Norge" (all of Norway) is not used as a county.
+- **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,
+  and the notes give "[betrothed]" after it.
+
 ## 1.8.2 - 2026-11-21
 
 - **Places as the record writes them:** a changed or added fact, and a new person,

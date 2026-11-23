@@ -259,6 +259,84 @@ function editDialog(page, onFs, combo) {
   return result;
 }
 
+// The SourceBox with Create Source, on the test's clock: Home's list empty at first
+// (not loaded yet); after Save, `home(ms)` gives its rows `ms` after the save, and the
+// search shows `all`'s rows holding the text 300 ms after it's clicked
+function createBox(home, all) {
+  const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox',
+    '<input data-testid="source-box-filter-field"><button data-testid="source-box-search-button">Search</button>' +
+    '<button data-testid="source-box-create-source-button">Create Source</button><div id="list"></div>', { clock: true });
+  const { w } = page;
+  const doc = w.document;
+  const list = doc.getElementById('list');
+  const rows = (items) => items.map(([id, title, date]) => row(id, title, date)).join('');
+  let searched = false;
+  doc.querySelector('[data-testid="source-box-create-source-button"]').addEventListener('click', () => {
+    const form = doc.createElement('form');
+    form.innerHTML = Object.values({ date: 'input', title: 'input', 'web-page': 'input', citation: 'textarea', notes: 'textarea' })
+      .map((tag, i) => `<${tag} data-testid="source-${['date', 'title', 'web-page', 'citation', 'notes'][i]}-field"></${tag}>`).join('') +
+      '<button type="button" data-testid="source-save-button">Save</button>';
+    form.querySelector('[data-testid="source-save-button"]').addEventListener('click', () => {
+      form.remove();
+      const at = w.Date.now();
+      // Home's rows as they come in, until 3 s after the save (or a search)
+      const show = () => {
+        if (searched) return;
+        const ms = w.Date.now() - at;
+        const html = rows(home(ms));
+        if (list.innerHTML !== html) list.innerHTML = html;
+        if (ms < 3000) w.setTimeout(show, 0);
+      };
+      w.setTimeout(show, 0);
+    });
+    doc.body.append(form);
+  });
+  doc.querySelector('[data-testid="source-box-search-button"]').addEventListener('click', () => {
+    searched = true;
+    const text = doc.querySelector('[data-testid="source-box-filter-field"]').value;
+    const at = w.Date.now();
+    list.innerHTML = '';
+    const answer = () => {
+      if (w.Date.now() - at < 300) { w.setTimeout(answer, 0); return; }
+      const hits = all.filter(([, title]) => title.includes(text));
+      list.innerHTML = hits.length ? rows(hits) : '<p>No sources found.</p>';
+    };
+    w.setTimeout(answer, 0);
+  });
+  return page;
+}
+
+const SOURCE = { date: '13 May 1846', title: TITLE, url: 'https://www.digitalarkivet.no/en/pd99000000000001', citation: 'Citation', notes: 'Notes' };
+const LETTER = 'Lars Halvorsen - Royal resolutions, no. 21 - Letter';
+
+test('createSource(): the new source is the new row with its title, not the source made just before it that Home shows first (report #13)', async () => {
+  // Home not loaded when the list was read; after Save it shows the letter made a
+  // moment before, then the new source on top
+  const page = createBox((ms) => (ms < 2000 ? [['TEST-S07', LETTER]] : [['TEST-S08', TITLE, SOURCE.date], ['TEST-S07', LETTER]]), []);
+  const answer = await page.step('createSource', SOURCE);
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(answer.sourceId, 'TEST-S08');
+});
+
+test('createSource(): a new source Home doesn\'t show in time is found with the search for its title', async () => {
+  const page = createBox(() => [['TEST-S07', LETTER]], [['TEST-S07', LETTER], ['TEST-S08', TITLE, SOURCE.date]]);
+  const answer = await page.step('createSource', SOURCE);
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(answer.sourceId, 'TEST-S08');
+});
+
+test('createSource(): no new row with the title is an error, never another source\'s ID; two are one too', async () => {
+  const none = createBox(() => [['TEST-S07', LETTER]], [['TEST-S07', LETTER]]);
+  const answer = await none.step('createSource', SOURCE);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.sourceId, undefined);
+  assert.match(answer.error, /saved, but the SourceBox doesn't list it under its title; nothing was attached/);
+  const two = createBox(() => [['TEST-S07', LETTER]], [['TEST-S08', TITLE], ['TEST-S09', TITLE]]);
+  const both = await two.step('createSource', SOURCE);
+  assert.equal(both.ok, false);
+  assert.match(both.error, /more than one new source with its title/);
+});
+
 const ON_FS = { date: '6 April 1846', title: TITLE, 'web-page': 'https://www.digitalarkivet.no/view/255/pd99000000000001', citation: 'Old citation', notes: 'Old notes' };
 
 test('editSource(): writes the linker\'s fields over the source on FS, with a reason', async () => {

@@ -245,10 +245,25 @@ if (!window.__arkivet2fsAttach) {
     byTestId('source-save-button').click();
     await waitGone(() => byTestId('source-save-button'), 'the saved source (the form stayed open; is a field invalid?)');
 
-    // The new row: a new ID with this title (the list shows newest first)
-    const row = await waitFor(() => sourceRows().find((r) => !before.has(r.id) && r.title === title)
-      || sourceRows().find((r) => !before.has(r.id)), 'the new source in the SourceBox');
-    return { ok: true, sourceId: row.id, missing };
+    // The new row: a new ID with this title, never any new ID (report #13: Home's list,
+    // not loaded yet when `before` was read, showed the source made just before this
+    // one first, and its ID was taken). Not on Home in time: the SourceBox's search
+    // for the title, where the one source of the title not there before is it (the
+    // linker looked for the title first and found none)
+    const fresh = (r) => !before.has(r.id) && r.title === title;
+    let rows;
+    try {
+      rows = [await waitFor(() => sourceRows().find(fresh), 'the new source in the SourceBox')];
+    } catch (e) {
+      if (!e.timeout) throw e;
+      rows = (await searchSourceBox(title)).filter(fresh);
+    }
+    if (rows.length !== 1) {
+      throw new Error(rows.length
+        ? 'The source was saved, but the SourceBox has more than one new source with its title; nothing was attached. Attach the right one by hand.'
+        : 'The source was saved, but the SourceBox doesn\'t list it under its title; nothing was attached. Attach it by hand.');
+    }
+    return { ok: true, sourceId: rows[0].id, missing };
   }
 
   // The DA permanent IDs a source names: any in its web page (the record's address),

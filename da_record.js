@@ -115,6 +115,9 @@ function positionWords() {
     [['Enke', 'Enkekone'], 'widow'],
     [['Enkemand', 'Enkemann'], 'widower'],
     [['Ungkarl', 'Ungkar'], 'bachelor'],
+    // A betrothed ("Kiæresten", the sweetheart): the bride or groom at a betrothal, or
+    // in a baptism a parent before the wedding
+    [['Kiæreste', 'Kiæresten', 'Kjæreste', 'Kjæresten', 'Kiereste', 'Kieresten'], 'betrothed'],
     [['Pige', 'Pike', 'Jomfru', 'Jomfrue'], 'unmarried woman'],
     [['Fattiglem', 'Almisselem', 'Lægdslem', 'Legdslem'], 'pauper'],
     [['Hjemmeværende', 'Hjemmehørende'], 'living at home']
@@ -588,7 +591,8 @@ function extractRecord(document, pageUrl) {
     if (infobox) {
       info.sourceTitle = cleanValue(infobox.querySelector(":scope > p.ssp-semibold")?.textContent);
       const f = fieldMap(readFields(infobox));
-      info.county = f['county'] || '';
+      // "Hele Norge", a source of all Norway (the Danish chancery's registers), is no county
+      info.county = /^hele norge$/i.test(f['county'] || '') ? '' : f['county'] || '';
       const muniKey = Object.keys(f).find(function(k) { return k.startsWith('municipality'); });
       info.municipality = muniKey ? f[muniKey] : '';
       info.parish = f['parish/church'] || f['parish'] || '';
@@ -941,6 +945,17 @@ function extractRecord(document, pageUrl) {
       recordDate = parentPost.substring(colonIdx + 1).trim();
     } else if (parentPost) {
       recordType = parentPost.trim();
+    }
+    // A header naming the record this one belongs to, by its permanent ID ("Type of
+    // letter: oc99000000000375", a royal resolution's letter, linked) gives neither a
+    // type nor a date: the type is what it names ("Letter"), the date the record's own
+    // Date field ("Date: 1715")
+    if (/^[a-z]{2}\d{14,}$/i.test(recordDate)) {
+      const named = recordType.match(/^type of (.+)$/i);
+      recordType = named ? named[1].charAt(0).toUpperCase() + named[1].slice(1) : '';
+      recordDate = '';
+      const own = fieldMap(readFields(document.querySelector('#collapse-section-1'))).date || '';
+      if (/^\d{4}(?!\d)/.test(own)) recordDate = own;
     }
     // Emigrant protocols' header holds group, date and ship: "00115/1882-09-16/Kong Ring"
     if (recordDate && !/^\d{4}(?!\d)/.test(recordDate)) {

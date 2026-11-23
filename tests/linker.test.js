@@ -927,6 +927,8 @@ test('recordFacts(): a relation to someone named in the position is no occupatio
     assert.equal(w.occupationOf(kin), '', kin);
   }
   for (const work of ['Serg.', 'Husmand under Ole Olsens Gaard', 'Lars Olsens Tjenestepige']) assert.equal(w.occupationOf(work), work);
+  // A mother called the father's betrothed in a baptism: a relation, no occupation
+  for (const kin of ['Kiæresten', 'hans Kiæreste', 'Kjæreste', 'Halvor Larsens Kiæreste']) assert.equal(w.occupationOf(kin), '', kin);
 });
 
 test('recordFacts(): a marriage\'s "Cop." or "Corp." (copulerede, married) is no occupation', () => {

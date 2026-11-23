@@ -152,6 +152,9 @@ test("a census position's compound kin words get English: \"hans Søstersøn [si
   // the simple words as before, and an occupation's family word in passing is left
   assert.equal(english('hans Søster'), 'hans Søster [sister]');
   assert.equal(w.expandAbbreviations('Husmand'), 'Husmand [cottager]');
+  // a church book's position too: a parent named as the other's betrothed
+  assert.equal(w.expandAbbreviations('Kiæresten'), 'Kiæresten [betrothed]');
+  assert.equal(w.expandAbbreviations('hans Kjæreste'), 'hans Kjæreste [betrothed]');
 });
 
 // 1910 gives each resident's full date of birth, once with the age after it ("@17")
@@ -272,4 +275,18 @@ test('a name: what the source struck out is left out, two readings are "Even/Sve
   const r = w.extractRecord(doc, fixtureUrl(file));
   assert.ok(r.title.startsWith('Lars/Ole'), r.title);
   assert.doesNotMatch(r.title, /Hans|%|@/);
+});
+
+test('a royal resolution\'s letter: the header names the letter it belongs to, not a type and a date; "Hele Norge" is no county', () => {
+  // Bug: "Type of letter: oc…" made the title "… - Type of letter, oc…" and the
+  // source's date the letter's permanent ID
+  const r = record('letter-1712');
+  assert.ok(!r.error, r.error);
+  assert.equal(r.recordDate, '1715');
+  assert.equal(r.title, 'Eiulf Mikkelsen - Danske kanselli 1572-1799, Kongelig resolusjon og ekspedisjon, Norske registre, no. 21: 1712-1715 - Letter, 1715');
+  assert.equal(r.county, '');
+  assert.equal(before(r.citation, '; database'),
+    'Norway, "Danske kanselli 1572-1799, Kongelig resolusjon og ekspedisjon, Norske registre, no. 21: 1712-1715," Letter, entry for Eiulf Mikkelsen, 1715');
+  assert.doesNotMatch(r.citation + r.title, /oc99/);
+  assert.deepEqual(people(r), ['Eiulf Mikkelsen (Groom)', 'Alhild Engvik (Bride)']);
 });
