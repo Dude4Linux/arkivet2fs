@@ -187,11 +187,21 @@ function ageOn(on, birth) {
   return on.year - birth.year - (before ? 1 : 0);
 }
 
-// A record's given name close to FS's, but not one of its forms: the record's is a
-// stem of FS's (Astri for Astrid; nameMatch() the other way round), as
+// A record's given name close to FS's, but not one of its forms: FS's without its
+// last letter, a consonant (Astri for Astrid, Gunhil for Gunhild: droppedEnd()), as
 // church books often write it, or a near spelling (Ingebret for Ingebrigt: nameNear())
 function nameClose(word, name) {
-  return !nameMatch(word, name) && (nameMatch(name, word) || nameNear(word, name) || illegibleFits(word, name));
+  return !nameMatch(word, name) && (droppedEnd(word, name) || nameNear(word, name) || illegibleFits(word, name));
+}
+
+// The record's name is FS's without its silent final d or g, or another last
+// consonant: Astri for Astrid, Gunhil for Gunhild. Not any name sharing a stem with
+// it: Maria, Mari and Marie aren't Marte (givenStem() cuts Maria to Mar*)
+function droppedEnd(word, name) {
+  if (readingsOf(word).length > 1 || readingsOf(name).length > 1) return eitherReading(droppedEnd, word, name);
+  if (unreadableWord(word) || unreadableWord(name)) return false;
+  const w = foldAa(word), n = foldAa(name);
+  return w.length >= 3 && n.length === w.length + 1 && n.startsWith(w) && !/[aeiouyæøå]$/.test(n);
 }
 
 // A record's name with letters DA couldn't read ("Ann??": unreadableWord()) whose

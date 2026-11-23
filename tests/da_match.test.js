@@ -208,6 +208,15 @@ test('nameNear(): near spellings, not other names', () => {
 test('nameClose(): Astri or Bodil for Astrid, not Hans', () => {
   assert.equal(w.nameClose('Astri', 'Astrid'), true);
   assert.equal(w.nameClose('Hans', 'Astrid'), false);
+  assert.equal(w.nameClose('Gunhil', 'Gunhild'), true);
+});
+
+// A report: Maria, Mari and Marie counted as close to FS's Marte (givenStem() cuts
+// Maria to Mar*), so other men's wives of those names scored for the FS wife
+test('nameClose(): FS\'s name less its last consonant, not any name of the same start', () => {
+  for (const name of ['Maria', 'Mari', 'Marie']) assert.equal(w.nameClose(name, 'Marte'), false, name);
+  assert.equal(w.nameClose('Ole', 'Olea'), false, 'a final vowel is another name');
+  assert.equal(w.nameClose('Hans', 'Hansine'), false);
 });
 
 test('nameClose(): Sigvart for Sigvard, Tollev for Tollef: near spellings', () => {

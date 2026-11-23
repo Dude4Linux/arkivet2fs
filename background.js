@@ -135,9 +135,12 @@ const PATRONYMIC = /(s[eøo]n|datter|dotter|daatter|s(?:dattr|datt|datr|dat|d:r)
 // Johansen Rysstad" → given "Tollef", surname "Johansen", rest "Rysstad". The
 // rest can also be a family or place-derived name (Lindeman), so personToQuery checks
 // it against the farm registers (farms.js). Without a patronymic, the last word is the
-// surname ("Maren Kristine Lindeman").
+// surname ("Maren Kristine Lindeman"). A patronymic joined to the farm by a hyphen,
+// "Marte Olsdtr-Moen" or "Marte Olsdtr- Moen", is split there.
 function splitName(full) {
-  const words = (full || '').split(/\s+/).filter(Boolean);
+  const words = (full || '').split(/\s+/).filter(Boolean)
+    .flatMap((w) => { const m = w.match(/^(.+?)-(.*)$/); return m && PATRONYMIC.test(m[1]) ? [m[1], m[2]] : [w]; })
+    .filter(Boolean);
   if (words.length < 2) return { given: words.join(' '), surname: '', rest: '' };
   const i = words.findIndex((w, k) => k > 0 && PATRONYMIC.test(w));
   if (i > 0) {
@@ -276,9 +279,11 @@ async function personToQuery(person) {
   // Family
   const relative = (prefix, p, i = 0) => {
     if (!p || !p.name) return;
+    // (a relative's surname is the patronymic and the farm after it, "Olsdtr Moen":
+    // records name them by either; da_search.js relativeName())
     const n = splitName(p.name);
     set('q.' + prefix + 'GivenName' + suffix(i), n.given);
-    set('q.' + prefix + 'Surname' + suffix(i), n.surname);
+    set('q.' + prefix + 'Surname' + suffix(i), [n.surname, n.rest].filter(Boolean).join(' '));
     // Lifespan "1796–Deceased"; "–1822" has no birth year
     set('q.' + prefix + 'BirthYear' + suffix(i), ((p.lifespan || '').match(/^\d{4}/) || [])[0]);
   };

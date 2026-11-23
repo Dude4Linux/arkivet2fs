@@ -117,6 +117,26 @@ test("buildQueries(): a relative's other patronymic spelling right after the ful
   ]);
 });
 
+test("profile(): a relative's patronymic and farm are the surname, wherever FS has the patronymic", () => {
+  const spouse = (given, surname) => plain(w.profile(criteria({
+    name: [{ givenName: 'Nils', surname: 'Olsen' }], spouse: [{ spouseGivenName: given, spouseSurname: surname }]
+  })).spouses[0]);
+  const marte = { given: 'Marte', surname: 'Olsdtr Moen', patronymic: 'Olsdtr', year: null };
+  assert.deepEqual(spouse('Marte', 'Olsdtr Moen'), marte);
+  assert.deepEqual(spouse('Marte Olsdtr-', 'Moen'), marte);
+  assert.deepEqual(spouse('Marte', 'Olsdtr-Moen'), marte);
+  assert.deepEqual(spouse('Anne Cathrine', 'Lindeman'), { given: 'Anne Cathrine', surname: 'Lindeman', patronymic: '', year: null });
+});
+
+test("buildQueries(): a relative's patronymic first, then the farm, before the surname is left out", () => {
+  const q = children(nils('Olsdtr Moen'));
+  assert.deepEqual(plain(q.steps.slice(0, 3).map((s) => s.text)), [
+    'Nils Ols* + mother Gunhild Ols*',
+    'Nils Ols* + mother Gunhild Moen',
+    'Nils Ols* + mother Gunhild'
+  ]);
+});
+
 test("buildQueries(): the person's own patronymic spelling as a fallback step", () => {
   const q = w.buildQueries(criteria({
     name: [{ givenName: 'Ole', surname: 'Pedersen' }], sex: [{ sex: 'Male' }],

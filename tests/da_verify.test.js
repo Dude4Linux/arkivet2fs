@@ -221,6 +221,26 @@ test("checkRecord(): a mother's patronymic abbreviated or spelled otherwise is s
   assert.ok(mother('Astri Olsdat.').points < 0, 'another father');
 });
 
+// A report: FS's wife "Marte <patronymic>-<farm>"; baptisms naming a mother Maria
+// with another patronymic, or Marie with another farm, counted ≈ +2 for her
+test("checkRecord(): the FS mother by her patronymic or her farm; not another given name, nor another patronymic", () => {
+  const P = w.profile(criteria({
+    name: [{ givenName: 'Nils', surname: 'Olsen' }], sex: [{ sex: 'Male' }],
+    spouse: [{ spouseGivenName: 'Marte Olsdtr-', spouseSurname: 'Moen' }]
+  }));
+  const baptism = (mother) => ({ recordTypeInfo: { type: 'baptism', prefix: 'pd' }, recordDate: '1852-03-07', fields: {}, people: [
+    { name: 'Ole', role: 'barn', roleEnglish: 'Child' },
+    { name: 'Nils Olsen', role: 'far', roleEnglish: 'Father', current: true },
+    { name: mother, role: 'mor', roleEnglish: 'Mother' }
+  ] });
+  const spouse = (mother) => plain(w.checkRecord(baptism(mother), P)).map((r) => [r.points, r.text]);
+  assert.deepEqual(spouse('Marte Olsdatter'), [[3, 'spouse Marte Olsdatter in the record']]);
+  assert.deepEqual(spouse('Marte Moen'), [[3, 'spouse Marte Moen in the record']]);
+  assert.equal(spouse('Marte Hansdatter')[0][0], -2);
+  assert.equal(spouse('Maria Hansd.')[0][0], -3);
+  assert.equal(spouse('Marie Bakken')[0][0], -3);
+});
+
 test("checkRecord(): a baptism's child counts once, for the FS child whose first given name it has", () => {
   const r = open(record('baptism-1846'), 1);
   r.people[0].name = 'Johan Peder';

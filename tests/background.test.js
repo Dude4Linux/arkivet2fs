@@ -23,6 +23,23 @@ test('splitName(): given names up to the patronymic, the rest after it', () => {
   assert.deepEqual(plain(w.splitName('Magnhild Magdaline Lindeman')), { given: 'Magnhild Magdaline', surname: 'Lindeman', rest: '' });
   assert.deepEqual(plain(w.splitName('Ingrid Larsdatter')), { given: 'Ingrid', surname: 'Larsdatter', rest: '' });
   assert.deepEqual(plain(w.splitName('Lars')), { given: 'Lars', surname: '', rest: '' });
+  // a patronymic joined to the farm by a hyphen
+  assert.deepEqual(plain(w.splitName('Marte Olsdtr-Moen')), { given: 'Marte', surname: 'Olsdtr', rest: 'Moen' });
+  assert.deepEqual(plain(w.splitName('Marte Olsdtr- Moen')), { given: 'Marte', surname: 'Olsdtr', rest: 'Moen' });
+  assert.deepEqual(plain(w.splitName('Anne-Marie Olsdatter')), { given: 'Anne-Marie', surname: 'Olsdatter', rest: '' });
+});
+
+// A report: a wife "Marte <patronymic>-<farm>" went to the search page with the
+// patronymic among her given names
+test("personToQuery(): a relative's surname is the patronymic and the farm after it", async () => {
+  const fetch = async (url) => new Response(/dokpro/.test(url) ? '<table></table>' : '{"navn":[]}');
+  const w = loadBackground({ fetch });
+  const q = await w.personToQuery({ pid: 'TEST-003', name: 'Nils Olsen', gender: 'Male', birth: { date: '1825' },
+    families: [{ spouse: { name: 'Marte Olsdtr-Moen' } }, { spouse: { name: 'Anne Cathrine Lindeman' } }] });
+  assert.equal(q.get('q.spouseGivenName'), 'Marte');
+  assert.equal(q.get('q.spouseSurname'), 'Olsdtr Moen');
+  assert.equal(q.get('q.spouseGivenName.1'), 'Anne Cathrine');
+  assert.equal(q.get('q.spouseSurname.1'), 'Lindeman');
 });
 
 test('withoutNickname(): a quoted word, a leading Big or Little', () => {

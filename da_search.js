@@ -328,14 +328,30 @@ function range(from, to) {
 const unique = (list) => [...new Set(list)];
 const foldName = (s) => (s || '').toLowerCase().trim();
 
+// An FS relative's name → { given, surname, patronymic }. A patronymic and a farm are
+// both the surname ("Marte Olsdtr Moen": records name her Marte Olsdatter or Marte
+// Moen), and `patronymic` is the patronymic alone, so a record's Marte Hansdatter isn't
+// taken for her (da_verify.js patronymicDiffers()). A patronymic FS has among the given
+// names ("Marte Olsdtr-" Moen; joined by a hyphen, "Olsdtr-Moen") goes to the surname.
+// Without one, the surname is as FS has it ("Anne Cathrine" Lindeman).
+function relativeName(given, surname) {
+  const split = (text) => String(text || '').trim().split(/\s+/).filter(Boolean)
+    .flatMap((w) => { const m = w.match(/^(.+?)-(.*)$/); return m && isPatronymic(m[1]) ? [m[1], m[2]] : [w]; })
+    .filter(Boolean);
+  const givens = split(given), surnames = split(surname);
+  const at = givens.findIndex((w, k) => k > 0 && isPatronymic(w));
+  const last = at > 0 ? [...givens.splice(at), ...surnames] : surnames;
+  return { given: givens.join(' '), surname: last.join(' '), patronymic: last.find(isPatronymic) || '' };
+}
+
 // The search page's criteria (readCriteria in search.js) as one person
 function profile(criteria) {
   const first = (id) => criteria[id][0] || {};
   const names = criteria.name.filter((n) => n.givenName || n.surname);
   const b = first('birth'), m = first('marriage'), d = first('death'), e = first('emigration');
   // A relative turned off in the sidebar (q.fatherSkip, ...) isn't used at all
-  const relative = (r, prefix) => (r[prefix + 'Skip'] ? { given: '', surname: '', year: null }
-    : { given: (r[prefix + 'GivenName'] || '').trim(), surname: (r[prefix + 'Surname'] || '').trim(), year: year(r[prefix + 'BirthYear']) });
+  const relative = (r, prefix) => (r[prefix + 'Skip'] ? { given: '', surname: '', patronymic: '', year: null }
+    : { ...relativeName(r[prefix + 'GivenName'], r[prefix + 'Surname']), year: year(r[prefix + 'BirthYear']) });
   const P = {
     given: firstWord(names[0] && names[0].givenName),
     givenNames: ((names[0] && names[0].givenName) || '').trim().split(/\s+/).filter(Boolean),
@@ -520,11 +536,18 @@ function buildQueries(criteria) {
   // person, with the other spellings of the relative's patronymic (Pers* for
   // Pedersdatter)
   const me = { first: given, last: stem };
-  const relative = (r, relation, roles) => r && r.given ? {
-    relation, roles, first: relatedStem(firstWord(r.given)), last: r.surname ? searchStem(r.surname) : '',
-    spellings: r.surname ? surnameSpellings(r.surname) : [],
-    fsFirst: firstWord(r.given), fsLast: r.surname || ''
-  } : null;
+  // (a surname of a patronymic and a farm, "Olsdtr Moen", by the patronymic first,
+  // then by the farm as another spelling)
+  const relative = (r, relation, roles) => {
+    if (!r || !r.given) return null;
+    const words = (r.surname || '').split(/\s+/).filter(Boolean);
+    const main = r.patronymic || words[0] || '';
+    return {
+      relation, roles, first: relatedStem(firstWord(r.given)), last: main ? searchStem(main) : '',
+      spellings: main ? [...surnameSpellings(main), ...words.filter((w) => w !== main).map(searchStem)] : [],
+      fsFirst: firstWord(r.given), fsLast: r.surname || ''
+    };
+  };
   // One party's names in a step (first and/or last), or null when the step wants a
   // name the party hasn't got
   const part = (who, first, last) => {

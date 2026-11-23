@@ -50,6 +50,12 @@ fixes, new features, changes that break what users have).
   notes.
 - **"Kiæresten" (the betrothed)** in a position is no longer offered as an occupation,
   and the notes give "[betrothed]" after it.
+- **A relative's patronymic and farm:** a parent or spouse whose name in FamilySearch
+  has both ("Marte Olsdtr-Moen", or the patronymic among the given names) now has both
+  as the surname, so records naming her either way count for her, and one with another
+  patronymic counts against. A mother or wife of another given name that only starts
+  the same (Maria, Mari or Marie for Marte) no longer counts as close to her, so other
+  men's children's baptisms aren't listed among the person's.
 
 ## 1.8.2 - 2026-11-21
 

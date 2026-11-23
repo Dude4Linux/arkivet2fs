@@ -235,12 +235,12 @@ function patronymicDiffers(person, surname) {
 // `relative` is {given, surname}.
 function unreadGivenFits(person, relative) {
   const words = (person.name || '').replace(/%[^%]*%|[*,]/g, ' ').split(/\s+/).filter(Boolean);
-  const surname = String(relative.surname || '').trim();
-  if (words.length < 2 || !surname || !unreadableWord(words[0])) return false;
+  const surnames = String(relative.surname || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2 || !surnames.length || !unreadableWord(words[0])) return false;
   const start = legibleStart(words[0]).toLowerCase();
   const givens = String(relative.given || '').toLowerCase().split(/\s+/).filter(Boolean);
   if (start && !givens.some((g) => g.replace(/å/g, 'aa').startsWith(start.replace(/å/g, 'aa')))) return false;
-  const fsForms = [surname, churchSpelling(surname)].filter(Boolean);
+  const fsForms = surnames.flatMap((surname) => [surname, churchSpelling(surname)]).filter(Boolean);
   return words.slice(1).some((w) => fsForms.some((s) => (isPatronymic(w) && isPatronymic(s)
     ? sameFather(patronymicBase(w), patronymicBase(s))
     : w.toLowerCase().startsWith(surnameStem(s).replace(/\*$/, '').toLowerCase()))));
@@ -250,7 +250,7 @@ function unreadGivenFits(person, relative) {
 // a birth year within 5 of FS's (census ages are often a few years off)
 function isRelative(person, relative, record, close = false) {
   const named = close ? !hasGivenName(person, relative.given) && hasCloseName(person, relative.given) : hasGivenName(person, relative.given);
-  if (!named || patronymicDiffers(person, relative.surname)) return false;
+  if (!named || patronymicDiffers(person, relative.patronymic || relative.surname)) return false;
   const year = birthYearOf(person, record);
   return !relative.year || !year || Math.abs(year - relative.year) <= 5;
 }
@@ -414,8 +414,9 @@ function siblingOfParent(record, P, census, add) {
   const head = people.find((p) => roleKind(p) === 'head') || people[0];
   if (!head || head === me) return;
   const [key, relative] = /^s/i.test(m[1]) ? ['mother', P.mother] : ['father', P.father];
-  if (!relative || !relative.given || !isPatronymic(relative.surname)) return;
-  if (patronymicDiffers(head, relative.surname)) {
+  const patronymic = relative && (relative.patronymic || relative.surname);
+  if (!relative || !relative.given || !isPatronymic(patronymic)) return;
+  if (patronymicDiffers(head, patronymic)) {
     add(-2, t('{role} of {name} in the record, who has another patronymic than {relation} {fs}', {
       role: me.role.split(',')[0].trim(), name: head.name, relation: t(key), fs: [relative.given, relative.surname].join(' ')
     }), false);
