@@ -468,7 +468,7 @@ function groupHits(merged, P) {
 // residence, else the birthplace ("1845, Aurland")
 function hitPlace(hit) {
   const source = String(hit.source || '');
-  const code = (source.match(/\((\d{4})[A-Z]\w*\)\s*$/) || source.match(/\bcensus for (\d{4})[A-Z]?\b/) || [])[1];
+  const code = parishCode(source).slice(0, 4) || (source.match(/\bcensus for (\d{4})[A-Z]?\b/) || [])[1];
   if (code && DA_COORDS[code]) return code;
   const named = source.match(/\bcensus for (?:\d{4}[A-Z]?\s+)?([^,(]+)/) || source.match(/^Church book from (.+?) parish\b/);
   const fromName = named && municipalityOf(named[1].trim());

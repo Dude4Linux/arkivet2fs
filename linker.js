@@ -873,10 +873,30 @@ const joined = (...parts) => parts.filter(Boolean).join(', ');
 // present name ("Halden parish"), the town Fredrikshald in 1875
 function parishName(record) {
   const name = recordPlace(record);
-  const code = (parishCode(record.sourceTitle || '').match(/^\d{4}/) || [])[0];
+  const code = parishCode(record.sourceTitle).slice(0, 4);
   if (!code || !TOWN_NAMES[code] || foldPlace(name) !== foldPlace(municipalityName(code))) return name;
   const town = townIn(code, (daDateParts(record.recordDate) || {}).year);
   return town ? town.name : name;
+}
+
+// The title's parish by the town's name of the record's year, as parishName() gives
+// it ("… - Fredrikshald parish 1869-1884 (0101P) - Birth, 17 May 1875"); the citation
+// keeps DA's name of the book, as the archive names it
+function titleOfYear(title, record) {
+  const code = parishCode(record.sourceTitle).slice(0, 4);
+  const town = TOWN_NAMES[code] && townIn(code, (daDateParts(record.recordDate) || {}).year);
+  const present = ' - ' + municipalityName(code) + ' parish ';
+  return town && town.name !== municipalityName(code) ? String(title || '').split(present).join(' - ' + town.name + ' parish ') : title;
+}
+// The title as it was before titleOfYear(): the town's parish by its present name
+function presentParishTitle(title) {
+  for (const [code, names] of Object.entries(TOWN_NAMES)) {
+    for (const [name] of names.filter(([n]) => n !== municipalityName(code))) {
+      const old = ' - ' + name + ' parish ';
+      if (String(title).includes(old)) return title.split(old).join(' - ' + municipalityName(code) + ' parish ');
+    }
+  }
+  return title;
 }
 
 // The record's parish as FS names it: a parish that is a municipality ("Vågå,
@@ -887,7 +907,7 @@ function parishPlace(record) {
   if (!name) return '';
   const own = fsMunicipality(name, record);
   if (own) return own;
-  const code = (parishCode(record.sourceTitle).match(/^\d{4}/) || [])[0];
+  const code = parishCode(record.sourceTitle).slice(0, 4);
   if (code && DA_MUNICIPALITIES[code]) return townPlace(code, record);
   return fsPlace(name, record);
 }
@@ -1202,7 +1222,7 @@ function deathFarm(person, record) {
 // (a kjøpstad or ladested) a number below 11 in its county (Arendal 0903, Oslo 0301),
 // a rural municipality 11 and up (Gjerstad 0911)
 function townParish(record) {
-  const code = (parishCode(record.sourceTitle).match(/^\d{4}/) || [])[0];
+  const code = parishCode(record.sourceTitle).slice(0, 4);
   return !!code && Number(code.slice(2)) < 11;
 }
 
@@ -2023,7 +2043,7 @@ async function readInTab(tabId, pid) {
 
 // The source's fields (`prefix` f; g for the other church book's)
 function fillSource(record, prefix = 'f') {
-  $(prefix + '-title').value = record.title || '';
+  $(prefix + '-title').value = titleOfYear(record.title || '', record);
   if (state.unnamedTitles) delete state.unnamedTitles[prefix + '-title'];  // a new title: unnamedChildTitle() reads it again
   $(prefix + '-date').value = record.date || '';
   $(prefix + '-url').value = record.url || '';
@@ -2313,8 +2333,8 @@ function readPlan(attach) {
       const later = additions.filter((a) => a.action === 'add').map((a) => a.fact);
       const now = tags.filter((tag) => !later.includes(tag));
       const kind = row.person ? roleKind(row.person) : '';
-      pairs.push(attach ? { pid, label: row.label(), kind, reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions }
-        : { pid, label: row.label(), kind, reason: row.reason(), tags: [], residence: false, additions });
+      pairs.push({ pid, label: row.label(), kind, reason: row.reason(), additions,
+        tags: attach ? now.filter((tag) => tag !== 'Residence') : [], residence: attach && now.includes('Residence') });
     }
     if (attach && !pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
   }
@@ -2329,7 +2349,7 @@ function marriageCouple(pairs) {
   if ((record.recordTypeInfo || {}).type !== 'marriage') return null;
   const groom = pairs.filter((p) => p.kind === 'groom'), bride = pairs.filter((p) => p.kind === 'bride');
   if (groom.length !== 1 || bride.length !== 1) return null;
-  const year = ((record.recordDate || '').match(/^\d{4}/) || [])[0];
+  const year = recordYear();
   const label = t('{a} and {b}', { a: groom[0].label, b: bride[0].label });
   return { pids: [groom[0].pid, bride[0].pid], label,
     reason: t('Marriage of {names}', { names: label }) + (year ? ' (' + year + ')' : '') + ' ' + t('on Digitalarkivet, {id}.', { id: record.permanentId || record.url }) };
@@ -2745,9 +2765,11 @@ function recordYear() {
 // with `source` (the Edit Source dialog, cancelled) and only this record's are kept;
 // their `fields` come along.
 async function lookUpSource(tabId, title, active = true, source = null, sameRecord = []) {
-  const former = formerTitles(title, recordYear());
+  const present = presentParishTitle(title);
+  const former = [...new Set([...formerTitles(title, recordYear()), ...(present !== title ? [present, ...formerTitles(present, recordYear())] : [])])];
   const forms = [title, ...former];
-  const search = forms.find((f) => forms.every((o) => o.includes(f))) || title;
+  const first = title.split(' - ')[0];
+  const search = forms.find((f) => forms.every((o) => o.includes(f))) || (present !== title && forms.every((o) => o.includes(first)) ? first : title);
   let found = await step(tabId, 'findSource', { title, older: former, search });
   if (!found.ok) throw stepError(found);
   for (const older of former.filter((f) => !f.includes(search))) {
@@ -2938,12 +2960,11 @@ function onTreeAlready(tree, a) {
   const vital = Object.keys(VITAL_TYPES).find((k) => VITAL_TYPES[k] === a.type);
   if (vital) {
     const fs = tree[vital.toLowerCase()];
-    // FS's place without its Norwegian letters isn't the one to be saved with them
-    const respelled = fs && placeText(fs.place) !== norwegianSpelling(fs.place) && placeText(fs.place) !== placeText(v.place);
-    // nor FS's town under another of its names the one of the year ("Halden, Østfold,
-    // Norway" for Fredrikshald, Smaalenene, which sameFsPlace() takes for one place)
-    const renamed = fs && placeText(fs.place) !== placeText(v.place) && townOfYear(norwegianSpelling(fs.place), fsYear(v.date)) === placeText(v.place);
-    return Boolean(fs && (fs.date || fs.place) && !respelled && !renamed && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
+    // FS's place not in the form an addition writes isn't the one to be saved (without
+    // its Norwegian letters; a town under another name than the year's, "Halden,
+    // Østfold, Norway" for 1875, which sameFsPlace() takes for the same place)
+    const stale = fs && placeText(fs.place) !== placeText(fsPlaceOfYear(fs.place, fsYear(v.date))) && placeText(fs.place) !== placeText(v.place);
+    return Boolean(fs && (fs.date || fs.place) && !stale && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
   }
   const year = fsYear(v.date);
   if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year);
@@ -3204,6 +3225,12 @@ function townPlaceIn(code, year, written) {
 // FS's place of a renamed town under another of its names (its present one, "Halden,
 // Østfold, Norway", for a birth in 1875) as the town was named in `year`: "Fredrikshald,
 // Smaalenene, Norway". Only the town itself, not a place in it; anything else as it is.
+// FS's place as an addition would write it: with its Norwegian letters, a renamed town
+// by its name of the year (onTreeAlready(): what FS hasn't yet)
+function fsPlaceOfYear(place, year) {
+  return townOfYear(norwegianSpelling(place), year);
+}
+
 function townOfYear(place, year) {
   const parts = String(place || '').split(',').map((x) => x.trim());
   if (!year || parts.length < 2 || parts.length > 3 || parts[parts.length - 1] !== 'Norway') return place;

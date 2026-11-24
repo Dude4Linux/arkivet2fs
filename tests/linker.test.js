@@ -2372,6 +2372,38 @@ test('lookUpSource(): a census source under its former title is searched for by 
   assert.equal(found.formerTitle, '1865, Halvor Larsen household, Bakken nedre, Nordlien - Vågå - Census');
 });
 
+test('titleOfYear(): a town\'s parish in the title by its name of the record\'s year; a source under the present name is found by it', async () => {
+  const record = (date, source) => ({ recordDate: date, sourceTitle: source });
+  const halden = 'Church book from Halden parish 1869-1884 (0101P)';
+  const title = 'Ole, son of Hans Olsen - Halden parish 1869-1884 (0101P) - Birth, 17 May 1875';
+  const old = 'Ole, son of Hans Olsen - Fredrikshald parish 1869-1884 (0101P) - Birth, 17 May 1875';
+  assert.equal(w.titleOfYear(title, record('1875-05-17', halden)), old);
+  assert.equal(w.titleOfYear(title, record('1930-05-17', halden)), title);  // Halden by then
+  assert.equal(w.titleOfYear('Lars - Vågå parish (0515P) - Birth', record('1846-08-23', 'Church book from Vågå parish (0515P)')), 'Lars - Vågå parish (0515P) - Birth');
+  assert.equal(w.presentParishTitle(old), title);
+  assert.equal(w.presentParishTitle('Lars - Vågå parish (0515P) - Birth'), 'Lars - Vågå parish (0515P) - Birth');
+  // the SourceBox's source of the present name: one search by the name, given the new title
+  const searched = [];
+  const { chrome } = fakeFs({
+    findSource: ({ older, search }) => {
+      searched.push(search);
+      return { ok: true, sources: [{ id: 'TEST-S14', title }], title: older.includes(title) ? title : null };
+    },
+    editSource: () => ({ ok: true, sourceId: 'TEST-S14', fields: { title } }),
+    attachedTo: () => ({ ok: true, persons: [] })
+  });
+  const { win, state, $ } = checkedPage(chrome);
+  state.record = { ...state.record, recordDate: '1875-05-17', sourceTitle: halden };
+  win.fillSource({ ...state.record, title, citation: 'Norway, Østfold, Halden Parish, "' + halden + '," …' });
+  assert.equal($('f-title').value, old);  // the source box's title
+  assert.match($('f-citation').value, /^Norway, Østfold, Halden Parish, "Church book from Halden parish/);  // as DA names the book
+  const tab = await win.openTab(value(win, 'SOURCEBOX_URL'));
+  const found = await win.lookUpSource(tab, old, true, win.reviewedSource('f'), win.sameRecordIds(0));
+  assert.deepEqual(searched, ['Ole, son of Hans Olsen']);
+  assert.equal(found.id, 'TEST-S14');
+  assert.equal(found.formerTitle, title);
+});
+
 test('run(): a source Home shows by its title is checked and written over like one found', async () => {
   const { chrome, asked } = fakeFs({
     findSource: () => ({ ok: true, sources: [] }),

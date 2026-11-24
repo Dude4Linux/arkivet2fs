@@ -37,6 +37,11 @@ fixes, new features, changes that break what users have).
   Østfold, Norway" for 1875), the linker offers to change it to the name of that
   year, and saves the change (it took the two names for the same place and left the
   fact unchanged).
+- The source's title names a town's parish by the town's name of the record's year
+  ("Fredrikshald parish 1869-1884 (0101P)" for a baptism in 1875); the citation still
+  names the church book as the National Archives do ("Halden parish"). A source made
+  before under the present name is found in your SourceBox and given the new title
+  when you open the record in the linker again.
 - **A colon closing a name:** the church books' abbreviation mark, kept in DA's
   transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
   title, the citation, the notes and the names offered for FamilySearch, and the

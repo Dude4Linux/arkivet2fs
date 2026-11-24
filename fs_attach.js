@@ -189,6 +189,8 @@ if (!window.__arkivet2fsAttach) {
   // (attach-to-<relationship ID>-persons, its entity type "Couple") holds the husband
   // and wife as plain `person`s, not attach-to-<PID>-person: they aren't persons with
   // the source.
+  const PID = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
+
   async function attachedTo({ sourceId }) {
     if (!/\/sources\/attachedto\//i.test(location.pathname)) {
       throw new Error('FamilySearch did not open the source\'s Attached To page. Please sign in to FamilySearch and try again.');
@@ -205,7 +207,7 @@ if (!window.__arkivet2fsAttach) {
       persons: persons().map((node) => {
         const pid = clean(byTestId('pid', node)?.textContent) || node.getAttribute('data-testid').replace(/^attach-to-/, '').replace(/-person$/, '');
         return { pid: pid.toUpperCase(), name: clean(byTestId('fullName', node)?.textContent), lifespan: clean(byTestId('lifespan', node)?.textContent) };
-      }).filter((p) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(p.pid)),
+      }).filter((p) => PID.test(p.pid)),
       couples: entries().map((node) => {
         const id = node.getAttribute('data-testid').replace(/^attach-to-/, '').replace(/-persons$/, '').toUpperCase();
         const type = clean(byTestId('attach-to-' + id + '-entity-type', node)?.textContent || byTestId('attach-to-' + id + '-entity-type')?.textContent);
@@ -216,8 +218,6 @@ if (!window.__arkivet2fsAttach) {
       }).filter(Boolean)
     };
   }
-  const PID = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
-
   const FIELDS = {
     date: 'input[data-testid="source-date-field"]',
     title: 'input[data-testid="source-title-field"]',
@@ -367,20 +367,24 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true, sourceId, changed, missing };
   }
 
+  // A source's Attach button in the SourceBox (a source Home doesn't show, in a folder
+  // or older, is searched for by its title)
+  async function rowAttachButton(sourceId, title) {
+    const find = () => byTestId('row-' + sourceId + '-attach-button');
+    try {
+      return await waitFor(find, 'the source in the SourceBox', title ? 6000 : 20000);
+    } catch (e) {
+      if (!title || e.blocked) throw e;
+      await searchSourceBox(clean(title));
+      return waitFor(find, 'the source in the SourceBox');
+    }
+  }
+
   // Attach the source to a person by PID, with a reason
   // (a source Home doesn't show, in a folder or older, is found by its title)
   async function attach({ sourceId, title, pid, reason, tags, residence }) {
     checkSourceBox();
-    const findButton = () => byTestId('row-' + sourceId + '-attach-button');
-    let button;
-    try {
-      button = await waitFor(findButton, 'the source in the SourceBox', title ? 6000 : 20000);
-    } catch (e) {
-      if (!title) throw e;
-      await searchSourceBox(clean(title));
-      button = await waitFor(findButton, 'the source in the SourceBox');
-    }
-    button.click();
+    (await rowAttachButton(sourceId, title)).click();
     const tab = await waitFor(() => byTestId('find-options-by-id-tab'), 'the Attach dialog');
     tab.click();
     const field = await waitFor(() => byTestId('find-options-id-field'), 'the ID field');
@@ -486,16 +490,7 @@ if (!window.__arkivet2fsAttach) {
     if (!PID.test(String(coupleId || '').toUpperCase()) || want.length !== 2 || !want.every((p) => PID.test(p))) {
       throw new Error('Not a couple relationship: ' + [coupleId, ...want].join(' '));
     }
-    const findButton = () => byTestId('row-' + sourceId + '-attach-button');
-    let button;
-    try {
-      button = await waitFor(findButton, 'the source in the SourceBox', title ? 6000 : 20000);
-    } catch (e) {
-      if (!title || e.blocked) throw e;
-      await searchSourceBox(clean(title));
-      button = await waitFor(findButton, 'the source in the SourceBox');
-    }
-    button.click();
+    (await rowAttachButton(sourceId, title)).click();
     const shown = await waitFor(() => document.querySelector('textarea[data-testid="reason-to-attach-reason-field"]') ||
       byTestId('reason-to-attach-already-attached-ok-button') || byTestId('find-options-by-id-tab'), 'the couple\'s Attach dialog');
     if (shown.matches('[data-testid="reason-to-attach-already-attached-ok-button"]')) {
@@ -668,14 +663,13 @@ if (!window.__arkivet2fsAttach) {
     return leaves.length ? leaves : [clean(o.textContent)];
   }
   function pickSuggestion(options, typed, year) {
-    const lines = optionLines;
     const fold = (text) => clean(text).toLowerCase();
     let rest = options;
     if (options.length > 1 && fold(options[0].textContent) === fold(typed)) rest = options.slice(1);
-    const kinds = rest.filter((o) => lines(o).length > 1);
+    const kinds = rest.filter((o) => optionLines(o).length > 1);
     if (!kinds.length) return rest[0];
     const holds = (o) => {
-      const m = lines(o).slice(1).join(' ').match(/(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Present)/i);
+      const m = optionLines(o).slice(1).join(' ').match(/(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Present)/i);
       if (!m) return false;
       const from = /^\d/.test(m[1]) ? Number(m[1]) : -Infinity;
       const to = /^\d/.test(m[2]) ? Number(m[2]) : Infinity;
@@ -685,7 +679,7 @@ if (!window.__arkivet2fsAttach) {
     const parts = (text) => String(text || '').split(',').map(key);
     const want = parts(typed);
     const named = kinds.filter((o) => {
-      const [name, ...more] = lines(o);
+      const [name, ...more] = optionLines(o);
       const have = parts(name);
       // A place below a municipality (a farm, "Bakken, Vågå, Oppland, Norway", or more
       // parts, "Lom, byens grund, Vågå, ..."): only one below that same
@@ -815,8 +809,7 @@ if (!window.__arkivet2fsAttach) {
   async function findPerson({ relation, anchor, other, person }) {
     anchor = (anchor || '').toUpperCase();
     other = (other || '').toUpperCase();
-    const pid = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
-    if (!pid.test(anchor) || (other && !pid.test(other))) throw new Error('Not a FamilySearch PID: ' + (pid.test(anchor) ? other : anchor));
+    if (!PID.test(anchor) || (other && !PID.test(other))) throw new Error('Not a FamilySearch PID: ' + (PID.test(anchor) ? other : anchor));
     if (!new RegExp('/tree/person/details/' + anchor + '(/|$)', 'i').test(location.pathname)) {
       throw new Error('FamilySearch did not open the tree person ' + anchor + '. Please sign in to FamilySearch and try again.');
     }
@@ -930,8 +923,7 @@ if (!window.__arkivet2fsAttach) {
     pid = (pid || '').toUpperCase();
     anchor = (anchor || '').toUpperCase();
     other = (other || '').toUpperCase();
-    const ok = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
-    if (![pid, anchor].every((p) => ok.test(p)) || (other && !ok.test(other))) throw new Error('Not a FamilySearch PID: ' + [pid, anchor, other].join(' '));
+    if (![pid, anchor].every((p) => PID.test(p)) || (other && !PID.test(other))) throw new Error('Not a FamilySearch PID: ' + [pid, anchor, other].join(' '));
     if (linkedOnPage(relation, anchor, other, pid)) {
       await cancelAdd();
       return { ok: true, already: true };
@@ -991,7 +983,7 @@ if (!window.__arkivet2fsAttach) {
 
   function onPersonPage(pid) {
     pid = String(pid || '').toUpperCase();
-    if (!/^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(pid)) throw new Error('Not a FamilySearch PID: ' + pid);
+    if (!PID.test(pid)) throw new Error('Not a FamilySearch PID: ' + pid);
     if (!new RegExp('/tree/person/details/' + pid + '(/|$)', 'i').test(location.pathname)) {
       throw new Error('FamilySearch did not open the tree person ' + pid + '. Please sign in to FamilySearch and try again.');
     }
@@ -1168,7 +1160,8 @@ if (!window.__arkivet2fsAttach) {
     await closeFactDialog();
     // The fact as FS shows it now: the one not there before (an edit: the only one, once
     // it holds the date's year)
-    const date = addition.action !== 'name' && (addition.value || {}).date;
+    const value = addition.action === 'name' ? {} : addition.value || {};
+    const date = value.date;
     const year = yearIn(date);
     const holds = (el) => !year || yearIn(clean((el.querySelector('[data-testid="conclusion-date"]') || el).textContent)) === year;
     let shown = '';
@@ -1176,7 +1169,7 @@ if (!window.__arkivet2fsAttach) {
       const el = await waitFor(() => (addition.action === 'edit' ? displays(type).find(holds) : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
       shown = clean(el.textContent);
       // Saved without its place: FS took the place as none (it was only typed in)
-      const place = addition.action !== 'name' && (addition.value || {}).place;
+      const place = value.place;
       if (place && !clean((byTestId('conclusion-place', el) || {}).textContent)) {
         throw Object.assign(new Error('FamilySearch saved the ' + factName(type) + ' without its place (' + place + '). Add the place by hand.'), { noPlace: true });
       }
