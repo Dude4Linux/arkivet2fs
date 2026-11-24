@@ -52,6 +52,22 @@ test('a page across a spread: "pp. 260–261", not "p. 260, 261" (bug: read as t
   assert.match(withPage('24b'), /, p\. 24b$/);
 });
 
+test('a baptism dated before the birth it gives: a remark in the notes (bug: baptized 12 March 1892, born 29 July 1892)', () => {
+  const file = 'da/baptism-1846.html';
+  const withBirth = (md) => {
+    const doc = fixtureDoc(w, file);
+    const label = [...doc.querySelectorAll('div')].find((d) => d.textContent.trim() === 'Date of birth:');
+    label.nextElementSibling.textContent = md;
+    const year = [...doc.querySelectorAll('div')].find((d) => d.textContent.trim() === 'Birth year:');
+    year.nextElementSibling.textContent = '1846';
+    return w.extractRecord(doc, fixtureUrl(file)).notes;
+  };
+  assert.match(withBirth('09-16'), /^Remark: the baptism, 23 August 1846, is dated before the birth, 16 September 1846: the year is evidently wrong in the source or its transcription\.$/m);
+  // born before the baptism, also the same day: nothing to remark
+  assert.doesNotMatch(withBirth('07-16'), /^Remark: the baptism/m);
+  assert.doesNotMatch(withBirth('08-23'), /^Remark: the baptism/m);
+});
+
 test('a header date DA wrote wrong ("1846-2308") is only its year', () => {
   const file = 'da/baptism-1846.html';
   const read = (date) => {

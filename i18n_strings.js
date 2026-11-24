@@ -449,6 +449,7 @@ function i18nTable() {
     'Christening': ['Dåp', 'Dåp'],
     'Occupation': ['Yrke', 'Yrke'],
     'about {year}': ['omkring {year}', 'omkring {year}'],
+    'before the birth, {born}: read as {date}': ['før fødselen, {born}: lest som {date}', 'før fødselen, {born}: lese som {date}'],
     'age {age}': ['alder {age}', 'alder {age}'],
     'age {age}, as in FamilySearch': ['alder {age}, som i FamilySearch', 'alder {age}, som i FamilySearch'],
     'age {age} (FamilySearch: {fs} on {date})': ['alder {age} (FamilySearch: {fs} den {date})', 'alder {age} (FamilySearch: {fs} den {date})'],

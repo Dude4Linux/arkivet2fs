@@ -1869,6 +1869,9 @@ test('a town\'s parish by its name of the record\'s year, also where FS has the 
   // FS's present name of the town (also without its Norwegian letters), changed to the name of the time
   assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Halden, Østfold, Norway' }, christening: { date: '23 August 1846', place: 'Halden,Ostfold,Norway' } }),
     [['Birth', 'edit', 'Fredrikshald, Smaalenene, Norway'], ['Christening', 'edit', 'Fredrikshald, Smaalenene, Norway']]);
+  // FS's place not standardized, without Norway: the town of the time too
+  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Halden, Østfold' } }),
+    [['Christening', 'edit', 'Fredrikshald, Smaalenene, Norway']]);
   // the name of the time already, or a place in the town: left as it is
   assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Immanuels kirke, Halden, Østfold, Norway' } }), []);
   // the birth's own year decides: a groom of 1850 born in Halden is in Fredrikshald, one of 1930 in Halden
@@ -1877,6 +1880,48 @@ test('a town\'s parish by its name of the record\'s year, also where FS has the 
   assert.equal(w.townOfYear('Oslo, Oslo, Norway', 1880), 'Kristiania, Norway');
   assert.equal(w.townOfYear('Halden, Østfold, Norway', null), 'Halden, Østfold, Norway');
   assert.equal(w.townOfYear('Vågå, Oppland, Norway', 1850), 'Vågå, Oppland, Norway');
+});
+
+test('baptismAfterBirth(), factAdditions(): a baptism dated before the birth is a slip of the year, never offered (bug: 12 March 1892 for a child born 29 July 1892)', () => {
+  assert.deepEqual(plain(w.baptismAfterBirth({ year: 1846, month: 3, day: 12 }, { year: 1846, month: 7, day: 16 })), { year: 1847, month: 3, day: 12 });
+  assert.equal(w.baptismAfterBirth({ year: 1846, month: 8, day: 23 }, { year: 1846, month: 7, day: 16 }), null);
+  assert.equal(w.baptismAfterBirth({ year: 1846, month: 8, day: 23 }, { year: 1846 }), null);
+  // the year of the day after the birth: born in September, a baptism dated 1 August of that year
+  assert.deepEqual(plain(w.baptismAfterBirth({ year: 1846, month: 8, day: 1 }, { year: 1846, month: 9, day: 16 })), { year: 1847, month: 8, day: 1 });
+  // the same year when the slip is a year back: born 16 July 1846, baptized "23 August 1845"
+  assert.deepEqual(plain(w.baptismAfterBirth({ year: 1845, month: 8, day: 23 }, { year: 1846, month: 7, day: 16 })), { year: 1846, month: 8, day: 23 });
+
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  // the record: born 16 July 1846 (its birth year), baptized "12 March 1846"
+  const b = { ...state.record, recordDate: '1846-03-12', fields: { ...state.record.fields, 'date of birth': '07-16', 'birth year': '1846' } };
+  state.record = b;
+  const facts = win.recordFacts(lars, b);
+  assert.match(facts.Christening.text, /^12 March 1846, .*\(before the birth, 16 July 1846: read as 12 March 1847\)$/);
+  const christening = (fs, tree = {}) => {
+    state.fs = { ...LARS_1846, ...tree, christening: fs };
+    return plain(win.factAdditions(lars, b, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Christening').map((a) => [a.action, a.value.date]);
+  };
+  // FS's 12 March 1847 agrees with the year it must be: no change, and ✓ in the table
+  assert.deepEqual(christening({ date: '12 March 1847', place: 'Vågå, Oppland, Norway' }), []);
+  assert.equal(win.compareFact('Christening', facts.Christening, { year: 1847, date: { year: 1847, month: 3, day: 12 } }), 'same');
+  // FS's own christening date stands, whatever its year: the slip's never offered
+  assert.deepEqual(christening({ date: '14 March 1847', place: 'Vågå, Oppland, Norway' }), []);
+  // FS without a christening: the day in the year after the birth, not the slip
+  assert.deepEqual(christening(undefined), [['add', '12 March 1847']]);
+  // the record without a birth date of its own: FS's full birth date tells the same
+  state.record = { ...b, fields: { ...state.record.fields, 'date of birth': '', 'birth year': '' } };
+  state.fs = { ...LARS_1846, christening: undefined };
+  assert.deepEqual(plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Christening').map((a) => a.value.date), ['12 March 1847']);
+});
+
+test('townOfYear(): FS\'s place not standardized, the town and county without Norway (bug: "Halden, Østfold" kept for 1893)', () => {
+  assert.equal(w.townOfYear('Halden, Østfold', 1893), 'Fredrikshald, Smaalenene, Norway');
+  assert.equal(w.townOfYear('Halden, Østfold.', 1893), 'Fredrikshald, Smaalenene, Norway');
+  // a town's name alone, or with another county, may be a farm elsewhere: as it is
+  assert.equal(w.townOfYear('Halden', 1893), 'Halden');
+  assert.equal(w.townOfYear('Halden, Oppland', 1893), 'Halden, Oppland');
+  assert.equal(w.townOfYear('Halden, Østfold', 1930), 'Halden, Østfold, Norway');
 });
 
 test('factAdditions(): a baptized child\'s birth FS lacks is in the parish of the baptism (reports #8, #9: no place, FS refused it)', () => {

@@ -840,6 +840,19 @@ function dateText(d) {
   if (!d || !d.year) return '';
   return d.month ? formatDate(d.year, d.month, d.day) : String(d.year);
 }
+// A baptism dated before the birth it records (DA's "Date of birth: 07-29", "Birth
+// year: 1892", baptized "1892-03-12"): a slip of the year, the clerk's or the
+// transcriber's. The baptism's day in the first year that puts it after the birth
+// ({year, month, day}); null when it comes after it, or either lacks a day.
+function baptismAfterBirth(baptized, born) {
+  const full = (d) => Boolean(d && d.year && d.month && d.day);
+  if (!full(baptized) || !full(born)) return null;
+  const key = (d) => d.year * 10000 + d.month * 100 + d.day;
+  if (key(baptized) >= key(born)) return null;
+  const year = born.year + (baptized.month * 100 + baptized.day < born.month * 100 + born.day ? 1 : 0);
+  return { year, month: baptized.month, day: baptized.day };
+}
+
 // The record's place, from the source title: "Church book from Vågå parish, ..." → Vågå
 function recordPlace(record) {
   const title = record.sourceTitle || '';
@@ -935,8 +948,15 @@ function recordFacts(person, record) {
 
   // The record's event, for the one it is about
   const event = (label, extra) => { facts[label] = { text: joined(dateText(recorded), place, extra), date: recorded, year: recorded && recorded.year }; };
-  if (type === 'birth_baptism' && kind === 'child') event('Christening');
-  else if (type === 'confirmation' && kind === 'child') event('Confirmation');
+  if (type === 'birth_baptism' && kind === 'child') {
+    event('Christening');
+    // dated before the birth the record gives: the year read as the one after it
+    const fixed = baptismAfterBirth(recorded, born);
+    if (fixed) {
+      facts.Christening.fixed = fixed;
+      facts.Christening.text += ' (' + t('before the birth, {born}: read as {date}', { born: dateText(born), date: dateText(fixed) }) + ')';
+    }
+  } else if (type === 'confirmation' && kind === 'child') event('Confirmation');
   else if (type === 'marriage' && (kind === 'groom' || kind === 'bride')) event('Marriage');
   else if (type === 'death_burial' && kind === 'deceased') {
     event('Burial');
@@ -1056,6 +1076,8 @@ function compareFact(fact, da, fs, person, tree, record, name) {
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
   if (!da.year || !fs.year) return '';
+  // a baptism dated before the birth: by the year it must have been (baptismAfterBirth())
+  if (da.fixed) da = { ...da, date: da.fixed, year: da.fixed.year };
   const a = da.date || {}, b = fs.date || {};
   // An age against FS's full birth date: the age on the day it was counted, one off ≈
   if (fact === 'Birth' && da.age != null && da.on && b.exact) {
@@ -1328,7 +1350,12 @@ function factAdditions(person, record, tree, name) {
     // no year in the record (a marriage's birthplace): only a place FS's dated fact lacks
     const placeOnly = fs && String(fs.date || '').trim() && !String(fs.place || '').trim() && cleanPlace(vitalPlace[fact][0]);
     if (!f.year && !placeOnly) continue;
-    const date = !f.year ? null : f.date && f.date.year ? f.date : { year: f.year };
+    // a baptism dated before the birth (the record's, else FS's full date): never the
+    // slip's year; FS's own date when it has one, else the day in the year after the birth
+    const fsBorn = fact === 'Christening' && parseFsDate((full.birth && full.birth.date) || '');
+    const fixed = fact === 'Christening' && (f.fixed || baptismAfterBirth(f.date, fsBorn && fsBorn.exact ? fsBorn : null));
+    const fsDate = fixed && fs && parseFsDate(fs.date || '');
+    const date = (fsDate && fsDate.year ? fsDate : fixed) || (!f.year ? null : f.date && f.date.year ? f.date : { year: f.year });
     const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(...[vitalPlace[fact][0], fs && fs.place, record].concat(vitalPlace[fact].slice(1))) };
     // a renamed town by its name of the fact's year, also where FS has it by another
     // ("Halden, Østfold, Norway" for a birth in 1875: Fredrikshald, Smaalenene)
@@ -3206,8 +3233,11 @@ function fsPlaceOfYear(place, year) {
 }
 
 function townOfYear(place, year) {
-  const parts = String(place || '').split(',').map((x) => x.trim());
-  if (!year || parts.length < 2 || parts.length > 3 || parts[parts.length - 1] !== 'Norway') return place;
+  const parts = String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+  // also FS's place not standardized, the town and its county without Norway ("Halden,
+  // Østfold."; the county checked below, so not a farm of the town's name elsewhere)
+  if (parts.length === 2 && parts[1] !== 'Norway') parts.push('Norway');
+  if (!year || parts.length < 2 || parts.length > 3) return place;
   for (const [code, names] of Object.entries(TOWN_NAMES)) {
     const county = fsCounty(countyName(code.slice(0, 2)));
     const towns = [municipalityName(code), ...names.map((n) => n[0])].map(foldPlace);

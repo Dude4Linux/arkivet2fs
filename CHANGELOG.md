@@ -36,7 +36,16 @@ fixes, new features, changes that break what users have).
   of a birth, christening, death or burial under another of its names ("Halden,
   Østfold, Norway" for 1875), the linker offers to change it to the name of that
   year, and saves the change (it took the two names for the same place and left the
-  fact unchanged).
+  fact unchanged). That is also so for a place FamilySearch hasn't standardized, the
+  town and its county without the country ("Halden, Østfold").
+- **A baptism dated before the birth:** when a record gives the child's date of birth
+  with its year and is dated before it (born 29 July, baptized 12 March of the same
+  year), the year is a slip, the clerk's or the transcriber's. The linker no longer
+  offers to change the christening on FamilySearch to the wrong year: it keeps
+  FamilySearch's date, or, when FamilySearch has no christening, takes the day in the
+  year after the birth. The people's facts show the slip ("12 March 1892 (before the
+  birth, 29 July 1892: read as 12 March 1893)"), and the source's notes say it in a
+  remark; the title and citation keep the date as DigitalArkivet has it.
 - Names are read by one set of rules everywhere (the search, the record pages, the
   linker): a patronymic in any of the church books' abbreviations ("Larsdat.",
   "Pedersd:r", "Olsdaatter"), one written without the genitive s ("Knutdatter"), and one
