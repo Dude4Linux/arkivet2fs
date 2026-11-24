@@ -740,7 +740,7 @@ function defaultReason(record, person) {
 // gives; both when neither does), and the paired FS person's own name
 function surnameSuggestions(person, people, record, tree) {
   const name = stripNameVariants(person.name);
-  if (!name || name.split(/\s+/).length > 1) return [];
+  if (!name || nameParts(name, { givenOnly: givenNamesOnly(person, record) }).surname) return [];
   const out = [];
   if (tree && tree.name && tree.name.split(/\s+/).length > 1 && hasGivenName(person, splitName(tree.name).given)) {
     out.push({ name: tree.name, label: t('FamilySearch name') });
@@ -1248,15 +1248,28 @@ function churchPlace(record) {
 // father Lars: Larsdatter); with `family` (the tree's surname, not a patronymic), a
 // last word that is the family name in another spelling is the surname, the
 // patronymic a given name ("Lars Halvorsen Lindeman", FS's Lindemann).
-function nameParts(name, { fathers = [], family = '' } = {}) {
+// With `givenOnly` (the record gives given names only, givenNamesOnly()), a name
+// without a patronymic is all given names ("Ana Margrethe", not Ana + Margrethe).
+function nameParts(name, { fathers = [], family = '', givenOnly = false } = {}) {
   const words = nameWords(name);
   const last = words[words.length - 1];
   const sameWord = (a, b) => fold(a) === fold(b) || nameNear(a, b);
   if (family && words.length > 2 && !isPatronymic(last) && sameWord(last, family)) {
     return { given: words.slice(0, -1).join(' '), surname: last, rest: '' };
   }
+  if (givenOnly && !words.slice(1).some(isPatronymic)) return { given: words.join(' '), surname: '', rest: '' };
   // the father's name as a patronymic's base reads it, without its genitive s (Johannes)
   return splitName(name, (w) => fathers.some((f) => [f, f.replace(/s$/i, '')].some((g) => sameFather(patronymicBase(w), g))));
+}
+// Whether the record names a person by given names only: the principal's own fields
+// with a given name and no last name (the fields are the principal's), else a baptized
+// child, whom church books name by the given names (DA's Last name field holds a
+// surname when the book gives one)
+function givenNamesOnly(person, record) {
+  const fields = record.fields || {};
+  const filled = (v) => !/^[-\s]*$/.test(v || '');
+  if (person.primary && filled(fields['given name'] || fields['first name'])) return !filled(fields['last name'] || fields['surname']);
+  return roleKind(person) === 'child' && (record.recordTypeInfo || {}).type === 'birth_baptism';
 }
 // The given names of a person's fathers in the record (a baptism's father, a groom's
 // or bride's father), for nameParts()
@@ -1300,12 +1313,14 @@ function otherName(person, record, full, name) {
   // (DA's "!!" and "??", missing or illegible in the source, are no name to keep: report
   // #10; nor is a word of two readings, "Even/Sven")
   if (asWritten.split(/\s+/).some((w) => unreadableWord(w) || readingsOf(w).length > 1)) return null;
-  const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name) });
+  // (given names only, as a baptism names the child: kept together, no surname)
+  const only = givenNamesOnly(person, record);
+  const parts = nameParts(asWritten, { fathers: recordFathers(person, record), family: treeFamilyName(full.name), givenOnly: only });
   const fsGiven = String(full.name || '').split(/\s+/).filter(Boolean).slice(0, -1);
   const givenOnly = fsGiven.length > 0 && asWritten.split(/\s+/).filter(Boolean).every((w) => fsGiven.some((g) => nameMatch(w, g)));
-  if (!parts.surname || givenOnly) return null;
+  if ((!parts.surname && !only) || givenOnly) return null;
   const known = [full.name, ...(full.altNames || [])].map(sameNameKey);
-  return known.includes(sameNameKey(parts.given + ' ' + parts.surname)) ? null : { given: parts.given, surname: parts.surname };
+  return known.includes(sameNameKey([parts.given, parts.surname].filter(Boolean).join(' '))) ? null : { given: parts.given, surname: parts.surname };
 }
 
 function factAdditions(person, record, tree, name) {
@@ -3272,10 +3287,10 @@ function newPersonDraft(row) {
   if (twoReadings.length) notes.push(t('Two readings on DigitalArkivet, the first taken: {words}.', { words: twoReadings.join(' ') }));
   const words = kept.map((w) => readingsOf(w)[0]);
   // The patronymic is the surname; a word after it (a farm, an address) is left out
-  let { given, surname, rest } = nameParts(words.join(' '));
+  let { given, surname, rest } = nameParts(words.join(' '), { givenOnly: givenNamesOnly(person, record) });
   if (rest) notes.push(t('Left out of the name: {rest} (a farm is an address; add it if it is a family name).', { rest }));
-  // A child by given name only: the father's patronymic
-  const surnames = words.length === 1 ? surnameSuggestions(person, state.people, record, null).map((x) => x.name.split(/\s+/).pop()) : [];
+  // A child by given names only: the father's patronymic (one suggestion: taken)
+  const surnames = !surname ? surnameSuggestions({ ...person, name: words.join(' ') }, state.people, record, null).map((x) => x.name.split(/\s+/).pop()) : [];
   if (!surname && surnames.length === 1) surname = surnames[0];
   const sex = facts.Sex ? facts.Sex.value.toLowerCase() : 'unknown';
   let birthDate = '';

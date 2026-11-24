@@ -38,6 +38,12 @@ fixes, new features, changes that break what users have).
   year, and saves the change (it took the two names for the same place and left the
   fact unchanged). That is also so for a place FamilySearch hasn't standardized, the
   town and its county without the country ("Halden, Østfold").
+- **A baptized child's given names kept together:** a child baptized as "Marte
+  Kristine" was offered as given name Marte and surname Kristine, in the alternate
+  name and the new person's form. The given names now stay together, with no surname,
+  unless the last word is a patronymic or DigitalArkivet gives a last name; the
+  father's patronymic is offered as the surname for two given names too, as it was for
+  one.
 - **A baptism dated before the birth:** when a record gives the child's date of birth
   with its year and is dated before it (born 29 July, baptized 12 March of the same
   year), the year is a slip, the clerk's or the transcriber's. The linker no longer

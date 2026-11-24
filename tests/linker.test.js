@@ -1113,6 +1113,39 @@ test('newPersonDraft(): a baptized child by given name, with the father\'s patro
   assert.match(draft.notes.join(' '), /Christening: 23 August 1846, Vågå/);
 });
 
+test('givenNamesOnly(), nameParts(): a baptized child\'s given names kept together, not the last as a surname (bug: "Ana" + "Margrethe")', () => {
+  const r = w.extractRecord(fixtureDoc(w, 'da/baptism-1846.html'), fixtureUrl('da/baptism-1846.html'));
+  const record = { ...r, fields: { ...r.fields, 'given name': 'Marte Kristine', gender: 'k' },
+    people: r.people.map((p) => (p.primary ? { ...p, name: 'Marte Kristine' } : p)) };
+  const child = record.people.find((p) => p.primary);
+  const father = record.people.find((p) => p.role === 'far');
+  assert.equal(w.givenNamesOnly(child, record), true);
+  assert.equal(w.givenNamesOnly(father, record), false);
+  // the principal's own Last name field says otherwise: a surname
+  assert.equal(w.givenNamesOnly(child, { ...record, fields: { ...record.fields, 'last name': 'Lindeman' } }), false);
+  assert.deepEqual(plain(w.nameParts('Marte Kristine', { givenOnly: true })), { given: 'Marte Kristine', surname: '', rest: '' });
+  // a patronymic is still the surname
+  assert.deepEqual(plain(w.nameParts('Marte Kristine Halvorsdatter', { givenOnly: true })), { given: 'Marte Kristine', surname: 'Halvorsdatter', rest: '' });
+  assert.deepEqual(plain(w.nameParts('Marte Kristine')), { given: 'Marte', surname: 'Kristine', rest: '' });
+  // the alternate name: the given names alone; none when FS has them (in its spellings too)
+  assert.deepEqual(plain(w.otherName(child, record, { pid: 'TEST-MAR', name: 'Marte Halvorsdatter', altNames: [] })), { given: 'Marte Kristine', surname: '' });
+  assert.equal(w.otherName(child, record, { pid: 'TEST-MAR', name: 'Marta Christine Halvorsdatter', altNames: [] }), null);
+  assert.equal(w.otherName(child, record, { pid: 'TEST-MAR', name: 'Marte Halvorsdatter', altNames: ['Marte Kristine'] }), null);
+  // the father's patronymic offered for the two given names, as for one
+  assert.deepEqual(plain(w.surnameSuggestions(child, record.people, record, null)).map((x) => x.name), ['Marte Kristine Halvorsdatter']);
+  assert.deepEqual(plain(w.surnameSuggestions({ ...child, name: 'Marte Kristine Halvorsdatter' }, record.people, record, null)), []);
+});
+
+test('newPersonDraft(): a baptized child of two given names, the father\'s patronymic as the surname', () => {
+  const { win, state } = pairedPage(undefined, 'baptism-1846', PARENTS);
+  state.record = { ...state.record, fields: { ...state.record.fields, 'given name': 'Lars Ole' } };
+  state.people = state.people.map((p) => (p.primary ? { ...p, name: 'Lars Ole' } : p));
+  state.rows = state.people.map((p) => win.personRow(p, win.treePool(LARS_1846, {}), PARENTS[p.name]));
+  const draft = plain(win.newPersonDraft(state.rows.find((row) => row.name === 'Lars Ole')));
+  assert.equal(draft.given, 'Lars Ole');
+  assert.equal(draft.surname, 'Halvorsen');
+});
+
 test('newPersonDraft(): the patronymic is the surname, a farm after it left out; a burial\'s death and place', () => {
   const { win, rowOf } = pairedPage(undefined, 'burial-1854', {});
   const draft = plain(win.newPersonDraft(rowOf('Lars Larsen Holt-Sletten')));
