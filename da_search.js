@@ -869,7 +869,7 @@ function parseResults(html) {
       id: id,
       url: href ? new URL(href, DA_SEARCH_URL).toString() : '',
       type: RECORD_TYPES[id.slice(0, 2)] || 'Other',
-      name: clean(link).replace(born, '').trim(),
+      name: clean(link).replace(born, '').trim().replace(/(\p{L}):(?=\s|$)/gu, '$1.'),  // "Larsdat:" as "Larsdat." (da_record.js abbreviationPoint())
       born: born.replace(/^\(b\.\s*|\)$/g, ''),
       gender: /female/i.test(clean(unit.querySelector('.gender'))) ? 'Female' : /male/i.test(clean(unit.querySelector('.gender'))) ? 'Male' : '',
       domicile: field(unit, '.place'),

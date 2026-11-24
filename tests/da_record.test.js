@@ -216,6 +216,19 @@ test("a marriage from the bride's entry: read from the groom's, so both entries 
   assert.equal(w.extractRecord(doc, fixtureUrl(file)).principalUrl, '');
 });
 
+test('a colon closing a name\'s word is a point: the church book\'s abbreviation mark (bug: "Larsdat:" in the title and as an alternate name)', () => {
+  const file = 'da/marriage-bride.html';
+  const doc = fixtureDoc(w, file);
+  for (const a of doc.querySelectorAll('#collapse-section-0 .data-item .ssp-semibold')) {
+    a.textContent = a.textContent.replace('Eli Kolvaldsdatter Daltveit', 'Eli Kolvaldsdat:').replace('Kolmund Finsteinsen Dalbø', 'Kolmund Finsteinsen Dalbø d:r');
+  }
+  const r = w.extractRecord(doc, fixtureUrl(file));
+  assert.deepEqual([...people(r).slice(0, 2)], ['Kolmund Finsteinsen Dalbø d:r (Groom)', 'Eli Kolvaldsdat. (Bride)']);
+  assert.match(r.title, /^Kolmund Finsteinsen Dalbø d:r and Eli Kolvaldsdat\. - /);
+  assert.match(r.citation, /marriage of Kolmund Finsteinsen Dalbø d:r and Eli Kolvaldsdat\.,/);
+  assert.doesNotMatch(r.notes, /Kolvaldsdat:/);
+});
+
 test("englishPageUrl(): DA's English page of a Bokmål or Nynorsk address", () => {
   assert.equal(w.englishPageUrl('https://www.digitalarkivet.no/view/255/pd99000000000018'),
     'https://www.digitalarkivet.no/en/view/255/pd99000000000018');
@@ -300,4 +313,25 @@ test('the role ektemann is Husband', () => {
   const r = w.extractRecord(doc, fixtureUrl(file));
   assert.equal(r.people[0].roleEnglish, 'Husband');
   assert.match(r.notes, /^Role: Husband$/m);
+});
+
+test('a clerk\'s abbreviation of a town in full, as the town was named then; the notes keep it as written (bug: "Fhald" left as it was)', () => {
+  assert.equal(w.townInFull('Fhald'), 'Fredrikshald');
+  assert.equal(w.townInFull('Fr.hald.'), 'Fredrikshald');
+  assert.equal(w.townInFull('Thjem'), 'Trondhjem');
+  assert.equal(w.townInFull('Chra.'), 'Christiania');
+  assert.equal(w.townInFull('Vaage'), '');
+  assert.equal(w.townInFull('Fhald gaard'), '');  // only the abbreviation alone
+  assert.equal(w.placeWithTown('Fhald'), 'Fhald [Fredrikshald]');
+  assert.equal(w.placeWithTown('Vaage'), 'Vaage');
+  // in the notes: the open person's own fields and the person lines
+  const file = 'da/marriage-bride.html';
+  const doc = fixtureDoc(w, file);
+  for (const div of doc.querySelectorAll('.ssp-semibold')) {
+    if (div.textContent.trim() === 'Vaage') div.textContent = 'Fhald';
+  }
+  const notes = w.extractRecord(doc, fixtureUrl(file)).notes;
+  assert.match(notes, /Birth place: Fhald \[Fredrikshald\]/);
+  assert.match(notes, /\(.*Fhald \[Fredrikshald\].*\)/);
+  assert.doesNotMatch(notes, /Fhald(?! \[)/);
 });

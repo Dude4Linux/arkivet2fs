@@ -16,6 +16,9 @@ test("a name without æ/ø/å is tried too (FS's Norwegian pages: Vaga)", () => 
 
 test('old names are aliases: Vaage, Christiania', () => {
   assert.deepEqual(plain(w.municipalityCodes('Vaage, Christians amt, Norway')), ['0515']);
+  // a clerk's abbreviation of a town: Fhald, Fr.hald for Fredrikshald (Halden)
+  assert.deepEqual(plain(w.municipalityCodes('Fhald')), ['0101']);
+  assert.deepEqual(plain(w.municipalityCodes('Fr.hald')), ['0101']);
   assert.ok(w.municipalityCodes('Christiania, Norway').includes('0301'));
 });
 

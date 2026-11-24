@@ -872,14 +872,14 @@ const joined = (...parts) => parts.filter(Boolean).join(', ');
 
 // The record's parish as FS names it: a parish that is a municipality ("Vågå,
 // Oppland, Norway"), else the municipality the parish code in the source title names
-// (a parish of Oslo, 0301M…: "Oslo, Oslo, Norway"), else the parish in the county
+// (a parish of Oslo, 0301M…: "Oslo, Norway"), else the parish in the county
 function parishPlace(record) {
   const name = cleanPlace(recordPlace(record));
   if (!name) return '';
   const own = fsMunicipality(name, record);
   if (own) return own;
   const code = (parishCode(record.sourceTitle).match(/^\d{4}/) || [])[0];
-  if (code && DA_MUNICIPALITIES[code]) return joined(municipalityName(code), fsCounty(countyName(code.slice(0, 2))), 'Norway');
+  if (code && DA_MUNICIPALITIES[code]) return townPlace(code, record);
   return fsPlace(name, record);
 }
 
@@ -914,7 +914,8 @@ function recordFacts(person, record) {
     const when = born ? dateText(born) || formatDate('', born.month, born.day)
       : fromAge && year ? t('about {year}', { year }) + ' (' + t('age {age}', { age: raw.match(/^\d+/)[0] }) + ')'
         : raw.replace(/\s*\(calculated\)/, '');
-    facts.Birth = { text: joined(when, birthPlace), date: born, year, approx: fromAge || /calculated|\*/.test(raw), place: birthPlace };
+    // a clerk's abbreviation of a town in full ("Fhald": Fredrikshald)
+    facts.Birth = { text: joined(when, townInFull(birthPlace) || birthPlace), date: born, year, approx: fromAge || /calculated|\*/.test(raw), place: birthPlace };
     // An age, with the day it was counted on (countDay()), for FS's full date
     if (fromAge) Object.assign(facts.Birth, { age: Number(raw.match(/^\d+/)[0]), on: countDay(type === 'census', recorded) });
   }
@@ -943,7 +944,7 @@ function recordFacts(person, record) {
   if (type === 'census') {
     facts.Residence = { text: joined(recorded && recorded.year, census.residence, census.district, place), year: recorded && recorded.year };
   } else if (person.residence) {
-    facts.Residence = { text: joined(recorded && recorded.year, person.residence), year: recorded && recorded.year };
+    facts.Residence = { text: joined(recorded && recorded.year, townInFull(person.residence) || person.residence), year: recorded && recorded.year };
   }
   const occupation = occupationOf(person.position, type === 'marriage');
   if (occupation) facts.Occupation = { text: occupation };
@@ -1345,9 +1346,10 @@ function factAdditions(person, record, tree, name) {
   const home = cleanPlace(isCensus ? (record.census || {}).residence : person.residence);
   if (da.Residence && year && !placeAbroad(home) && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
     const census = record.census || {};
-    const description = isCensus ? joined(census.residence, census.district) : person.residence || '';
-    // a residence that is a town ("Chr": Kristiania) is the town, not a farm in the parish
+    // a residence that is a town ("Chr": Kristiania; "Fhald": Fredrikshald) is the town,
+    // not a farm in the parish, and has no farm for a description
     const town = home && !isCensus && fsMunicipality(home, record);
+    const description = isCensus ? joined(census.residence, census.district) : town ? '' : person.residence || '';
     const where = kind === 'emigration' ? fsPlace(home, record, true)
       : town || (home && !placeIn(home, parish) ? joined(home, parish) : parish);
     if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
@@ -2296,12 +2298,27 @@ function readPlan(attach) {
       // person hasn't it yet, or has another (a residence of another year)
       const later = additions.filter((a) => a.action === 'add').map((a) => a.fact);
       const now = tags.filter((tag) => !later.includes(tag));
-      pairs.push(attach ? { pid, label: row.label(), reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions }
-        : { pid, label: row.label(), reason: row.reason(), tags: [], residence: false, additions });
+      const kind = row.person ? roleKind(row.person) : '';
+      pairs.push(attach ? { pid, label: row.label(), kind, reason: row.reason(), tags: now.filter((tag) => tag !== 'Residence'), residence: now.includes('Residence'), additions }
+        : { pid, label: row.label(), kind, reason: row.reason(), tags: [], residence: false, additions });
     }
     if (attach && !pairs.length) throw new Error(t('Choose a tree person for someone in the record, or use "Create source only".'));
   }
-  return parallel ? { source, parallel, pairs } : { source, pairs };
+  const couple = attach ? marriageCouple(pairs) : null;
+  return { source, ...(parallel ? { parallel } : {}), pairs, ...(couple ? { couple } : {}) };
+}
+
+// A marriage's groom and bride, both paired: the source goes to their couple
+// relationship too, as FS attaches its own marriage records ({pids, label, reason})
+function marriageCouple(pairs) {
+  const record = state.record || {};
+  if ((record.recordTypeInfo || {}).type !== 'marriage') return null;
+  const groom = pairs.filter((p) => p.kind === 'groom'), bride = pairs.filter((p) => p.kind === 'bride');
+  if (groom.length !== 1 || bride.length !== 1) return null;
+  const year = ((record.recordDate || '').match(/^\d{4}/) || [])[0];
+  const label = t('{a} and {b}', { a: groom[0].label, b: bride[0].label });
+  return { pids: [groom[0].pid, bride[0].pid], label,
+    reason: t('Marriage of {names}', { names: label }) + (year ? ' (' + year + ')' : '') + ' ' + t('on Digitalarkivet, {id}.', { id: record.permanentId || record.url }) };
 }
 
 // Both books' sources: each named by its book, with the other's entry in the notes,
@@ -2343,6 +2360,14 @@ function fsMessage(text) {
   }
   if ((m = text.match(/^FamilySearch did not open the tree person (\S*)\. Please sign in to FamilySearch and try again\.$/))) {
     return t('FamilySearch did not open the tree person {pid}. Please sign in to FamilySearch and try again.', { pid: m[1] });
+  }
+  // The couple steps'
+  if ((m = text.match(/^FamilySearch showed another couple \((.*)\) for (.*) and (.*)\.$/))) {
+    return t('FamilySearch showed another couple ({shown}) for {a} and {b}.', { shown: m[1], a: m[2], b: m[3] });
+  }
+  if ((m = text.match(/^FamilySearch (shows no couple relationship to open|gave no couple relationship ID) for (\S+) and (\S+)\.$/))) {
+    return t(m[1] === 'gave no couple relationship ID' ? 'FamilySearch gave no couple relationship ID for {a} and {b}.'
+      : 'FamilySearch shows no couple relationship to open for {a} and {b}.', { a: m[2], b: m[3] });
   }
   // The fact steps' messages, with the fact's English name
   const fact = (name) => t(name === 'custom event' ? 'Custom event' : name.charAt(0).toUpperCase() + name.slice(1)).toLowerCase();
@@ -2733,7 +2758,7 @@ async function lookUpSource(tabId, title, active = true, source = null, sameReco
   await navigate(tabId, attachedToUrl(ids[0]), active);
   const read = await step(tabId, 'attachedTo', { sourceId: ids[0] });
   if (!read.ok) throw stepError(read);
-  return { title, id: ids[0], ids, persons: read.persons, ...old, ...(fields ? { fields } : {}) };
+  return { title, id: ids[0], ids, persons: read.persons, couples: read.couples || [], ...old, ...(fields ? { fields } : {}) };
 }
 
 // The source in the SourceBox for run(), and who has it: searched for, and once more
@@ -2756,7 +2781,7 @@ async function sourceForRun(tabId, source, i) {
   if (!before || before.title !== title || before.error) return null;
   log(before.id ? t('Going by the SourceBox check made before, which found this source ({id}).', { id: before.id })
     : t('Going by the SourceBox check made before, which found no source with this title.'), 'near');
-  return { title, id: before.id || null, ids: before.ids || [], persons: before.persons || [],
+  return { title, id: before.id || null, ids: before.ids || [], persons: before.persons || [], couples: before.couples || [],
     ...(before.formerTitle ? { formerTitle: before.formerTitle } : {}) };
 }
 
@@ -2833,6 +2858,36 @@ async function factStep(tabId, name, args) {
   log(t('{error} Trying once more, with the page loaded again.', { error: answer.error }), 'near');
   await navigate(tabId, personDetailsUrl(args.pid));
   return step(tabId, name, args);
+}
+
+// The SourceBox in a couple relationship's context: its Attach attaches to the couple
+const coupleSourceBoxUrl = (id) => SOURCEBOX_URL + '?entityId=' + encodeURIComponent(id) + '&entityType=couple';
+
+// A marriage's source attached to the couple relationship (after the persons): its ID
+// read from the groom's page (fs_attach.js coupleId), then the SourceBox opened for the
+// couple. Not when the source is on the couple already (`couples`, from its Attached To
+// page, or the couple's own sources), nor when FS has no couple of the two (said in the
+// log). The couple as {id, pids}, or null.
+async function attachToCouple(tabId, couple, sourceId, title, couples) {
+  const [a, b] = couple.pids.map((p) => p.toUpperCase());
+  const already = () => log(t('The couple {names} already has this source on FamilySearch; left as it is.', { names: couple.label }), 'ok');
+  const on = couples.find((c) => c.pids.includes(a) && c.pids.includes(b));
+  if (on) { already(); return on; }
+  await navigate(tabId, personDetailsUrl(a));
+  const found = await step(tabId, 'coupleId', { pid: a, spouse: b });
+  if (!found.ok) { log(t('Not attached to the couple {names}: {error}', { names: couple.label, error: found.error }), 'bad'); return null; }
+  if (!found.coupleId) {
+    log(t('{names} are not a couple on FamilySearch, so the source is attached to each of them but not to their marriage. Add them as a couple on FamilySearch, then attach the source to the couple there.', { names: couple.label }), 'near');
+    return null;
+  }
+  const relation = { id: found.coupleId, pids: [a, b] };
+  if ((found.sources || []).includes(String(sourceId).toUpperCase())) { already(); return relation; }
+  await navigate(tabId, coupleSourceBoxUrl(found.coupleId));
+  const result = await step(tabId, 'attachCouple', { sourceId, title, coupleId: found.coupleId, pids: [a, b], reason: couple.reason });
+  if (!result.ok) { log(t('Not attached to the couple {names}: {error}', { names: couple.label, error: result.error }), 'bad'); return null; }
+  if (result.already) already();
+  else log(t('Attached to the couple {names} ({id}).', { names: couple.label, id: found.coupleId }) + (result.tagged ? ' ' + t('The marriage is tagged.') : ''), 'ok');
+  return relation;
 }
 
 // The tree person read again in the work tab (fs_person.js), kept for the page and
@@ -3005,6 +3060,13 @@ async function run(attach) {
         if (result.tagged) { if (pair.tags.length || pair.residence) logTags(pair, result.tagged); }
         else attached.push(pair);
       }
+      // A marriage: the couple's relationship too
+      const couples = [...(known.couples || [])];
+      if (attach && plan.couple) {
+        const couple = await attachToCouple(tabId, plan.couple, sourceId, source.title, couples);
+        if (couple && !couples.some((c) => c.id === couple.id)) couples.push(couple);
+      }
+      checked[checked.length - 1].couples = couples;
       for (const pair of attached) {
         if (!pair.tags.length && !pair.residence) continue;
         await navigate(tabId, personSourcesUrl(pair.pid));
@@ -3075,8 +3137,9 @@ function fsDateText(d, approx) {
 // the record names but isn't in, such as a census's birthplace, which can lie in any
 // county ("Christiania" in a census of Troms is Oslo): the record's county only when
 // the place is found there, else "<place>, Norway". Bergen, a county of its own on DA,
-// is in Hordaland as FS has it; Oslo is Kristiania when the record names it so
-// (Kristiania, Christiania or a clerk's abbreviation: Chra., Kria., ...).
+// is in Hordaland as FS has it; a renamed town has its name of the record's year
+// (townPlace(): "Fredrikshald, Smaalenene" before 1919, "Kristiania, Norway" 1877-1924), or without
+// a year the old name when the record writes one (Christiania, Chra., Fhald, ...).
 function fsPlace(place, record, elsewhere) {
   const name = asInSource(place).replace(/\*/g, '').replace(/\s+(prgj\.?|prestegjeld|sogn|herred|s\.)$/i, '').trim();
   if (!name) return '';
@@ -3091,7 +3154,7 @@ function fsMunicipality(place, record, elsewhere) {
   if (!name || /,/.test(name)) return '';
   const county = record.county && !/,/.test(record.county) ? record.county : '';
   // "Chr", as clerks wrote Christiania, in a record of Oslo or Akershus
-  if (/^chr\.?$/i.test(name) && /^(Oslo|Akershus)$/.test(county)) return 'Kristiania, Oslo, Norway';
+  if (/^chr\.?$/i.test(name) && /^(Oslo|Akershus)$/.test(county)) return townPlace('0301', record);
   const one = (placeWords(name) || [name])[0];
   const names = [...new Set([one, one.replace(/s$/, ''), one.replace(/\.$/, '')])];
   // with the record's county first; one anywhere also alone (the county Bergen is also
@@ -3102,16 +3165,18 @@ function fsMunicipality(place, record, elsewhere) {
     const mine = municipalityCodes(own);
     const code = oneMunicipality(municipalityCodes(tryName).filter((c) => mine.includes(c)));
     if (!code) continue;
-    const municipality = code === '0301' && namesKristiania(name) ? 'Kristiania' : municipalityName(code);
-    return joined(municipality, fsCounty(countyName(code.slice(0, 2))), 'Norway');
+    return townPlace(code, record, name);
   }
   return '';
 }
-// Whether a place is Oslo under its old name: a word of it is one of Oslo's
-// PLACE_ALIASES but "oslo" (Christiania, Kristiania, Chra., Chria., Chrania, Kria.)
-function namesKristiania(name) {
-  const old = PLACE_ALIASES.find((names) => names[0] === 'oslo').slice(1);
-  return name.toLowerCase().split(/[^a-zæøå]+/).some((word) => old.includes(word));
+// A municipality as FS writes it, a renamed town by its name and county in the
+// record's year (townIn(): "Fredrikshald, Smaalenene, Norway" before 1919), Oslo in no
+// county ("Kristiania, Norway" 1877-1924, else "Oslo, Norway"); `written`, the place as
+// the record has it, for a record without a year
+function townPlace(code, record, written) {
+  const town = townIn(code, (daDateParts(record.recordDate) || {}).year, written);
+  const county = town ? town.county : '';
+  return joined(town ? town.name : municipalityName(code), county === null ? '' : county || fsCounty(countyName(code.slice(0, 2))), 'Norway');
 }
 // A DA county as FS names it: DA's Bergen is FS's Hordaland
 const fsCounty = (name) => (name === 'Bergen' ? 'Hordaland' : name);

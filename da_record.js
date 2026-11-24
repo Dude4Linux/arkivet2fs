@@ -144,6 +144,37 @@ function expandAbbreviations(text, more = []) {
   return out;
 }
 
+// A colon closing a word of a name: the church books' abbreviation mark, which DA's
+// transcriptions keep ("Larsdat:" for Larsdatter, "Halvorsd:"); written as a point, as
+// DA writes the other abbreviations ("Larsdat."), so it reads as one. "d:r" inside a
+// word stays.
+function abbreviationPoint(name) {
+  return String(name || '').replace(/(\p{L}):(?=\s|$)/gu, '$1.');
+}
+
+// A town as clerks abbreviated it in emigrant protocols and moving lists, in full, as
+// the town was named then: "Fhald" is Fredrikshald (Halden since 1928), "Thjem"
+// Trondhjem. Only a place that is the abbreviation alone, a point after it or not;
+// '' for any other place.
+function townInFull(place) {
+  const key = String(place || '').trim().toLowerCase().replace(/\.$/, '');
+  const towns = {
+    'fhald': 'Fredrikshald', 'fr.hald': 'Fredrikshald', 'frhald': 'Fredrikshald',
+    'fstad': 'Fredrikstad', 'fr.stad': 'Fredrikstad', 'frstad': 'Fredrikstad',
+    'chr.sand': 'Christianssand', 'kr.sand': 'Kristiansand',
+    'chr.sund': 'Christianssund', 'kr.sund': 'Kristiansund',
+    'chra': 'Christiania', 'chria': 'Christiania', 'chrania': 'Christiania', 'kria': 'Kristiania',
+    'thjem': 'Trondhjem'
+  };
+  return Object.hasOwn(towns, key) ? towns[key] : '';
+}
+// A place with the town in full after an abbreviation, as the notes write it
+// ("Fhald [Fredrikshald]"); other places as written
+function placeWithTown(place) {
+  const town = townInFull(place);
+  return town ? String(place).trim() + ' [' + town + ']' : place;
+}
+
 function extractRecord(document, pageUrl) {
 
   // --- Helper: Validate permanent ID format (2 alpha + 14+ digits) ---
@@ -463,6 +494,7 @@ function extractRecord(document, pageUrl) {
     if (key === 'role') return translateRole(value);
     if (key === 'family position') return translateCensusPosition(value);
     if (key === 'position' || key === 'occupation') return expandAbbreviations(value);
+    if (/place|residence|destination|migrating/.test(key)) return placeWithTown(value);
     // Ages in years/months/weeks/days (år, måneder, uker, dager): "57 a", "3 m 2 u", "27 A."
     if (key === 'age' && /^(\d+\s*[amud]\b\.?\s*)+$/i.test(value)) {
       const units = { 'a': 'year', 'm': 'month', 'u': 'week', 'd': 'day' };
@@ -913,8 +945,8 @@ function extractRecord(document, pageUrl) {
         details.push(/^\d{4}/.test(person.birthYear) ? 'b. ' + person.birthYear
           : 'age ' + translateFieldValue('Age', person.birthYear));
       }
-      if (person.birthPlace) details.push(person.birthPlace);
-      if (person.residence) details.push('res. ' + person.residence);
+      if (person.birthPlace) details.push(placeWithTown(person.birthPlace));
+      if (person.residence) details.push('res. ' + placeWithTown(person.residence));
       if (details.length > 0) line += ' (' + details.join(', ') + ')';
       return line;
     }
@@ -1063,6 +1095,9 @@ function extractRecord(document, pageUrl) {
       }
     }
 
+    // A colon closing a name's word is a point: "Larsdat:" is "Larsdat."
+    people.forEach(function(p) { p.name = abbreviationPoint(p.name); });
+
     // Mark the person whose page is open as primary (falls back to the first person)
     const primaryPerson = people.find(function(p) { return p.current; }) || people[0];
     const primaryPersonId = primaryPerson ? primaryPerson.id : null;
@@ -1072,7 +1107,7 @@ function extractRecord(document, pageUrl) {
     const scans = extractScans();
 
     const pageName = (primaryPerson && primaryPerson.current && primaryPerson.name) ||
-                     [ownFields['given name'], ownFields['last name']].filter(Boolean).join(' ');
+                     abbreviationPoint([ownFields['given name'], ownFields['last name']].filter(Boolean).join(' '));
     // Migration lists give the open person's role only in their own fields, and
     // emigrant protocols give none
     if (primaryPerson && primaryPerson.current && !primaryPerson.role) {

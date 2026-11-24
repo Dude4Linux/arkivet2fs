@@ -2,14 +2,19 @@
 // sends one step at a time; each answers {ok, ...} or {ok: false, error}):
 //   findSource   — in the SourceBox: search all folders for the title, and give the
 //                  sources of exactly that title (reads only)
-//   attachedTo   — on a source's Attached To page: the persons it is attached to
-//                  (reads only)
+//   attachedTo   — on a source's Attached To page: the persons and the couple
+//                  relationships it is attached to (reads only)
 //   createSource — in the SourceBox: Create Source, fill the form, Save, and find the
 //                  new source's row (its ID, from data-testid="row-<ID>-title")
 //   editSource   — in the SourceBox: the source's Edit, write the linker's fields over
 //                  those that differ, a change reason, Save (Cancel when none differ);
 //                  with `read`, FS's fields only, Cancel
 //   attach       — in the SourceBox: the row's Attach, "By ID" with the PID, the
+//                  reason, Attach
+//   coupleId     — on a spouse's page: the couple relationship of two spouses (its ID,
+//                  from its Add Source menu's SourceBox link) and its sources (reads
+//                  only; the dialog is closed)
+//   attachCouple — in the SourceBox opened for the couple: the row's Attach, the
 //                  reason, Attach
 //   tag          — on the person's Sources tab: open the source's row, Add Tags, add
 //                  the vital tags (and a residence) asked for, Save (FS may instead
@@ -179,15 +184,19 @@ if (!window.__arkivet2fsAttach) {
   }
 
   // Who the source is attached to, from its Attached To page: {title, persons: [{pid,
-  // name, lifespan}]}. The persons come after the heading; a source attached to no one
-  // shows none.
+  // name, lifespan}], couples: [{id, pids}]}. The persons come after the heading; a
+  // source attached to no one shows none. A couple relationship's entry
+  // (attach-to-<relationship ID>-persons, its entity type "Couple") holds the husband
+  // and wife as plain `person`s, not attach-to-<PID>-person: they aren't persons with
+  // the source.
   async function attachedTo({ sourceId }) {
     if (!/\/sources\/attachedto\//i.test(location.pathname)) {
       throw new Error('FamilySearch did not open the source\'s Attached To page. Please sign in to FamilySearch and try again.');
     }
     const heading = await waitFor(() => byTestId('attach-to-title'), 'the source\'s Attached To page', 30000);
     const persons = () => [...document.querySelectorAll('[data-testid^="attach-to-"][data-testid$="-person"]')];
-    try { await waitFor(() => persons().length, 'the attached persons', 5000); } catch (e) { /* attached to no one */ }
+    const entries = () => [...document.querySelectorAll('[data-testid^="attach-to-"][data-testid$="-persons"]')];
+    try { await waitFor(() => persons().length || entries().length, 'the attached persons', 5000); } catch (e) { /* attached to no one */ }
     await sleep(500);
     return {
       ok: true,
@@ -196,9 +205,18 @@ if (!window.__arkivet2fsAttach) {
       persons: persons().map((node) => {
         const pid = clean(byTestId('pid', node)?.textContent) || node.getAttribute('data-testid').replace(/^attach-to-/, '').replace(/-person$/, '');
         return { pid: pid.toUpperCase(), name: clean(byTestId('fullName', node)?.textContent), lifespan: clean(byTestId('lifespan', node)?.textContent) };
-      }).filter((p) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(p.pid))
+      }).filter((p) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/.test(p.pid)),
+      couples: entries().map((node) => {
+        const id = node.getAttribute('data-testid').replace(/^attach-to-/, '').replace(/-persons$/, '').toUpperCase();
+        const type = clean(byTestId('attach-to-' + id + '-entity-type', node)?.textContent || byTestId('attach-to-' + id + '-entity-type')?.textContent);
+        const pids = [...node.querySelectorAll('[data-testid="person"] [data-testid="pid"]')].map((e) => clean(e.textContent).toUpperCase());
+        // a couple: so named, or two persons in an entry that is no one's own
+        const couple = /couple/i.test(type) || (!type && pids.length === 2 && !node.querySelector('[data-testid$="-person"]'));
+        return couple && PID.test(id) ? { id, pids: pids.filter((p) => PID.test(p)) } : null;
+      }).filter(Boolean)
     };
   }
+  const PID = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/;
 
   const FIELDS = {
     date: 'input[data-testid="source-date-field"]',
@@ -395,6 +413,123 @@ if (!window.__arkivet2fsAttach) {
       return { ok: true, person: shown, tagged: result };
     }
     return { ok: true, person: shown };
+  }
+
+  // --- A marriage's couple relationship ------------------------------------------
+  // FS keeps a couple's marriage as the relationship's own (looked at 2026-11-23, read
+  // only): the family card on a spouse's page (family-<PID>_<PID>) has
+  // couple-relationship-view-button, a dialog with the couple's facts and sources
+  // (source-button_view-<ID>) and Add Source (source-list.add-button), whose "Attach
+  // From Source Box" item links to the SourceBox in the couple's context:
+  // sourceBox?entityId=<relationship ID>&entityType=couple. The relationship ID is
+  // shown nowhere else. There a row's Attach opens the reason dialog for the couple at
+  // once (reason-to-attach-spouse1, -spouse2), with no search by ID.
+
+  const coupleDialog = () => [...document.querySelectorAll('[role="dialog"]')].find((d) => byTestId('person1-COUPLE-relationship', d));
+
+  // On a spouse's page: the couple relationship of the two, and its sources ({ok,
+  // coupleId, sources}; coupleId null when FS has no family of the two). The dialog
+  // and the Add Source menu are only opened and closed: nothing is clicked in them.
+  async function coupleId({ pid, spouse }) {
+    pid = (pid || '').toUpperCase();
+    spouse = (spouse || '').toUpperCase();
+    if (![pid, spouse].every((p) => PID.test(p))) throw new Error('Not a FamilySearch PID: ' + pid + ' ' + spouse);
+    onPersonPage(pid);
+    // The family cards come with the page, the couple's among them
+    const card = () => familyCards().find((c) => c.ids.includes(pid) && c.ids.includes(spouse));
+    try { await waitFor(() => card() || familyCards().length, 'the family cards', 20000); } catch (e) { if (e.blocked) throw e; }
+    if (!card()) await sleep(1500);
+    const found = card();
+    if (!found) return { ok: true, coupleId: null, sources: [] };
+    const view = byTestId('couple-relationship-view-button', found.node);
+    if (!view) throw new Error('FamilySearch shows no couple relationship to open for ' + pid + ' and ' + spouse + '.');
+    view.click();
+    try {
+      const dialog = await waitFor(coupleDialog, 'the couple relationship');
+      const text = clean(dialog.textContent).toUpperCase();
+      if (!text.includes(pid) || !text.includes(spouse)) throw new Error('FamilySearch showed another couple for ' + pid + ' and ' + spouse + '.');
+      // The couple's sources, once the list has come
+      await sleep(1500);
+      const sources = [...dialog.querySelectorAll('[data-testid^="source-button_view-"]')]
+        .map((b) => b.getAttribute('data-testid').replace(/^source-button_view-/, '').toUpperCase());
+      const add = await waitFor(() => byTestId('source-list.add-button', coupleDialog() || dialog), 'the couple\'s Add Source button');
+      add.click();
+      const item = await waitFor(() => byTestId('source-list.add-sourcebox-source-link'), 'the couple\'s Attach From Source Box');
+      const link = item.closest('a[href]') || item.querySelector('a[href]');
+      let url = null;
+      try { url = new URL(link.getAttribute('href'), location.href); } catch (e) { /* none */ }
+      const id = url && url.searchParams.get('entityType') === 'couple' ? (url.searchParams.get('entityId') || '').toUpperCase() : '';
+      if (!PID.test(id)) throw new Error('FamilySearch gave no couple relationship ID for ' + pid + ' and ' + spouse + '.');
+      return { ok: true, coupleId: id, sources: [...new Set(sources)] };
+    } finally {
+      await closeCoupleDialog();
+    }
+  }
+
+  // The Add Source menu (Escape) and the couple's dialog closed (its Close; it takes a
+  // moment to go)
+  async function closeCoupleDialog() {
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(300);
+    const close = coupleDialog()?.querySelector('button[aria-label="Close"]');
+    if (close) close.click();
+    await waitGone(coupleDialog, 'the couple relationship to close', 5000).catch(() => {});
+  }
+
+  // In the SourceBox opened in the couple's context: the row's Attach, the couple's
+  // reason dialog (both spouses checked), the reason, Attach. `already` when FS says
+  // the source is attached already. FS may offer the tags then (not seen yet): its
+  // one marriage tag is set, else the dialog is left as it is.
+  async function attachCouple({ sourceId, title, coupleId, pids = [], reason }) {
+    checkSourceBox();
+    const want = pids.map((p) => String(p).toUpperCase());
+    if (!PID.test(String(coupleId || '').toUpperCase()) || want.length !== 2 || !want.every((p) => PID.test(p))) {
+      throw new Error('Not a couple relationship: ' + [coupleId, ...want].join(' '));
+    }
+    const findButton = () => byTestId('row-' + sourceId + '-attach-button');
+    let button;
+    try {
+      button = await waitFor(findButton, 'the source in the SourceBox', title ? 6000 : 20000);
+    } catch (e) {
+      if (!title || e.blocked) throw e;
+      await searchSourceBox(clean(title));
+      button = await waitFor(findButton, 'the source in the SourceBox');
+    }
+    button.click();
+    const shown = await waitFor(() => document.querySelector('textarea[data-testid="reason-to-attach-reason-field"]') ||
+      byTestId('reason-to-attach-already-attached-ok-button') || byTestId('find-options-by-id-tab'), 'the couple\'s Attach dialog');
+    if (shown.matches('[data-testid="reason-to-attach-already-attached-ok-button"]')) {
+      shown.click();
+      return { ok: true, already: true };
+    }
+    // The SourceBox without the couple's context asks whom to attach to: not here
+    if (!shown.matches('textarea')) {
+      (byTestId('find-options-cancel-button') || document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
+      throw new Error('FamilySearch opened the SourceBox without the couple relationship.');
+    }
+    const spouses = ['reason-to-attach-spouse1', 'reason-to-attach-spouse2'].map((id) => clean(byTestId(id)?.textContent).toUpperCase());
+    const found = spouses.join(' ').match(/\b[A-Z0-9]{4}-[A-Z0-9]{2,4}\b/g) || [];
+    if (!want.every((p) => found.includes(p))) {
+      byTestId('reason-to-attach-cancel-button')?.click();
+      throw new Error('FamilySearch showed another couple (' + clean(spouses.join(', ')) + ') for ' + want.join(' and ') + '.');
+    }
+    setValue(shown, reason);
+    await sleep(300);
+    byTestId('reason-to-attach-attach-button').click();
+    await waitGone(() => byTestId('reason-to-attach-attach-button'), 'the attached source (the dialog stayed open)');
+    await sleep(1500);
+    const tagSave = byTestId('add-tagging-save-button');
+    if (tagSave) {
+      const chips = [...document.querySelectorAll('[data-testid*="tag-chip-"]')].filter((c) => /marriage/i.test(c.getAttribute('data-testid')));
+      if (chips.length === 1) {
+        if (!chips[0].hasAttribute('data-selected')) chips[0].click();
+        await sleep(300);
+        tagSave.click();
+        await waitGone(() => byTestId('add-tagging-save-button'), 'the saved tags (the dialog stayed open)').catch(() => {});
+        return { ok: true, tagged: true };
+      }
+    }
+    return { ok: true };
   }
 
   // The source's panel on the person's Sources tab: the nearest ancestor of its
@@ -1093,7 +1228,7 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true };
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact };
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, coupleId, attachCouple, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Only the steps themselves, not what every object has (constructor, toString)

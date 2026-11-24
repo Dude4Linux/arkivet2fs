@@ -6,6 +6,26 @@ fixes, new features, changes that break what users have).
 
 ## 1.8.3 - not released yet
 
+- **Marriages attached to the couple:** a marriage's source now goes to the couple's
+  relationship on FamilySearch too, as FamilySearch attaches its own marriage records,
+  besides the groom and the bride. When FamilySearch doesn't have the two as a couple,
+  the log says so, and the source is attached to each of them.
+- **Towns by their names of the time:** a renamed town gets the name it had in the
+  record's year, as FamilySearch's places have it: a record of 1874 from Halden gives
+  "Fredrikshald, Smaalenene, Norway", one of 1925 "Fredrikshald, Østfold, Norway"
+  (the county renamed in 1919, the town Halden in 1928), Oslo from 1877 to 1924
+  "Kristiania, Norway" and otherwise "Oslo, Norway" (a city in no county; FamilySearch
+  has no Christiania), and Trondheim before 1919 "Trondheim, Søndre Trondhjem, Norway"
+  (FamilySearch keeps the town's present name there, under the county of the time).
+  A clerk's abbreviation of a town ("Fhald", "Fr.hald", "Thjem")
+  is read as the town and written in full: "Fredrikshald" in the people's facts, "Fhald
+  [Fredrikshald]" in the notes. It used to be taken for a farm called Fhald. A
+  residence that is a town or a municipality no longer gets its name repeated as a
+  farm in the description.
+- **A colon closing a name:** the church books' abbreviation mark, kept in DA's
+  transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
+  title, the citation, the notes and the names offered for FamilySearch, and the
+  abbreviated patronymic is read as one.
 - **A new source mixed up with the one made just before it:** after "Create source",
   the linker could take the source created a moment earlier for the new one, and
   attach that one instead (report #13). It now takes only the new source with this

@@ -317,7 +317,7 @@ const PLACE_ALIASES = [
   ['trondheim', 'trondhjem', 'thjem', 'nidaros'],
   // Towns as clerks abbreviated them (emigrant protocols, moving lists)
   ['fredrikstad', 'frederikstad', 'fr.stad', 'frstad', 'fstad'],
-  ['halden', 'fredrikshald', 'frederikshald', 'fr.hald', 'frhald'],
+  ['halden', 'fredrikshald', 'frederikshald', 'fr.hald', 'frhald', 'fhald'],
   ['kristiansand', 'christianssand', 'christiansand', 'chr.sand', 'kr.sand'],
   ['kristiansund', 'christianssund', 'christiansund', 'chr.sund', 'kr.sund'],
   ['vest-agder', 'lister og mandal'],
@@ -355,6 +355,33 @@ function placeAliases(name) {
 }
 
 function municipalityName(code) { return DA_MUNICIPALITIES[code] || code; }
+// Towns renamed since, as FS keeps them: each earlier name, with its county when FS
+// has the town under the county of the time, and the year the next one took over.
+// FS has "Fredrikshald, Smaalenene, Norway" from 1665, "Fredrikshald, Østfold, Norway"
+// from 1919 (Smaalenene became Østfold), and Halden from the renaming in 1928;
+// FS has Oslo as an independent city, in no county: "Oslo, Norway" from 1048 and
+// "Kristiania, Norway" from 1877 (no Christiania) until it was Oslo again in 1925. FS has Trondheim (no Trondhjem or Nidaros of its
+// own) under the county of the time: Trondhjem, Søndre Trondhjem from 1805 and
+// Sør-Trøndelag from 1919.
+const TOWN_NAMES = {
+  '0101': [['Fredrikshald', 'Smaalenene', 1919], ['Fredrikshald', '', 1928]],
+  '0301': [['Oslo', null, 1877], ['Kristiania', null, 1925], ['Oslo', null, Infinity]],
+  '1601': [['Trondheim', 'Trondhjem', 1805], ['Trondheim', 'Søndre Trondhjem', 1919]]
+};
+// A renamed town's name in a year, as `{name, county}` (county '' for the present
+// one, null for none), or null for a town under its present name in its present
+// county. Without a year, the earliest name when `written` (the place as the record
+// has it) is one of the town's old names or their abbreviations (PLACE_ALIASES),
+// else the present one's entry if it has one (Oslo's, in no county).
+function townIn(code, year, written) {
+  const names = TOWN_NAMES[code];
+  if (!names) return null;
+  const as = (entry) => (entry ? { name: entry[0], county: entry[1] } : null);
+  if (year) return as(names.find((entry) => year < entry[2]));
+  const old = (PLACE_ALIASES.find((list) => list[0] === foldPlace(municipalityName(code))) || []).slice(1);
+  const words = String(written || '').toLowerCase().split(/[^a-zæøå.]+/).map((w) => w.replace(/\.$/, ''));
+  return as(words.some((w) => old.includes(w)) ? names[0] : names.find((entry) => entry[2] === Infinity));
+}
 function countyName(code) { return DA_COUNTIES[code] || code; }
 // Every municipality's or county's code (for the search page's place picker)
 function municipalityCodeList() { return Object.keys(DA_MUNICIPALITIES); }

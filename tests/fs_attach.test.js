@@ -1169,3 +1169,144 @@ test('addFact(): FS\'s standard place is read from its list for the typed text, 
   const added = await factPage({ late: true }).step('addFact', { pid: 'TEST-LAR', addition: CHRISTENING, reason: REASON, save: false });
   assert.match(added.fields.find((f) => f.name === 'place').standard, /Municipality, 1781 - 2019/);
 });
+
+// A marriage's couple relationship (FS's testids seen 2026-11-23): the couple's card on
+// a spouse's page opens the relationship's dialog, its sources and Add Source, whose
+// "Attach From Source Box" links to the SourceBox in the couple's context
+const couplePerson = (pid, name) => `<div data-testid="person"><span data-testid="fullName">${name}</span><span data-testid="pid">${pid}</span></div>`;
+
+function couplePage({ card = true, sources = ['TEST-S02'], href = '/en/tree/sources/sourceBox?entityId=TEST-C01&entityType=couple', spouse = 'TEST-KJE' } = {}) {
+  const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-LAR',
+    '<section data-testid="section-card-family">' +
+    (card ? `<div data-testid="family-TEST-LAR_${spouse}"><div data-testid="couple-persons"><a href="/tree/person/details/TEST-LAR">Lars Halvorsen</a>` +
+      `<a href="/tree/person/details/${spouse}">Kjersti Olsdatter</a></div>` +
+      '<button data-testid="couple-relationship-view-button">View Relationship</button></div>' : '') +
+    '<div data-testid="family-TEST-HAL_TEST-AST"><div data-testid="couple-persons">Halvor Larsen, Astri Larsdatter</div></div></section>');
+  const { w } = page;
+  const d = w.document;
+  const did = { deleted: false, menu: false, closed: false };
+  const view = d.querySelector('[data-testid="couple-relationship-view-button"]');
+  if (view) view.addEventListener('click', () => {
+    const dialog = d.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.innerHTML = '<button aria-label="Close">×</button>' +
+      `<div data-testid="person1-COUPLE-relationship">Lars Halvorsen TEST-LAR</div><div data-testid="person2-COUPLE-relationship">Kjersti Olsdatter ${spouse}</div>` +
+      '<div data-testid="conclusionDisplay:MARRIAGE">Marriage 20 October 1870</div>' +
+      sources.map((id) => `<button data-testid="source-button_view-${id}">View</button>`).join('') +
+      '<button data-testid="source-list.add-button">Add Source</button>' +
+      '<button data-testid="delete-couple-relationship-button">Delete Relationship</button>';
+    d.body.append(dialog);
+    dialog.querySelector('[data-testid="delete-couple-relationship-button"]').addEventListener('click', () => { did.deleted = true; });
+    dialog.querySelector('[aria-label="Close"]').addEventListener('click', () => { did.closed = true; dialog.remove(); });
+    dialog.querySelector('[data-testid="source-list.add-button"]').addEventListener('click', () => {
+      did.menu = true;
+      const menu = d.createElement('div');
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = `<a role="menuitem" href="${href}"><span data-testid="source-list.add-sourcebox-source-link">Attach From Source Box</span></a>`;
+      dialog.append(menu);
+    });
+  });
+  return { ...page, did };
+}
+
+test('coupleId(): the couple relationship\'s ID from its Add Source link, and its sources; the dialog closed, nothing else clicked', async () => {
+  const { w, step, did } = couplePage();
+  const answer = await step('coupleId', { pid: 'TEST-LAR', spouse: 'TEST-KJE' });
+  assert.equal(answer.ok, true);
+  assert.equal(answer.coupleId, 'TEST-C01');
+  assert.deepEqual(plain(answer.sources), ['TEST-S02']);
+  assert.equal(did.menu, true);
+  assert.equal(did.closed, true);
+  assert.equal(did.deleted, false);
+  assert.equal(w.document.querySelector('[role="dialog"]'), null);
+});
+
+test('coupleId(): two who are no couple on FS give none', async () => {
+  const { step, did } = couplePage({ card: false });
+  const answer = await step('coupleId', { pid: 'TEST-LAR', spouse: 'TEST-KJE' });
+  assert.deepEqual([answer.ok, answer.coupleId], [true, null]);
+  assert.equal(did.menu, false);
+});
+
+test('coupleId(): a link without the couple\'s context is no ID; only on the spouse\'s page', async () => {
+  let { step, did } = couplePage({ href: '/en/tree/sources/sourceBox' });
+  let answer = await step('coupleId', { pid: 'TEST-LAR', spouse: 'TEST-KJE' });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /gave no couple relationship ID/);
+  assert.equal(did.closed, true);  // closed all the same
+  ({ step } = couplePage());
+  answer = await step('coupleId', { pid: 'TEST-KJE', spouse: 'TEST-LAR' });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /did not open the tree person TEST-KJE/);
+});
+
+// The SourceBox in the couple's context: a row's Attach opens `dialog`: the couple's
+// reason dialog ('couple'), FS's "already attached" ('already'), or, outside the
+// couple's context, the search for a person ('person')
+function coupleSourceBox(dialog = 'couple', spouses = ['TEST-LAR', 'TEST-KJE']) {
+  const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox?context=TEST-CTX', row('TEST-S07', TITLE) +
+    '<button data-testid="row-TEST-S07-attach-button">Attach</button>');
+  const { w } = page;
+  const d = w.document;
+  const did = {};
+  d.querySelector('[data-testid="row-TEST-S07-attach-button"]').addEventListener('click', () => {
+    const box = d.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.innerHTML = dialog === 'already'
+      ? '<p>This source is already attached.</p><button data-testid="reason-to-attach-already-attached-ok-button">OK</button>'
+      : dialog === 'person'
+        ? '<button data-testid="find-options-by-id-tab">Find by ID</button><button data-testid="find-options-cancel-button">Cancel</button>'
+        : '<h2>Attach To Couple Relationship</h2>' +
+          `<div data-testid="reason-to-attach-spouse1">Lars Halvorsen ${spouses[0]}</div><div data-testid="reason-to-attach-spouse2">Kjersti Olsdatter ${spouses[1]}</div>` +
+          '<textarea data-testid="reason-to-attach-reason-field"></textarea>' +
+          '<button data-testid="reason-to-attach-cancel-button">Cancel</button><button data-testid="reason-to-attach-attach-button">Attach</button>';
+    d.body.append(box);
+    for (const [id, what] of [['reason-to-attach-already-attached-ok-button', 'ok'], ['find-options-cancel-button', 'cancelled'], ['reason-to-attach-cancel-button', 'cancelled']]) {
+      box.querySelector(`[data-testid="${id}"]`)?.addEventListener('click', () => { did[what] = true; box.remove(); });
+    }
+    box.querySelector('[data-testid="reason-to-attach-attach-button"]')?.addEventListener('click', () => {
+      did.reason = box.querySelector('textarea').value;
+      box.remove();
+    });
+  });
+  return { ...page, did };
+}
+const COUPLE = { sourceId: 'TEST-S07', title: TITLE, coupleId: 'TEST-C01', pids: ['TEST-LAR', 'TEST-KJE'], reason: 'Marriage of Lars Halvorsen and Kjersti Olsdatter (1870)' };
+
+test('attachCouple(): the source attached to the couple with the reason, both spouses checked', async () => {
+  const { step, did } = coupleSourceBox();
+  const answer = await step('attachCouple', COUPLE);
+  assert.equal(answer.ok, true);
+  assert.equal(did.reason, COUPLE.reason);
+});
+
+test('attachCouple(): another couple in FS\'s dialog is cancelled, not attached', async () => {
+  const { step, did } = coupleSourceBox('couple', ['TEST-LAR', 'TEST-OTH']);
+  const answer = await step('attachCouple', COUPLE);
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /FamilySearch showed another couple/);
+  assert.equal(did.cancelled, true);
+  assert.equal(did.reason, undefined);
+});
+
+test('attachCouple(): a couple that has the source already; a SourceBox without the couple is an error', async () => {
+  let { step, did } = coupleSourceBox('already');
+  let answer = await step('attachCouple', COUPLE);
+  assert.deepEqual([answer.ok, answer.already, did.ok], [true, true, true]);
+  ({ step, did } = coupleSourceBox('person'));
+  answer = await step('attachCouple', COUPLE);
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /without the couple relationship/);
+  assert.equal(did.cancelled, true);
+});
+
+test('attachedTo(): a couple relationship the source is attached to, its spouses not taken for persons attached', async () => {
+  const couple = '<div data-testid="attach-to-TEST-C01-persons"><div data-testid="attach-to-TEST-C01-entity-type">Couple</div>' +
+    couplePerson('TEST-LAR', 'Lars Halvorsen') + couplePerson('TEST-KJE', 'Kjersti Olsdatter') +
+    '<div data-testid="attach-to-TEST-C01-reason">Marriage</div></div>';
+  const { step } = attachPage('https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S07',
+    `<h1 data-testid="attach-to-title">${TITLE}</h1>` + couple + person('TEST-KJE', 'Kjersti Olsdatter'));
+  const answer = await step('attachedTo', { sourceId: 'TEST-S07' });
+  assert.deepEqual(plain(answer.persons.map((p) => p.pid)), ['TEST-KJE']);
+  assert.deepEqual(plain(answer.couples), [{ id: 'TEST-C01', pids: ['TEST-LAR', 'TEST-KJE'] }]);
+});

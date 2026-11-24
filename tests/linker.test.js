@@ -826,6 +826,93 @@ test('run(): a title not in the SourceBox is created there', async () => {
   assert.match($('log').textContent, /Source created \(TEST-S05\)/);
 });
 
+// A marriage's page, the groom, the bride and the groom's father paired
+function marriagePage(chrome) {
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  win.Element.prototype.scrollIntoView = () => {};
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/marriage-bride.html'), fixtureUrl('da/marriage-bride.html'));
+  Object.assign(state, { record: r, people: win.recordPeople(r) });
+  win.fillSource(r);
+  const pairs = { 'Kolmund Finsteinsen Dalbø': 'TEST-KOL', 'Eli Kolvaldsdatter Daltveit': 'TEST-ELI', 'Hans Finsteinsen': 'TEST-HAN' };
+  state.rows = state.people.map((p) => win.personRow(p, [], pairs[p.name]));
+  win.document.getElementById('people').replaceChildren(...state.rows.map((r) => r.node));
+  return { win, state, $: (id) => win.document.getElementById(id) };
+}
+const stepNames = (asked) => plain(asked.map(([name, args]) => name + (args.pid ? ' ' + args.pid : '')));
+
+test('run(): a marriage\'s source goes to the groom, the bride and their couple relationship, as FS attaches its own', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S07', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    coupleId: (args, url) => ({ ok: true, coupleId: url.endsWith('/details/TEST-KOL') ? 'TEST-C01' : null, sources: ['TEST-S02'] }),
+    attachCouple: (args, url) => (url.endsWith('?entityId=TEST-C01&entityType=couple') ? { ok: true } : { ok: false, error: 'not the couple\'s SourceBox' })
+  });
+  const { win, state, $ } = marriagePage(chrome);
+  assert.deepEqual(plain(win.readPlan(true).couple.pids), ['TEST-KOL', 'TEST-ELI']);
+  await win.run(true);
+  assert.deepEqual(stepNames(asked), ['findSource', 'createSource', 'attach TEST-KOL', 'attach TEST-ELI', 'attach TEST-HAN', 'coupleId TEST-KOL', 'attachCouple']);
+  assert.equal(asked[5][1].spouse, 'TEST-ELI');
+  const args = asked[6][1];
+  assert.deepEqual([args.sourceId, args.coupleId, ...args.pids], ['TEST-S07', 'TEST-C01', 'TEST-KOL', 'TEST-ELI']);
+  assert.equal(args.title, $('f-title').value);
+  assert.match(args.reason, /^Marriage of Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit \(1849\) on Digitalarkivet, pv99/);
+  assert.match($('log').textContent, /Attached to the couple Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit \(TEST-C01\)\./);
+  assert.deepEqual(plain(state.fsCheck.sources[0].couples), [{ id: 'TEST-C01', pids: ['TEST-KOL', 'TEST-ELI'] }]);
+  assert.deepEqual(plain(tabs.closed), [2]);  // all done
+});
+
+test('run(): a marriage\'s couple that has the source already is left as it is', async () => {
+  // on its Attached To page: no couple step at all
+  const attachedFs = fakeFs({
+    findSource: ({ title }) => ({ ok: true, sources: [{ id: 'TEST-S07', title }] }),
+    attachedTo: () => ({ ok: true, persons: [{ pid: 'TEST-ELI' }], couples: [{ id: 'TEST-C01', pids: ['TEST-KOL', 'TEST-ELI'] }] }),
+    editSource: () => ({ ok: true, sourceId: 'TEST-S07', changed: [], missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } })
+  });
+  let page = marriagePage(attachedFs.chrome);
+  await page.win.run(true);
+  assert.deepEqual(stepNames(attachedFs.asked), ['findSource', 'attachedTo', 'editSource', 'attach TEST-KOL', 'attach TEST-HAN']);
+  assert.match(page.$('log').textContent, /The couple Kolmund Finsteinsen Dalbø and Eli Kolvaldsdatter Daltveit already has this source on FamilySearch; left as it is\./);
+  // among the couple's own sources: not attached again
+  const ownFs = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S07', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    coupleId: () => ({ ok: true, coupleId: 'TEST-C01', sources: ['TEST-S07'] }),
+    attachCouple: () => { throw new Error('attached twice'); }
+  });
+  page = marriagePage(ownFs.chrome);
+  await page.win.run(true);
+  assert.equal(stepNames(ownFs.asked).at(-1), 'coupleId TEST-KOL');
+  assert.match(page.$('log').textContent, /already has this source on FamilySearch; left as it is\./);
+});
+
+test('run(): a groom and bride who are no couple on FS are said to be, and the run still ends well', async () => {
+  const { chrome, asked, tabs } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S07', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    coupleId: () => ({ ok: true, coupleId: null, sources: [] }),
+    attachCouple: () => { throw new Error('no couple to attach to'); }
+  });
+  const { win, $ } = marriagePage(chrome);
+  await win.run(true);
+  assert.equal(stepNames(asked).at(-1), 'coupleId TEST-KOL');
+  assert.match($('log').textContent, /are not a couple on FamilySearch, so the source is attached to each of them but not to their marriage/);
+  assert.equal($('log').querySelector('.bad'), null);
+  assert.deepEqual(plain(tabs.closed), [2]);
+});
+
+test('run(): a marriage with only the groom paired, or "Create source only", has no couple step', async () => {
+  const { chrome } = fakeFs({});
+  const { win, state } = marriagePage(chrome);
+  assert.equal(win.readPlan(false).couple, undefined);
+  state.rows.find((r) => r.person.role === 'brur').node.querySelector('select').value = '';
+  assert.equal(win.readPlan(true).couple, undefined);
+});
+
 // The record person beside the tree person, fact by fact
 const factTexts = (facts) => Object.fromEntries(Object.entries(facts).map(([k, v]) => [k, v.text]));
 
@@ -1073,15 +1160,19 @@ test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', ()
   assert.equal(w.fsPlace('Nowhere', c), 'Nowhere, Oppland, Norway');
   assert.equal(w.fsPlace('', c), '');
   // Oslo's neighbour Aker, added for searching, doesn't make Christiania two places
-  assert.equal(w.fsPlace('Christiania', c), 'Kristiania, Oslo, Norway');  // as the record names it
-  assert.equal(w.fsPlace('Kristiania', c), 'Kristiania, Oslo, Norway');
+  // Oslo as FS has it, in no county: "Oslo, Norway" in 1865 (FS has no Christiania)
+  assert.equal(w.fsPlace('Christiania', c), 'Oslo, Norway');
+  assert.equal(w.fsPlace('Kristiania', c), 'Oslo, Norway');
   for (const short of ['Chra.', 'Chria', 'Chrania', 'Kria.']) {  // a clerk's abbreviations
-    assert.equal(w.fsPlace(short, c), 'Kristiania, Oslo, Norway', short);
+    assert.equal(w.fsPlace(short, c), 'Oslo, Norway', short);
   }
-  assert.equal(w.fsPlace('Oslo', c), 'Oslo, Oslo, Norway');
+  // "Kristiania, Norway" from 1877 until 1925, then Oslo again
+  assert.equal(w.fsPlace('Oslo', { ...c, recordDate: '1900-05-04' }), 'Kristiania, Norway');
+  assert.equal(w.fsPlace('Christiania', { ...c, recordDate: '1877-05-04' }), 'Kristiania, Norway');
+  assert.equal(w.fsPlace('Oslo', { ...c, recordDate: '1930-05-04' }), 'Oslo, Norway');
   // a place the record only names (a census's birthplace): found anywhere in Norway,
   // the county first, and never given the census's county when it isn't found there
-  assert.equal(w.fsPlace('Christiania', c, true), 'Kristiania, Oslo, Norway');
+  assert.equal(w.fsPlace('Christiania', c, true), 'Oslo, Norway');
   assert.equal(w.fsPlace('Vaage', c, true), 'Vågå, Oppland, Norway');
   assert.equal(w.fsPlace('Bergen', c, true), 'Bergen, Hordaland, Norway');  // DA's county of its own, FS's Hordaland
   assert.equal(w.fsPlace('Nowhere', c, true), 'Nowhere, Norway');
@@ -1090,22 +1181,23 @@ test('fsDateText() and fsPlace(): dates and places as FS\'s form takes them', ()
 test('fsMunicipality(): in a record of Oslo or Bergen, a farm isn\'t the town the county is named after (bug: "Oslo, Oslo, Norway")', () => {
   const oslo = { county: 'Oslo' };
   assert.equal(w.fsMunicipality('Bakken', oslo), '');
-  assert.equal(w.fsPlace('Bakken', oslo), 'Bakken, Oslo, Norway');
+  assert.equal(w.fsPlace('Bakken', oslo), 'Bakken, Oslo, Norway');  // in the city Oslo
   assert.equal(w.fsMunicipality('Bakken', { county: 'Bergen' }), '');
   assert.equal(w.fsMunicipality('Bergen', { county: 'Bergen' }), 'Bergen, Hordaland, Norway');
-  assert.equal(w.fsMunicipality('Oslo', oslo), 'Oslo, Oslo, Norway');
-  assert.equal(w.fsMunicipality('Christiania', oslo), 'Kristiania, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Oslo', oslo), 'Oslo, Norway');
+  assert.equal(w.fsMunicipality('Christiania', oslo), 'Oslo, Norway');
+  assert.equal(w.fsMunicipality('Christiania', { ...oslo, recordDate: '1880' }), 'Kristiania, Norway');
   // a town of another county is that town, not one in the record's county
   assert.equal(w.fsMunicipality('Fredrikstad', oslo), 'Fredrikstad, Østfold, Norway');
   // "Chr", Christiania as the clerks of Oslo and Akershus wrote it; elsewhere it isn't known
-  assert.equal(w.fsMunicipality('Chr', oslo), 'Kristiania, Oslo, Norway');
-  assert.equal(w.fsMunicipality('Chr.', { county: 'Akershus' }), 'Kristiania, Oslo, Norway');
+  assert.equal(w.fsMunicipality('Chr', oslo), 'Oslo, Norway');
+  assert.equal(w.fsMunicipality('Chr.', { county: 'Akershus', recordDate: '1890-01-01' }), 'Kristiania, Norway');
   assert.equal(w.fsMunicipality('Chr', { county: 'Vest-Agder' }), '');
 });
 
 test('parishPlace(): a town\'s parish is the town its code names, not a place in the county (bug: "<parish>, Oslo, Norway")', () => {
   const oslo = { county: 'Oslo', sourceTitle: 'Church book from Kirkebakken parish 1858-1874 (0301M99)' };
-  assert.equal(w.parishPlace(oslo), 'Oslo, Oslo, Norway');
+  assert.equal(w.parishPlace(oslo), 'Oslo, Norway');
   // a parish that is a municipality stays as it is
   assert.equal(w.parishPlace({ county: 'Oppland', sourceTitle: 'Church book from Vågå parish 1838-1850 (0515P)' }), 'Vågå, Oppland, Norway');
   // no code: the parish in the county, as before
@@ -1564,7 +1656,7 @@ test('factAdditions(): a residence that is a town is the town, not a farm in the
   state.record = b;
   state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '12 April 1854', place: 'Oslo, Oslo, Norway' }, burial: { date: '18 April 1854', place: 'Oslo, Oslo, Norway' }, residences: [], occupations: [{ description: 'Lægdslem' }] };
   const adds = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }));
-  assert.deepEqual(adds.filter((a) => a.fact === 'Residence').map((a) => a.value), [{ date: '1854', place: 'Kristiania, Oslo, Norway', description: 'Chr' }]);
+  assert.deepEqual(adds.filter((a) => a.fact === 'Residence').map((a) => a.value), [{ date: '1854', place: 'Oslo, Norway', description: '' }]);
   // the burial at the parish: the town its code names
   assert.deepEqual(adds.filter((a) => a.fact === 'Burial'), []);
 });
@@ -1615,6 +1707,56 @@ test('factAdditions(): a birthplace the record gives without a year, where FS\'s
   // FS has a place, or no birth: nothing from a place alone
   assert.deepEqual(births({ date: '19 August 1807', place: 'Lom, Oppland, Norway' }), []);
   assert.deepEqual(births(null), []);
+});
+
+test('a marriage\'s birthplace without a year: no year compared, and a town\'s abbreviation is the town by its name then (bug: "Fhald" a farm in Halden)', () => {
+  const { win, state } = checkedPage();
+  const m = { ...record('marriage-bride'), county: 'Østfold', church: '', recordDate: '1874-05-10', sourceTitle: 'Church book from Halden parish 1869-1884 (0101P)' };
+  const groom = { ...w.recordPeople(m)[0], birthYear: '', birthPlace: 'Fhald', residence: 'Fhald' };
+  state.record = m;
+  state.fs = { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø', gender: 'Male', residences: [], occupations: [], altNames: [], birth: { date: '15 October 1850' } };
+  const da = w.recordFacts(groom, m);
+  // the clerk's abbreviation in full, the town's name then
+  assert.equal(da.Birth.text, 'Fredrikshald');
+  assert.equal(w.recordFacts(groom, m).Residence.text, '1874, Fredrikshald');
+  assert.ok(!da.Birth.year);
+  // a place alone is neither the same as FS's date nor against it
+  assert.equal(w.compareFact('Birth', da.Birth, w.treeFacts(state.fs, m).Birth, groom, { pid: 'TEST-KOL' }, m), '');
+  const adds = plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' }));
+  assert.deepEqual(adds.filter((a) => a.fact === 'Birth').map((a) => a.value), [{ date: '15 October 1850', place: 'Fredrikshald, Smaalenene, Norway' }]);
+  // the town, with no farm for a description
+  assert.deepEqual(adds.find((a) => a.fact === 'Residence').value, { date: '1874', place: 'Fredrikshald, Smaalenene, Norway', description: '' });
+  // FS's place of the town names the record's: kept, nothing to change
+  state.fs = { ...state.fs, birth: { date: '15 October 1850', place: 'Fredrikshald, Smaalenene, Norway' } };
+  assert.deepEqual(plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' })).filter((a) => a.fact === 'Birth'), []);
+  state.fs = { ...state.fs, birth: { date: '15 October 1850', place: 'Fredrikshald, Østfold, Norway' } };
+  assert.deepEqual(plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' })).filter((a) => a.fact === 'Birth'), []);
+  // as FS has the town: under Østfold from 1919, Halden from the renaming in 1928
+  assert.equal(w.fsPlace('Fhald', { ...m, recordDate: '1925-05-10' }), 'Fredrikshald, Østfold, Norway');
+  assert.equal(w.fsPlace('Fhald', { ...m, recordDate: '1930-05-10' }), 'Halden, Østfold, Norway');
+  const thjem = { ...m, county: 'Sør-Trøndelag', sourceTitle: 'Church book from Domkirken parish 1850-1860 (1601P)' };
+  assert.equal(w.fsPlace('Thjem', { ...thjem, recordDate: '1855-05-10' }), 'Trondheim, Søndre Trondhjem, Norway');
+  assert.equal(w.fsPlace('Thjem', { ...thjem, recordDate: '1930-05-10' }), 'Trondheim, Sør-Trøndelag, Norway');
+});
+
+test('townIn(): a renamed town by its name and county in the year, as FS has it, else as the record writes it', () => {
+  const town = (...args) => plain(w.townIn(...args));
+  assert.deepEqual(town('0101', 1874), { name: 'Fredrikshald', county: 'Smaalenene' });
+  assert.deepEqual(town('0101', 1919), { name: 'Fredrikshald', county: '' });
+  assert.equal(w.townIn('0101', 1928), null);  // Halden
+  // Oslo in no county: Oslo, Kristiania from 1877, Oslo again from 1925
+  assert.deepEqual(town('0301', 1850), { name: 'Oslo', county: null });
+  assert.deepEqual(town('0301', 1924), { name: 'Kristiania', county: null });
+  assert.deepEqual(town('0301', 1925), { name: 'Oslo', county: null });
+  // FS has Trondheim, not Trondhjem or Nidaros, under the county of the time
+  assert.deepEqual(town('1601', 1790), { name: 'Trondheim', county: 'Trondhjem' });
+  assert.deepEqual(town('1601', 1850), { name: 'Trondheim', county: 'Søndre Trondhjem' });
+  assert.equal(w.townIn('1601', 1919), null);  // Trondheim, Sør-Trøndelag
+  assert.equal(w.townIn('0515', 1850), null);  // not renamed
+  // no year: the earliest name when the record writes an old one
+  assert.deepEqual(town('0101', null, 'Fr.hald'), { name: 'Fredrikshald', county: 'Smaalenene' });
+  assert.deepEqual(town('0301', null, 'Chra.'), { name: 'Oslo', county: null });
+  assert.deepEqual(town('0301', null, 'Oslo'), { name: 'Oslo', county: null });
 });
 
 test('additionText(): an alternate name as written, given names before the surname', () => {
@@ -1861,7 +2003,7 @@ test('factAdditions(): a census birthplace in another county isn\'t given the ce
   state.record = c;
   state.fs = { pid: 'TEST-LAR', name: lars.name, birth: { date: '4 July 1848' }, residences: [], occupations: [] };
   const birth = plain(win.factAdditions(lars, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
-  assert.equal(birth.value.place, 'Kristiania, Oslo, Norway');
+  assert.equal(birth.value.place, 'Oslo, Norway');  // Christiania in 1865: FS's Oslo
   const nowhere = plain(win.factAdditions({ ...lars, birthPlace: 'Nowhere' }, c, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Birth');
   assert.equal(nowhere.value.place, 'Nowhere, Norway');
 });
@@ -1873,7 +2015,7 @@ test('factAdditions(): an emigration as a custom event with its destination, unl
   state.record = e;
   state.fs = { pid: 'TEST-LAR', name: 'Lars Halvorsen', birth: { date: '1843' }, emigration: [], residences: [{ date: '1902' }], occupations: [{ description: 'Farmer' }] };
   assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), [
-    { fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value: { date: '5 September 1902', place: 'Oslo, Oslo, Norway', description: 'Destination: Minnesota' } }
+    { fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value: { date: '5 September 1902', place: 'Kristiania, Norway', description: 'Destination: Minnesota' } }
   ]);
   state.fs = { ...state.fs, emigration: [{ date: '1902' }] };
   assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), []);
@@ -1890,7 +2032,7 @@ test('factAdditions(): an emigration as a custom event with its destination, unl
   // district; one abroad (an American going back) isn't added
   const home = (residence) => plain(win.factAdditions({ ...lars, residence }, bergen, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Residence');
   state.fs = { ...state.fs, residences: [] };
-  assert.deepEqual(home('Vaage').value, { date: '1902', place: 'Vågå, Oppland, Norway', description: 'Vaage' });
+  assert.deepEqual(home('Vaage').value, { date: '1902', place: 'Vågå, Oppland, Norway', description: '' });  // a municipality, not a farm: no description
   assert.equal(home('Amerika'), undefined);
   assert.equal(home('Chicago, Illinois'), undefined);
   assert.equal(win.additionReason(e), 'From "' + e.title + '", Digitalarkivet, Permanent ID ' + e.permanentId + '.');
