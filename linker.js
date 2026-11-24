@@ -152,8 +152,9 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   // The record against the FS person (buried before this baptism): not paired, but
   // their parents are still the record person's, and the parents' FS families, read
   // as `need`, can pair the namesake brother or sister who fits
-  const against = self && !(self.key in chosen) && !used.has(fs.pid) && !census ? selfContradicted(record, self, fs) : '';
-  if (self && !(self.key in chosen) && !used.has(fs.pid)) {
+  const open = self && !(self.key in chosen) && !used.has(fs.pid);
+  const against = open && !census ? selfContradicted(record, self, fs) : '';
+  if (open) {
     if (!against) pairs[self.key] = fs.pid;
     why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripNameVariants(fs.name), what: against })
       : t('the FamilySearch person');
@@ -224,7 +225,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
     // baptism): the record can't tell which FS child it is, so the ones it could be are
     // named in the hint, not paired: of the child's sex, born by the burial (for a
     // baptism, that year or the one before), and not dead in another year
-    const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
+    const recordYear = recordYearOf(record);
     const prefix = record.recordTypeInfo && record.recordTypeInfo.prefix;
     for (const child of found.child) {
       if (!namelessInSource(child) || pairs[child.key] || why[child.key] || blocked.has(child.key)) continue;
@@ -491,7 +492,7 @@ function residentFit(record, people, from, fromTree, candidate, rel, tree) {
   const sex = recordSex(candidate, record), fsSex = /^(male|female)$/i.test(tree.gender || '') ? tree.gender : '';
   if (sex && fsSex && sex.toLowerCase() !== fsSex.toLowerCase()) return null;
   if (name === 1 && !(sex && fsSex)) return null;
-  const recordYear = Number(((record.recordDate || '').match(/^\d{4}/) || [])[0]) || null;
+  const recordYear = recordYearOf(record);
   if (!familySurname(candidate, from, recordYear) && patronymicClash(candidate.name, tree.name)) return null;
   const yc = birthYearOf(candidate, record), yt = treeYear(tree), yf = birthYearOf(from, record);
   let score = name === 2 ? 3 : 1;
@@ -835,6 +836,8 @@ function daDateParts(text) {
   const m = String(text || '').match(/^(1[5-9]\d\d|20\d\d)(?:-(\d{1,2}))?(?:-(\d{1,2}))?/);
   return m ? { year: Number(m[1]), month: m[2] ? Number(m[2]) : null, day: m[3] ? Number(m[3]) : null } : null;
 }
+// The year of the record's date, null without one
+const recordYearOf = (record) => (daDateParts(record && record.recordDate) || {}).year || null;
 // A date as FS writes it: "6 April 1845", "April 1845", "1845"
 function dateText(d) {
   if (!d || !d.year) return '';
@@ -863,8 +866,7 @@ function birthBeforeBaptism(born, baptized) {
 // year later (`baptism`, the birth as written) or the birth earlier (`birth`, the
 // baptism as written); `born`, `baptized` as written, `fromFs` when the birth is FS's.
 // Null: no clash.
-function dateSlip(person, record, full) {
-  const da = recordFacts(person, record);
+function dateSlip(person, record, full, da = recordFacts(person, record)) {
   const c = da.Christening;
   if (!c) return null;
   const own = da.Birth && da.Birth.date && da.Birth.date.day ? da.Birth.date : null;
@@ -887,13 +889,15 @@ function slipReading(da, slip, which) {
 // The record's facts to compare with FS's: as written, or with a slip by the reading
 // chosen, or each of the three while none is (bestMark())
 function factReadings(da, person, record, tree) {
-  const slip = dateSlip(person, record, tree && fullTree(tree.pid));
+  const slip = dateSlip(person, record, tree && fullTree(tree.pid), da);
   if (!slip) return [da];
   const choice = slipChoice(person);
   return choice ? [slipReading(da, slip, choice)] : [da, slipReading(da, slip, 'baptism'), slipReading(da, slip, 'birth')];
 }
 function bestMark(fact, readings, fs, ...rest) {
   const rank = { same: 3, near: 2, differs: 1 };
+  // the readings differ only in these two
+  if (fact !== 'Birth' && fact !== 'Christening') readings = readings.slice(0, 1);
   return readings.map((da) => compareFact(fact, da[fact], fs[fact], ...rest)).reduce((a, b) => ((rank[b] || 0) > (rank[a] || 0) ? b : a));
 }
 
@@ -904,14 +908,19 @@ function recordPlace(record) {
   return sourceParish(title) || (m ? m[1] : '');
 }
 const joined = (...parts) => parts.filter(Boolean).join(', ');
+// The renamed town of the record's parish and its name in the record's year
+// (`{code, name}`), or null
+function parishTown(record) {
+  const code = parishMunicipality(record.sourceTitle);
+  const town = TOWN_NAMES[code] && townIn(code, recordYearOf(record));
+  return town ? { code, name: town.name } : null;
+}
 // The parish's name as the record's year had it: DA names a town's parish by the town's
 // present name ("Halden parish"), the town Fredrikshald in 1875
 function parishName(record) {
   const name = recordPlace(record);
-  const code = parishMunicipality(record.sourceTitle);
-  if (!code || !TOWN_NAMES[code] || foldPlace(name) !== foldPlace(municipalityName(code))) return name;
-  const town = townIn(code, (daDateParts(record.recordDate) || {}).year);
-  return town ? town.name : name;
+  const town = parishTown(record);
+  return town && foldPlace(name) === foldPlace(municipalityName(town.code)) ? town.name : name;
 }
 
 // The title's parish by the town's name of the record's year, as parishName() gives
@@ -919,9 +928,8 @@ function parishName(record) {
 // register (official) for Fredrikshald parish 1845-1856 - …"); the citation keeps DA's
 // name of the book, as the archive names it
 function titleOfYear(title, record) {
-  const code = parishMunicipality(record.sourceTitle);
-  const town = TOWN_NAMES[code] && townIn(code, (daDateParts(record.recordDate) || {}).year);
-  return town && town.name !== municipalityName(code) ? renameParish(title, municipalityName(code), town.name) : title;
+  const town = parishTown(record);
+  return town && town.name !== municipalityName(town.code) ? renameParish(title, municipalityName(town.code), town.name) : title;
 }
 // The title as it was before titleOfYear(): the town's parish by its present name
 function presentParishTitle(title) {
@@ -936,8 +944,7 @@ function presentParishTitle(title) {
 // The title with the parish `from` named `to`: the source title's parish, after " - ",
 // "from" or "for" ("Church book from …", "Parish register (official) for …")
 function renameParish(title, from, to) {
-  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return String(title || '').replace(new RegExp('( - |\\bfrom |\\bfor )' + escaped + ' parish\\b', 'g'), '$1' + to + ' parish');
+  return String(title || '').replace(new RegExp('( - |\\bfrom |\\bfor )' + escapeRe(from) + ' parish\\b', 'g'), '$1' + to + ' parish');
 }
 
 // The record's parish as FS names it: a parish that is a municipality ("Vågå,
@@ -1077,7 +1084,7 @@ function treeFacts(tree, record) {
     const f = event(full[key]);
     if (f) facts[fact] = { ...f, year: f.date && f.date.year };
   }
-  const recordYear = (daDateParts(record.recordDate) || {}).year;
+  const recordYear = recordYearOf(record);
   const nearest = (list) => {  // the one nearest the record's year
     const dated = (list || []).filter(Boolean);
     return dated.sort((a, b) => Math.abs(((parseFsDate(a.date) || {}).year || 9999) - recordYear) - Math.abs(((parseFsDate(b.date) || {}).year || 9999) - recordYear))[0];
@@ -1382,7 +1389,7 @@ function factAdditions(person, record, tree, name, opts = {}) {
   const da = recordFacts(person, record);
   const out = [];
   const place = recordPlace(record);
-  const year = (daDateParts(record.recordDate) || {}).year;
+  const year = recordYearOf(record);
   const ids = opts.ids || [];
   const ours = (f) => Boolean(f && f.from && ids.includes(f.from.id));
   const stale = (f) => reasonFrom(f.from.reason) !== reasonFrom(opts.reason);
@@ -1400,7 +1407,7 @@ function factAdditions(person, record, tree, name, opts = {}) {
     if (renamed || stale(ourName)) {
       const split = splitName(ourName.name);
       out.push({ fact: 'Name', action: 'edit', type: 'ALTERNATE_NAME', current: ourName.name, ...refresh(ourName, renamed),
-        match: [ourName.name, ourName.from.id],
+        match: [ourName.name, ourName.from.id], // by the name, not refresh()'s year
         value: renamed ? { ...other, nameType: 'AKA' } : { given: split.given, surname: [split.surname, split.rest].filter(Boolean).join(' '), nameType: 'AKA' } });
     }
   } else if (other) out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { ...other, nameType: 'AKA' } });
@@ -1505,7 +1512,7 @@ function factAdditions(person, record, tree, name, opts = {}) {
       // this record's: its place and description as the record has them now (a town
       // by its name of the year), FS's standard form of the same place kept
       const has = placeText(fs.place);
-      const samePlace = !where || (has && sameFsPlace(has, where) && placeText(fsPlaceOfYear(has, year)) === has);
+      const samePlace = !where || (has && sameFsPlace(has, where) && !notOfYear(has, year));
       const changed = !samePlace || (description && sameNameKey(description) !== sameNameKey(fs.description));
       if (changed || stale(fs)) {
         out.push({ fact: 'Residence', action: 'edit', type: 'RESIDENCE', current: joined(fs.date, fs.place), ...refresh(fs, changed),
@@ -2173,7 +2180,7 @@ function treesToRead(need, asked) {
     return { pid, near: row && open.has(row.person.household), year: row ? birthYearOf(row.person, state.record) || 9999 : 9999 };
   });
   // A child at the census heads no household there: their FS family pairs no one new
-  const recordYear = Number(((state.record.recordDate || '').match(/^\d{4}/) || [])[0]) || 0;
+  const recordYear = recordYearOf(state.record) || 0;
   const grown = who.filter((w) => !recordYear || w.year === 9999 || recordYear - w.year >= 16);
   const near = grown.filter((w) => w.near);
   return (near.length ? near : grown.sort((a, b) => a.year - b.year).slice(0, 2)).map((w) => w.pid);
@@ -3216,7 +3223,7 @@ function onTreeAlready(tree, a) {
     // FS's place not in the form an addition writes isn't the one to be saved (without
     // its Norwegian letters; a town under another name than the year's, "Halden,
     // Østfold, Norway" for 1875, which sameFsPlace() takes for the same place)
-    const stale = fs && placeText(fs.place) !== placeText(fsPlaceOfYear(fs.place, fsYear(v.date))) && placeText(fs.place) !== placeText(v.place);
+    const stale = fs && notOfYear(fs.place, fsYear(v.date)) && placeText(fs.place) !== placeText(v.place);
     return Boolean(fs && (fs.date || fs.place) && !stale && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
   }
   const year = fsYear(v.date);
@@ -3469,30 +3476,35 @@ function fsMunicipality(place, record, elsewhere) {
 // county ("Kristiania, Norway" 1877-1924, else "Oslo, Norway"); `written`, the place as
 // the record has it, for a record without a year
 function townPlace(code, record, written) {
-  return townPlaceIn(code, (daDateParts(record.recordDate) || {}).year, written);
+  return townPlaceIn(code, recordYearOf(record), written);
 }
 function townPlaceIn(code, year, written) {
   const town = townIn(code, year, written);
   const county = town ? town.county : '';
   return joined(town ? town.name : municipalityName(code), county === null ? '' : county || fsCounty(countyName(code.slice(0, 2))), 'Norway');
 }
-// FS's place of a renamed town under another of its names (its present one, "Halden,
-// Østfold, Norway", for a birth in 1875) as the town was named in `year`: "Fredrikshald,
-// Smaalenene, Norway"; a place in the town too, the town's part renamed ("Aasen,
-// Halden, Østfold, Norway" for 1858: "Aasen, Fredrikshald, Smaalenene, Norway").
-// Anything else as it is.
 // FS's place as an addition would write it: with its Norwegian letters, a renamed town
 // by its name of the year (onTreeAlready(): what FS hasn't yet)
 function fsPlaceOfYear(place, year) {
   return townOfYear(norwegianSpelling(place), year);
 }
+// FS's place not as an addition of `year` would write it (fsPlaceOfYear())
+const notOfYear = (place, year) => placeText(fsPlaceOfYear(place, year)) !== placeText(place);
 
+// A place's parts, without a final point ("Halden, Østfold." of FS's place not standardized)
+const placeParts = (place) => String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+
+// FS's place of a renamed town under another of its names (its present one, "Halden,
+// Østfold, Norway", for a birth in 1875) as the town was named in `year`: "Fredrikshald,
+// Smaalenene, Norway"; a place in the town too, the town's part renamed ("Aasen,
+// Halden, Østfold, Norway" for 1858: "Aasen, Fredrikshald, Smaalenene, Norway").
+// Anything else as it is.
 function townOfYear(place, year) {
   if (!year) return place;
   const code = townCode(place);
   if (code) return townPlaceIn(code, year);
   // a place in the town: the town, its county (none for Oslo) and Norway after it
-  const parts = String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+  const parts = placeParts(place);
   if (parts.length >= 3 && parts[parts.length - 1] === 'Norway') {
     for (const size of [3, 2]) {
       const tail = parts.slice(-size);
@@ -3504,7 +3516,7 @@ function townOfYear(place, year) {
 // The town of TOWN_NAMES that a place of the town alone names (two or three parts, a
 // county the town's, now or then), or ''
 function townCode(place) {
-  const parts = String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+  const parts = placeParts(place);
   // also FS's place not standardized, the town and its county without Norway ("Halden,
   // Østfold."; the county checked below, so not a farm of the town's name elsewhere)
   if (parts.length === 2 && parts[1] !== 'Norway') parts.push('Norway');

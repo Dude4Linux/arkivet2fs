@@ -1443,6 +1443,15 @@ test('coupleFact(): a marriage FS lacks is added, another of another year named,
   assert.deepEqual([did.saved.length, did.closed], [0, true]);
 });
 
+test('coupleFact(): FS\'s only marriage, without a date (no year to match), is the one changed', async () => {
+  const { step, did, marriages } = coupleFacts({ marriages: [{ date: '', place: 'Halden, Ostfold, Norway', sources: [] }] });
+  const answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: { ...MARRIAGE_EDIT, match: [] }, reason: 'From the record.', save: true, sourceId: 'TEST-S07', title: TITLE });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(did.saved[0]), { date: '11 November 1849', place: 'Fredrikshald, Smaalenene, Norway', reason: 'From the record.' });
+  assert.equal(marriages.length, 1);
+  assert.deepEqual(plain(did.tagged), ['TEST-S07']);
+});
+
 // The SourceBox in the couple's context: a row's Attach opens `dialog`: the couple's
 // reason dialog ('couple'), FS's "already attached" ('already'), or, outside the
 // couple's context, the search for a person ('person'). `late`: the couple's dialog

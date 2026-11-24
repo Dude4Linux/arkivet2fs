@@ -1097,6 +1097,27 @@ if (!window.__arkivet2fsAttach) {
     return null;
   }
 
+  // FS keeps a form's Save off while it has nothing to save
+  const saveOff = (submit) => !submit || submit.disabled || submit.getAttribute('aria-disabled') === 'true';
+
+  // FS's message in a form, if it shows one
+  function formProblem(form) {
+    const alert = form && form.querySelector('[role="alert"], [aria-invalid="true"]');
+    return alert ? clean(alert.textContent || alert.getAttribute('aria-label')).slice(0, 200) : '';
+  }
+
+  // Save clicked, and the form waited gone (`gone()`). FS asks "Are you sure that you
+  // want to continue without explaining your changes?" when the reason is the one the
+  // fact has (saved by an earlier run): Yes
+  function submitAnswered(submit, gone, what) {
+    submit.click();
+    return waitFor(() => {
+      const yes = noReasonYes();
+      if (yes) { yes.click(); return null; }
+      return gone();
+    }, what, 20000);
+  }
+
   // Out of the form, and the fact's view (after an edit) closed
   async function closeFactDialog() {
     const d = conclusionDialog();
@@ -1112,6 +1133,9 @@ if (!window.__arkivet2fsAttach) {
     await waitGone(conclusionDialog, 'the form to close', 20000).catch(() => {});
   }
 
+  // `unsaved`: failed before Save was clicked, so trying again can't add it twice
+  const unsaved = (error) => Object.assign(error, { unsaved: true });
+
   // addFact: the addition filled into FS's form; `save` false: the fields as FS took
   // them (the places picked) read back and the form cancelled, nothing saved
   async function addFact({ pid, addition, reason, save }) {
@@ -1121,8 +1145,6 @@ if (!window.__arkivet2fsAttach) {
     // the one to fill in: FS keeps one of each and offers no Add for it
     if (addition.action === 'add' && VITALS.includes(type) && bareFact(type)) addition = { ...addition, action: 'edit' };
     const before = new Set(displays(type).map((e) => clean(e.textContent)));
-    // `unsaved`: failed before Save was clicked, so trying again can't add it twice
-    const unsaved = (error) => Object.assign(error, { unsaved: true });
     let fields, submit;
     try {
       const form = await openFactForm(addition);
@@ -1142,32 +1164,19 @@ if (!window.__arkivet2fsAttach) {
     } catch (error) {
       throw unsaved(error);
     }
-    // FS's message in the form, if it shows one
-    const problem = () => {
-      const d = conclusionDialog();
-      const alert = d && d.querySelector('[role="alert"], [aria-invalid="true"]');
-      return alert ? clean(alert.textContent || alert.getAttribute('aria-label')).slice(0, 200) : '';
-    };
+    const problem = () => formProblem(conclusionDialog());
     // FS keeps an edit's Save off while the form holds what FS has already (saved by
     // an earlier run): nothing to change. The form is never left open.
-    const off = () => submit.disabled || submit.getAttribute('aria-disabled') === 'true';
-    if (off()) await sleep(1000);
-    if (off()) {
+    if (saveOff(submit)) await sleep(1000);
+    if (saveOff(submit)) {
       const why = problem();
       await closeFactDialog();
       if (!why && addition.action === 'edit') return { ok: true, fields, unchanged: true };
       throw new Error('FamilySearch did not take the ' + factName(type) + (why ? ': ' + why : '.'));
     }
-    submit.click();
-    // Saved: the form closes (an edit's back to its view, closed then); still open: FS's message.
-    // FS asks "Are you sure that you want to continue without explaining your changes?"
-    // when the reason is the one the fact has (saved by an earlier run): Yes
+    // Saved: the form closes (an edit's back to its view, closed then); still open: FS's message
     try {
-      await waitFor(() => {
-        const yes = noReasonYes();
-        if (yes) { yes.click(); return null; }
-        return !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog());
-      }, 'the form to close', 20000);
+      await submitAnswered(submit, () => !conclusionDialog() || !byTestId('conclusionDetailOverlay:reason', conclusionDialog()), 'the form to close');
     } catch (error) {
       const why = problem();
       await closeFactDialog();
@@ -1228,35 +1237,45 @@ if (!window.__arkivet2fsAttach) {
   // Olsen too. Else the one with every word, else the one of the year; a guess only when
   // FS has one of the type: a person can have several residences (sorted by date), and
   // a source tagged to (or a place put in) another year's would be wrong without a word
+  const matchWords = (match) => (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
+  // a year in the fact's date, not in its reason ("From ..., Marriage, 21 November 1874")
+  const factHas = (e, w) => clean(((/^\d{4}$/.test(w) && byTestId('conclusion-date', e)) || e).textContent).toLowerCase().includes(w);
+  const only = (list) => (list.length === 1 ? list[0] : null);
+
   function whichFact(all, type, match) {
-    const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
+    const words = matchWords(match);
     const nameOf = (e) => clean((byTestId('conclusion-name-template', e) || {}).textContent).toLowerCase();
-    // a year in the fact's date, not in its reason ("From ..., Marriage, 21 November 1874")
-    const has = (e, w) => clean(((/^\d{4}$/.test(w) && byTestId('conclusion-date', e)) || e).textContent).toLowerCase().includes(w);
     const year = words.find((w) => /^\d{4}$/.test(w));
-    const only = (list) => (list.length === 1 ? list[0] : null);
     // the name without a record's permanent ID (one in the reason tells an update's fact)
     const name = words.filter((w) => !/^[a-z]{2}\d{14,}$/.test(w)).join(' ');
     return (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === name)) ||
-      all.find((e) => words.length && words.every((w) => has(e, w))) ||
-      (year && only(all.filter((e) => has(e, year)))) || only(all);
+      all.find((e) => words.length && words.every((w) => factHas(e, w))) ||
+      (year && only(all.filter((e) => factHas(e, year)))) || only(all);
+  }
+
+  // In a fact's view or form (`box`): the source tagged, by Tag Sources, the source
+  // (its SourceBox ID; the list shows `whose` sources), Tag To. False when the sources
+  // listed in `sources` already have the title (FS's tag dialog after attaching may
+  // have tagged it): left as it is.
+  async function tagIn(box, sources, sourceId, title, whose) {
+    await sleep(500);
+    if (title && [...sources.querySelectorAll('[data-testid="source-heading-section"]')].some((h) => clean(h.textContent).includes(clean(title)))) return false;
+    const tagButton = await waitFor(() => [...box.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
+    tagButton.click();
+    const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
+    if (!item) throw new Error('The source is not among the ' + whose + ' sources on FamilySearch, so it could not be tagged.');
+    item.click();
+    (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
+    return true;
   }
 
   // The rest of tagFact, in the fact's view just opened
   async function tagFromView(sourceId, title) {
     const view = await waitFor(conclusionDialog, 'the fact');
-    // Tagged already (FS's tag dialog after attaching may have done it): left as it is
-    await sleep(500);
-    if (title && [...view.querySelectorAll('[data-testid="source-heading-section"]')].some((h) => clean(h.textContent).includes(clean(title)))) {
+    if (!await tagIn(view, view, sourceId, title, 'person\'s')) {
       await closeFactDialog();
       return { ok: true, already: true };
     }
-    const tagButton = await waitFor(() => [...view.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
-    tagButton.click();
-    const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
-    if (!item) throw new Error('The source is not among the person\'s sources on FamilySearch, so it could not be tagged.');
-    item.click();
-    (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
     // FS may ask for a reason; then saved with it
     await sleep(800);
     const reason = conclusionDialog() && byTestId('conclusionDetailOverlay:reason', conclusionDialog());
@@ -1280,7 +1299,8 @@ if (!window.__arkivet2fsAttach) {
 
   const coupleForm = () => {
     const form = byTestId('conclusionDetailOverlay:addEditConclusion');
-    return form && byTestId('conclusionDetailOverlay:reason', form.closest('[role="dialog"]') || form) ? form.closest('[role="dialog"]') || form : null;
+    const box = form && (form.closest('[role="dialog"]') || form);
+    return box && byTestId('conclusionDetailOverlay:reason', box) ? box : null;
   };
   const marriages = (dialog) => [...dialog.querySelectorAll('[data-testid="conclusionDisplay:MARRIAGE"]')];
 
@@ -1301,7 +1321,6 @@ if (!window.__arkivet2fsAttach) {
   async function coupleFact({ pid, spouse, addition, reason, save, sourceId, title }) {
     pid = String(pid || '').toUpperCase();
     spouse = String(spouse || '').toUpperCase();
-    const unsaved = (error) => Object.assign(error, { unsaved: true });
     let dialog;
     try {
       dialog = await openCoupleDialog(pid, spouse);
@@ -1315,14 +1334,13 @@ if (!window.__arkivet2fsAttach) {
       const year = yearIn(v.date);
       const all = marriages(dialog);
       // FS's marriage with the record's date and place: nothing to change
-      const same = all.find((e) => yearIn(part(e, 'conclusion-date')) === year && sameDay(part(e, 'conclusion-date'), v.date) &&
+      const same = all.find((e) => sameDay(part(e, 'conclusion-date'), v.date) &&
         part(e, 'conclusion-place').toLowerCase() === clean(v.place).toLowerCase());
-      // the one with every `match` word (the year in its date), only when one has them
-      const words = (addition.match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
-      const has = (e, w) => clean(((/^\d{4}$/.test(w) && byTestId('conclusion-date', e)) || e).textContent).toLowerCase().includes(w);
-      const named = all.filter((e) => words.every((w) => has(e, w)));
-      const only = (list) => (list.length === 1 ? list[0] : null);
-      let target = same || (addition.action === 'edit' ? (words.length ? only(named) : null) || (!named.length && only(all)) || null : null);
+      // the one with every `match` word (the year in its date), only when one has them;
+      // none has them (or no `match`, FS's marriage without a date): FS's only one
+      const words = matchWords(addition.match);
+      const named = all.filter((e) => words.every((w) => factHas(e, w)));
+      const target = same || (addition.action === 'edit' ? only(named.length ? named : all) : null);
       if (addition.action === 'edit' && !target) {
         throw unsaved(new Error('FamilySearch has more than one marriage for the couple and none is clearly this one; change it by hand.'));
       }
@@ -1347,22 +1365,15 @@ if (!window.__arkivet2fsAttach) {
           return { ok: true, fields, others };
         }
         const submit = byTestId('conclusionDetailOverlay:submit:button', coupleForm());
-        const off = () => !submit || submit.disabled || submit.getAttribute('aria-disabled') === 'true';
-        if (off()) await sleep(1000);
-        if (off()) {
-          const alert = coupleForm() && coupleForm().querySelector('[role="alert"], [aria-invalid="true"]');
-          const why = alert ? clean(alert.textContent || alert.getAttribute('aria-label')).slice(0, 200) : '';
+        if (saveOff(submit)) await sleep(1000);
+        if (saveOff(submit)) {
+          const why = formProblem(coupleForm());
           await leaveCoupleForm();
           if (why || !target) throw unsaved(new Error('FamilySearch did not take the marriage' + (why ? ': ' + why : '.')));
           unchanged = true;
         } else {
-          submit.click();
           try {
-            await waitFor(() => {
-              const yes = noReasonYes();
-              if (yes) { yes.click(); return null; }
-              return !coupleForm();
-            }, 'the form to close', 20000);
+            await submitAnswered(submit, () => !coupleForm(), 'the form to close');
           } catch (error) {
             await leaveCoupleForm();
             throw new Error('FamilySearch did not save the marriage.');
@@ -1401,28 +1412,16 @@ if (!window.__arkivet2fsAttach) {
     if (!pencil) throw new Error('FamilySearch shows no way to open the marriage.');
     pencil.click();
     const form = await waitFor(coupleForm, 'the marriage\'s form');
-    await sleep(500);
-    const sources = byTestId('conclusionDetailOverlay:sources-wrapper', form) || form;
-    if (title && [...sources.querySelectorAll('[data-testid="source-heading-section"]')].some((h) => clean(h.textContent).includes(clean(title)))) {
+    if (!await tagIn(form, byTestId('conclusionDetailOverlay:sources-wrapper', form) || form, sourceId, title, 'couple\'s')) {
       await leaveCoupleForm();
       return 'already';
     }
-    const tagButton = await waitFor(() => [...form.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
-    tagButton.click();
-    const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
-    if (!item) throw new Error('The source is not among the couple\'s sources on FamilySearch, so it could not be tagged.');
-    item.click();
-    (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
     await waitGone(() => byTestId('source-view-tag-button'), 'the tag to be set', 15000).catch(() => {});
     await sleep(500);
     const submit = coupleForm() && byTestId('conclusionDetailOverlay:submit:button', coupleForm());
-    if (submit && !submit.disabled && submit.getAttribute('aria-disabled') !== 'true') {
-      submit.click();
-      await waitFor(() => {
-        const yes = noReasonYes();
-        if (yes) { yes.click(); return null; }
-        return !coupleForm();
-      }, 'the tag to be saved', 20000).catch(async () => { await leaveCoupleForm(); throw new Error('FamilySearch did not save the tag.'); });
+    if (!saveOff(submit)) {
+      await submitAnswered(submit, () => !coupleForm(), 'the tag to be saved')
+        .catch(async () => { await leaveCoupleForm(); throw new Error('FamilySearch did not save the tag.'); });
     } else {
       await leaveCoupleForm();
     }
