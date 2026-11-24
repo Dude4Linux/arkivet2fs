@@ -425,6 +425,7 @@ test('hitPlace(): the municipality a hit is from: the source\'s code or name; an
   assert.equal(w.hitPlace({ type: 'Census', source: '1891 census for 0515 Vågå' }), '0515');
   assert.equal(w.hitPlace({ type: 'Census', source: '1865 census for Vågå', domicile: 'Vaage: Toftum' }), '0515');
   assert.equal(w.hitPlace({ type: 'Baptism', source: 'Church book from Vågå parish' }), '0515');
+  assert.equal(w.hitPlace({ type: 'Baptism', source: 'Parish register (official) for Halden parish 1845-1856' }), '0101');  // DA's newer titles
   // an emigrant protocol is the port's: the residence, else the birthplace
   assert.equal(w.hitPlace({ type: 'Emigration', source: 'Bergen politikammer, Reisekontroll, Emigrasjon, no. 242', domicile: 'Bykle', born: '1851' }), '0941');
   assert.equal(w.hitPlace({ type: 'Emigration', source: "Ships' lists for Bergen-Quebec (Canada) 1865-1873", domicile: '', born: '1844, Hemsedal' }), '0618');

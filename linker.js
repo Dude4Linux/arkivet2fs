@@ -843,38 +843,44 @@ function dateText(d) {
 // The record's place, from the source title: "Church book from Vågå parish, ..." → Vågå
 function recordPlace(record) {
   const title = record.sourceTitle || '';
-  const m = title.match(/\bfrom (.+?) parish\b/i) || title.match(/\bcensus for (?:\d{3,4} )?(.+?)(?: \(|$)/i);
-  return m ? m[1] : '';
+  const m = title.match(/\bcensus for (?:\d{3,4} )?(.+?)(?: \(|$)/i);
+  return sourceParish(title) || (m ? m[1] : '');
 }
 const joined = (...parts) => parts.filter(Boolean).join(', ');
 // The parish's name as the record's year had it: DA names a town's parish by the town's
 // present name ("Halden parish"), the town Fredrikshald in 1875
 function parishName(record) {
   const name = recordPlace(record);
-  const code = parishCode(record.sourceTitle).slice(0, 4);
+  const code = parishMunicipality(record.sourceTitle);
   if (!code || !TOWN_NAMES[code] || foldPlace(name) !== foldPlace(municipalityName(code))) return name;
   const town = townIn(code, (daDateParts(record.recordDate) || {}).year);
   return town ? town.name : name;
 }
 
 // The title's parish by the town's name of the record's year, as parishName() gives
-// it ("… - Fredrikshald parish 1869-1884 (0101P) - Birth, 17 May 1875"); the citation
-// keeps DA's name of the book, as the archive names it
+// it ("… - Fredrikshald parish 1869-1884 (0101P) - Birth, 17 May 1875", "… - Parish
+// register (official) for Fredrikshald parish 1845-1856 - …"); the citation keeps DA's
+// name of the book, as the archive names it
 function titleOfYear(title, record) {
-  const code = parishCode(record.sourceTitle).slice(0, 4);
+  const code = parishMunicipality(record.sourceTitle);
   const town = TOWN_NAMES[code] && townIn(code, (daDateParts(record.recordDate) || {}).year);
-  const present = ' - ' + municipalityName(code) + ' parish ';
-  return town && town.name !== municipalityName(code) ? String(title || '').split(present).join(' - ' + town.name + ' parish ') : title;
+  return town && town.name !== municipalityName(code) ? renameParish(title, municipalityName(code), town.name) : title;
 }
 // The title as it was before titleOfYear(): the town's parish by its present name
 function presentParishTitle(title) {
   for (const [code, names] of Object.entries(TOWN_NAMES)) {
     for (const [name] of names.filter(([n]) => n !== municipalityName(code))) {
-      const old = ' - ' + name + ' parish ';
-      if (String(title).includes(old)) return title.split(old).join(' - ' + municipalityName(code) + ' parish ');
+      const renamed = renameParish(title, name, municipalityName(code));
+      if (renamed !== title) return renamed;
     }
   }
   return title;
+}
+// The title with the parish `from` named `to`: the source title's parish, after " - ",
+// "from" or "for" ("Church book from …", "Parish register (official) for …")
+function renameParish(title, from, to) {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(title || '').replace(new RegExp('( - |\\bfrom |\\bfor )' + escaped + ' parish\\b', 'g'), '$1' + to + ' parish');
 }
 
 // The record's parish as FS names it: a parish that is a municipality ("Vågå,
@@ -885,7 +891,7 @@ function parishPlace(record) {
   if (!name) return '';
   const own = fsMunicipality(name, record);
   if (own) return own;
-  const code = parishCode(record.sourceTitle).slice(0, 4);
+  const code = parishMunicipality(record.sourceTitle);
   if (code && DA_MUNICIPALITIES[code]) return townPlace(code, record);
   return fsPlace(name, record);
 }
@@ -1200,7 +1206,7 @@ function deathFarm(person, record) {
 // (a kjøpstad or ladested) a number below 11 in its county (Arendal 0903, Oslo 0301),
 // a rural municipality 11 and up (Gjerstad 0911)
 function townParish(record) {
-  const code = parishCode(record.sourceTitle).slice(0, 4);
+  const code = parishMunicipality(record.sourceTitle);
   return !!code && Number(code.slice(2)) < 11;
 }
 

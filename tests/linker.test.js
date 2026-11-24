@@ -2404,6 +2404,22 @@ test('titleOfYear(): a town\'s parish in the title by its name of the record\'s 
   assert.equal(found.formerTitle, title);
 });
 
+test('titleOfYear(), parishPlace(): DA\'s newer source titles, without a parish code ("Parish register (official) for Halden parish")', () => {
+  const register = 'Parish register (official) for Halden parish 1845-1856';
+  const record = { recordDate: '1851-05-18', sourceTitle: register, county: 'Østfold' };
+  const title = 'Ole, son of Hans Olsen - ' + register + ' - Birth, 18 May 1851';
+  const old = 'Ole, son of Hans Olsen - Parish register (official) for Fredrikshald parish 1845-1856 - Birth, 18 May 1851';
+  assert.equal(w.sourceParish(register), 'Halden');
+  assert.equal(w.parishMunicipality(register), '0101');
+  assert.equal(w.titleOfYear(title, record), old);
+  assert.equal(w.presentParishTitle(old), title);
+  assert.equal(w.parishName(record), 'Fredrikshald');
+  assert.equal(w.parishPlace(record), 'Fredrikshald, Smaalenene, Norway');
+  assert.ok(w.townParish(record));
+  // a rural parish's name is no town's
+  assert.ok(!w.townParish({ recordDate: '1851-05-18', sourceTitle: 'Parish register (official) for Vågå parish 1845-1856' }));
+});
+
 test('run(): a source Home shows by its title is checked and written over like one found', async () => {
   const { chrome, asked } = fakeFs({
     findSource: () => ({ ok: true, sources: [] }),

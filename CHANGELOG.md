@@ -48,6 +48,14 @@ fixes, new features, changes that break what users have).
   names the church book as the National Archives do ("Halden parish"). A source made
   before under the present name is found in your SourceBox and given the new title
   when you open the record in the linker again.
+- **Church books with DigitalArkivet's newer titles** ("Parish register (official) for
+  Halden parish 1845-1856", with no parish code after it) are now read as the parish's:
+  a town's parish gets the name of the record's year in the source's title and in the
+  places of its facts, the citation names the parish ("Norway, Østfold, Halden Parish,
+  …"), and the search page weighs these hits by their parish's distance and pairs an
+  entry found in both of the parish's church books. Before, the parish in such a
+  title was missed, so rerunning the linker on a baptism in Halden kept "Halden
+  parish" in the title.
 - **A colon closing a name:** the church books' abbreviation mark, kept in DA's
   transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
   title, the citation, the notes and the names offered for FamilySearch, and the

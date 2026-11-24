@@ -468,9 +468,9 @@ function groupHits(merged, P) {
 // residence, else the birthplace ("1845, Aurland")
 function hitPlace(hit) {
   const source = String(hit.source || '');
-  const code = parishCode(source).slice(0, 4) || (source.match(/\bcensus for (\d{4})[A-Z]?\b/) || [])[1];
+  const code = parishMunicipality(source) || (source.match(/\bcensus for (\d{4})[A-Z]?\b/) || [])[1];
   if (code && DA_COORDS[code]) return code;
-  const named = source.match(/\bcensus for (?:\d{4}[A-Z]?\s+)?([^,(]+)/) || source.match(/^Church book from (.+?) parish\b/);
+  const named = source.match(/\bcensus for (?:\d{4}[A-Z]?\s+)?([^,(]+)/);
   const fromName = named && municipalityOf(named[1].trim());
   if (fromName) return fromName;
   if (hit.type !== 'Emigration') return '';
@@ -486,10 +486,22 @@ function parishCode(source) {
   const m = String(source || '').match(/\((\d{4}[A-Z]\w*)\)\s*$/);
   return m ? m[1] : '';
 }
+// The parish a church book's source title names: "Church book from Vågå parish, Vågå
+// local parish 1842-1856 (0515P)", and DA's newer titles, which have no code:
+// "Parish register (official) for Halden parish 1845-1856" → Vågå, Halden
+function sourceParish(source) {
+  const m = String(source || '').match(/\b(?:from|for) (.+?) parish\b/i);
+  return m ? m[1].trim() : '';
+}
+// The municipality code of a church book's parish: the code its title ends with, else
+// the municipality the parish's name names ('' for none)
+function parishMunicipality(source) {
+  return parishCode(source).slice(0, 4) || municipalityOf(sourceParish(source));
+}
 
 function parallelKey(hit) {
   const date = String(hit.date || '').match(/^\d{4}-\d{1,2}-\d{1,2}/);
-  const code = parishCode(hit.source);
+  const code = parishCode(hit.source) || sourceParish(hit.source).toLowerCase();
   return date && code && hit.sourceUrl ? [hit.type, hit.role, date[0], code].join('|') : '';
 }
 

@@ -631,11 +631,12 @@ function extractRecord(document, pageUrl) {
 
     // Jurisdiction named in the source title:
     //   "Church book from Folda parish 1836-1856 (1845P)"            → "Folda Parish"
+    //   "Parish register (official) for Halden parish 1845-1856"     → "Halden Parish"
     //   "Probate register for Ytre Sogn judicial district 1698-1853" → "Ytre Sogn Judicial District"
     //   "1891 census for 0529 Vestre Toten"                          → "Vestre Toten"
     const t = info.sourceTitle;
     let m;
-    if ((m = t.match(/\bfrom (.+?) parish\b/i))) info.jurisdiction = m[1] + ' Parish';
+    if ((m = t.match(/\b(?:from|for) (.+?) parish\b/i))) info.jurisdiction = m[1] + ' Parish';
     else if ((m = t.match(/\bfor (.+?) judicial district\b/i))) info.jurisdiction = m[1] + ' Judicial District';
     else if ((m = t.match(/\bcensus for (?:\d{3,4} )?(.+)$/i))) info.jurisdiction = m[1];
     else info.jurisdiction = '';
