@@ -437,23 +437,9 @@ if (!window.__arkivet2fsAttach) {
   async function coupleId({ pid, spouse }) {
     pid = (pid || '').toUpperCase();
     spouse = (spouse || '').toUpperCase();
-    if (![pid, spouse].every((p) => PID.test(p))) throw new Error('Not a FamilySearch PID: ' + pid + ' ' + spouse);
-    onPersonPage(pid);
-    // The family cards come with the page, the couple's among them
-    const card = () => familyCards().find((c) => c.ids.includes(pid) && c.ids.includes(spouse));
-    try { await waitFor(() => card() || familyCards().length, 'the family cards', 20000); } catch (e) { if (e.blocked) throw e; }
-    if (!card()) await sleep(1500);
-    const found = card();
-    if (!found) return { ok: true, coupleId: null, sources: [] };
-    const view = byTestId('couple-relationship-view-button', found.node);
-    if (!view) throw new Error('FamilySearch shows no couple relationship to open for ' + pid + ' and ' + spouse + '.');
-    view.click();
+    const dialog = await openCoupleDialog(pid, spouse);
+    if (!dialog) return { ok: true, coupleId: null, sources: [] };
     try {
-      const dialog = await waitFor(coupleDialog, 'the couple relationship');
-      const text = clean(dialog.textContent).toUpperCase();
-      if (!text.includes(pid) || !text.includes(spouse)) throw new Error('FamilySearch showed another couple for ' + pid + ' and ' + spouse + '.');
-      // The couple's sources, once the list has come
-      await sleep(1500);
       const sources = [...dialog.querySelectorAll('[data-testid^="source-button_view-"]')]
         .map((b) => b.getAttribute('data-testid').replace(/^source-button_view-/, '').toUpperCase());
       const add = await waitFor(() => byTestId('source-list.add-button', coupleDialog() || dialog), 'the couple\'s Add Source button');
@@ -467,6 +453,33 @@ if (!window.__arkivet2fsAttach) {
       return { ok: true, coupleId: id, sources: [...new Set(sources)] };
     } finally {
       await closeCoupleDialog();
+    }
+  }
+
+  // On a spouse's page: the couple relationship's dialog of the two opened from their
+  // family card, its sources' list come; null when FS has no family of the two
+  async function openCoupleDialog(pid, spouse) {
+    if (![pid, spouse].every((p) => PID.test(p))) throw new Error('Not a FamilySearch PID: ' + pid + ' ' + spouse);
+    onPersonPage(pid);
+    // The family cards come with the page, the couple's among them
+    const card = () => familyCards().find((c) => c.ids.includes(pid) && c.ids.includes(spouse));
+    try { await waitFor(() => card() || familyCards().length, 'the family cards', 20000); } catch (e) { if (e.blocked) throw e; }
+    if (!card()) await sleep(1500);
+    const found = card();
+    if (!found) return null;
+    const view = byTestId('couple-relationship-view-button', found.node);
+    if (!view) throw new Error('FamilySearch shows no couple relationship to open for ' + pid + ' and ' + spouse + '.');
+    view.click();
+    try {
+      const dialog = await waitFor(coupleDialog, 'the couple relationship');
+      const text = clean(dialog.textContent).toUpperCase();
+      if (!text.includes(pid) || !text.includes(spouse)) throw new Error('FamilySearch showed another couple for ' + pid + ' and ' + spouse + '.');
+      // The couple's facts and sources, once they have come
+      await sleep(1500);
+      return dialog;
+    } catch (error) {
+      await closeCoupleDialog();
+      throw error;
     }
   }
 
@@ -1256,7 +1269,167 @@ if (!window.__arkivet2fsAttach) {
     return { ok: true };
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, coupleId, attachCouple, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact };
+  // --- A couple's marriage ------------------------------------------------------------
+  // FS keeps a marriage on the couple relationship (looked at on 2026-11-23, read and
+  // cancelled only): the couple's dialog (coupleDialog()) lists it as
+  // `conclusionDisplay:MARRIAGE`; its pencil opens the form in the same dialog
+  // (`conclusionDetailOverlay:addEditConclusion`: the `coupleEventType` select, date,
+  // place, the reason, the sources with Tag Sources, Cancel `add-edit:cancel-action`
+  // back to the couple, Save), `add-new-coupleEvent-button` an empty one (a marriage by
+  // default). Never its Delete Event, nor the relationship's delete.
+
+  const coupleForm = () => {
+    const form = byTestId('conclusionDetailOverlay:addEditConclusion');
+    return form && byTestId('conclusionDetailOverlay:reason', form.closest('[role="dialog"]') || form) ? form.closest('[role="dialog"]') || form : null;
+  };
+  const marriages = (dialog) => [...dialog.querySelectorAll('[data-testid="conclusionDisplay:MARRIAGE"]')];
+
+  // Out of the form, back in the couple's dialog (its Cancel)
+  async function leaveCoupleForm() {
+    const form = coupleForm();
+    const cancel = form && byTestId('add-edit:cancel-action', form);
+    if (cancel) cancel.click();
+    await waitGone(coupleForm, 'the form to close', 5000).catch(() => {});
+  }
+
+  // coupleFact: on the groom's page (`pid`), the marriage of the couple with `spouse`
+  // added or changed in the couple relationship, then the source (`sourceId`, the
+  // couple's by now) tagged to it. `save` false: the fields as FS took them, nothing
+  // saved. The marriage changed is the one `match` names (the record's ID in its reason,
+  // or its year), else FS's only one; with none, one is added. FS's marriages already
+  // with the record's date and place are `unchanged`; the others are named (`others`).
+  async function coupleFact({ pid, spouse, addition, reason, save, sourceId, title }) {
+    pid = String(pid || '').toUpperCase();
+    spouse = String(spouse || '').toUpperCase();
+    const unsaved = (error) => Object.assign(error, { unsaved: true });
+    let dialog;
+    try {
+      dialog = await openCoupleDialog(pid, spouse);
+    } catch (error) {
+      throw unsaved(error);
+    }
+    if (!dialog) throw unsaved(new Error('FamilySearch has no couple relationship of ' + pid + ' and ' + spouse + '; link them as a couple first.'));
+    try {
+      const v = addition.value || {};
+      const part = (el, id) => clean((byTestId(id, el) || {}).textContent);
+      const year = yearIn(v.date);
+      const all = marriages(dialog);
+      // FS's marriage with the record's date and place: nothing to change
+      const same = all.find((e) => yearIn(part(e, 'conclusion-date')) === year && sameDay(part(e, 'conclusion-date'), v.date) &&
+        part(e, 'conclusion-place').toLowerCase() === clean(v.place).toLowerCase());
+      // the one with every `match` word (the year in its date), only when one has them
+      const words = (addition.match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
+      const has = (e, w) => clean(((/^\d{4}$/.test(w) && byTestId('conclusion-date', e)) || e).textContent).toLowerCase().includes(w);
+      const named = all.filter((e) => words.every((w) => has(e, w)));
+      const only = (list) => (list.length === 1 ? list[0] : null);
+      let target = same || (addition.action === 'edit' ? (words.length ? only(named) : null) || (!named.length && only(all)) || null : null);
+      if (addition.action === 'edit' && !target) {
+        throw unsaved(new Error('FamilySearch has more than one marriage for the couple and none is clearly this one; change it by hand.'));
+      }
+      const others = all.filter((e) => e !== target).map((e) => [part(e, 'conclusion-date'), part(e, 'conclusion-place')].filter(Boolean).join(', '));
+      let fields = [], unchanged = !!same;
+      if (!same || !save) {
+        try {
+          const opener = target ? byTestId('pencil-edit-button', target) : await waitFor(() => byTestId('add-new-coupleEvent-button', coupleDialog() || dialog), 'Add Event of the couple');
+          if (!opener) throw new Error('FamilySearch shows no way to ' + (target ? 'change' : 'add') + ' the marriage.');
+          opener.click();
+          const form = await waitFor(coupleForm, 'the marriage\'s form');
+          const type = form.querySelector('select[name="coupleEventType"]');
+          if (type && type.value !== 'MARRIAGE') throw new Error('FamilySearch opened another event of the couple than the marriage.');
+          fields = await fillFactForm(form, addition, reason);
+          await sleep(300);
+        } catch (error) {
+          await leaveCoupleForm();
+          throw unsaved(error);
+        }
+        if (!save) {
+          await leaveCoupleForm();
+          return { ok: true, fields, others };
+        }
+        const submit = byTestId('conclusionDetailOverlay:submit:button', coupleForm());
+        const off = () => !submit || submit.disabled || submit.getAttribute('aria-disabled') === 'true';
+        if (off()) await sleep(1000);
+        if (off()) {
+          const alert = coupleForm() && coupleForm().querySelector('[role="alert"], [aria-invalid="true"]');
+          const why = alert ? clean(alert.textContent || alert.getAttribute('aria-label')).slice(0, 200) : '';
+          await leaveCoupleForm();
+          if (why || !target) throw unsaved(new Error('FamilySearch did not take the marriage' + (why ? ': ' + why : '.')));
+          unchanged = true;
+        } else {
+          submit.click();
+          try {
+            await waitFor(() => {
+              const yes = noReasonYes();
+              if (yes) { yes.click(); return null; }
+              return !coupleForm();
+            }, 'the form to close', 20000);
+          } catch (error) {
+            await leaveCoupleForm();
+            throw new Error('FamilySearch did not save the marriage.');
+          }
+        }
+      }
+      // The marriage as FS shows it now, its source tagged
+      const now = coupleDialog() || await waitFor(coupleDialog, 'the couple relationship');
+      const saved = await waitFor(() => marriages(now).find((e) => !year || yearIn(part(e, 'conclusion-date')) === year), 'the saved marriage', 10000).catch(() => null);
+      if (!saved) throw new Error('FamilySearch does not show the marriage of ' + (v.date || '') + ' now. Look at the couple relationship there.');
+      const shown = clean(saved.textContent);
+      if (v.place && !part(saved, 'conclusion-place')) throw new Error('FamilySearch saved the marriage without its place (' + v.place + '). Add the place by hand.');
+      let tagged = '', tagError = '';
+      if (sourceId) {
+        try {
+          tagged = await tagMarriage(saved, sourceId, title);
+        } catch (error) {
+          if (error.blocked) throw error;
+          tagError = error.message || String(error);
+          const closeList = byTestId('restore-source-cancel-button');
+          if (closeList) closeList.click();
+          await leaveCoupleForm();
+        }
+      }
+      return { ok: true, fields, shown, unchanged, others, tagged, tagError };
+    } finally {
+      await closeCoupleDialog();
+    }
+  }
+
+  // The source tagged to the marriage from its form: Tag Sources lists the couple's
+  // sources; the form saved after (Cancel when FS has nothing to save). 'already' when
+  // the form lists it already.
+  async function tagMarriage(display, sourceId, title) {
+    const pencil = byTestId('pencil-edit-button', display);
+    if (!pencil) throw new Error('FamilySearch shows no way to open the marriage.');
+    pencil.click();
+    const form = await waitFor(coupleForm, 'the marriage\'s form');
+    await sleep(500);
+    const sources = byTestId('conclusionDetailOverlay:sources-wrapper', form) || form;
+    if (title && [...sources.querySelectorAll('[data-testid="source-heading-section"]')].some((h) => clean(h.textContent).includes(clean(title)))) {
+      await leaveCoupleForm();
+      return 'already';
+    }
+    const tagButton = await waitFor(() => [...form.querySelectorAll('button, [role="button"]')].find((b) => /^tag sources?$/i.test(clean(b.textContent))), 'Tag Sources');
+    tagButton.click();
+    const item = await waitFor(() => document.querySelector('[role="button"][name="' + String(sourceId).replace(/["\\]/g, '\\$&') + '"]'), 'the source in the list to tag', 15000).catch(() => null);
+    if (!item) throw new Error('The source is not among the couple\'s sources on FamilySearch, so it could not be tagged.');
+    item.click();
+    (await waitFor(() => byTestId('source-view-tag-button'), 'Tag To')).click();
+    await waitGone(() => byTestId('source-view-tag-button'), 'the tag to be set', 15000).catch(() => {});
+    await sleep(500);
+    const submit = coupleForm() && byTestId('conclusionDetailOverlay:submit:button', coupleForm());
+    if (submit && !submit.disabled && submit.getAttribute('aria-disabled') !== 'true') {
+      submit.click();
+      await waitFor(() => {
+        const yes = noReasonYes();
+        if (yes) { yes.click(); return null; }
+        return !coupleForm();
+      }, 'the tag to be saved', 20000).catch(async () => { await leaveCoupleForm(); throw new Error('FamilySearch did not save the tag.'); });
+    } else {
+      await leaveCoupleForm();
+    }
+    return 'tagged';
+  }
+
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, coupleId, attachCouple, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact, coupleFact };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Only the steps themselves, not what every object has (constructor, toString)

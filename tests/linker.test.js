@@ -863,6 +863,33 @@ test('run(): a marriage\'s source goes to the groom, the bride and their couple 
   assert.deepEqual(plain(tabs.closed), [2]);  // all done
 });
 
+test('run(): a marriage changed in the couple relationship after the couple has the source, and tagged by the same step', async () => {
+  const { chrome, asked } = fakeFs({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S07', missing: [] }),
+    attach: () => ({ ok: true, tagged: { changed: [], notes: [] } }),
+    coupleId: () => ({ ok: true, coupleId: 'TEST-C01', sources: [] }),
+    attachCouple: () => ({ ok: true }),
+    readPerson: () => ({ person: { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø', families: [] } }),
+    coupleFact: (args, url) => (url.endsWith('/details/TEST-KOL') ? { ok: true, shown: 'Marriage 22 April 1849', tagged: 'tagged', others: ['1850, Lom'] } : { ok: false, error: 'not the groom\'s page' })
+  });
+  const { win, state, $ } = marriagePage(chrome);
+  const addition = { fact: 'Marriage', action: 'edit', type: 'MARRIAGE', couple: 'TEST-ELI', match: ['1849'], current: '22 Apr 1849, Vaage', value: { date: '22 April 1849', place: 'Vågå, Oppland, Norway' } };
+  const plan = win.readPlan(true);
+  plan.pairs.find((p) => p.pid === 'TEST-KOL').additions = [{ ...addition, reason: 'From the record.' }];
+  win.readPlan = () => plan;
+  await win.run(true);
+  const names = stepNames(asked);
+  assert.ok(names.indexOf('attachCouple') < names.indexOf('coupleFact TEST-KOL'), names.join(', '));
+  const args = asked.find(([name]) => name === 'coupleFact')[1];
+  assert.deepEqual([args.spouse, args.sourceId, args.save, args.reason], ['TEST-ELI', 'TEST-S07', true, 'From the record.']);
+  assert.equal(args.title, $('f-title').value);
+  assert.ok(!names.includes('tagFact TEST-KOL'));  // tagged by coupleFact
+  assert.match($('log').textContent, /The source is tagged to it\./);
+  assert.match($('log').textContent, /FamilySearch has another marriage for the couple, left as it is: 1850, Lom\./);
+  assert.equal(state.rows.length, 4);
+});
+
 test('run(): a marriage\'s couple that has the source already is left as it is', async () => {
   // on its Attached To page: no couple step at all
   const attachedFs = fakeFs({
@@ -1761,6 +1788,32 @@ test('factAdditions(): FS\'s residence of the record\'s year changed where it is
   const edit = { action: 'edit', type: 'RESIDENCE', value: { date: '1874', place: town } };
   assert.equal(w.onTreeAlready({ residences: [{ date: '1874', place: '' }] }, edit), false);
   assert.equal(w.onTreeAlready({ residences: [{ date: '1874', place: town }] }, edit), true);
+});
+
+test('factAdditions(): a marriage in the couple relationship, its town by the name of the year (bug: "Halden, Ostfold" for 1849 not offered a change)', () => {
+  const { win, state } = checkedPage();
+  const m = { ...record('marriage-bride'), county: 'Østfold', church: '', recordDate: '1849-11-11', sourceTitle: 'Church book from Halden parish 1845-1856 (0101P)' };
+  const groom = w.recordPeople(m)[0];
+  state.record = m;
+  const marriages = (marriage, spouse = 'TEST-ELI') => {
+    state.fs = { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø', gender: 'Male', occupations: [], altNames: [], residences: [],
+      families: [{ spouse: { pid: 'TEST-ELI', name: 'Eli Kolvaldsdatter Daltveit' }, marriage, children: [] }] };
+    return plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' }, '', { spouse })).filter((a) => a.fact === 'Marriage')
+      .map(({ action, type, couple, match, current, value }) => ({ action, type, couple, match, current, value }));
+  };
+  const town = 'Fredrikshald, Smaalenene, Norway';
+  // FS's present name of the town, without its letters: the town of the year, the date kept
+  assert.deepEqual(marriages({ date: '11 Nov 1849', place: 'Halden, Ostfold, Norway' }),
+    [{ action: 'edit', type: 'MARRIAGE', couple: 'TEST-ELI', match: ['1849'], current: '11 Nov 1849, Halden, Ostfold, Norway', value: { date: '11 November 1849', place: town } }]);
+  // FS's as the record has it: nothing; none on FS: added
+  assert.deepEqual(marriages({ date: '11 November 1849', place: town }), []);
+  assert.deepEqual(marriages(null).map((a) => [a.action, a.value.place]), [['add', town]]);
+  // not the groom of a bride paired with no couple on FS, nor without a bride paired
+  assert.deepEqual(marriages(null, 'TEST-XYZ'), []);
+  assert.deepEqual(marriages(null, ''), []);
+  // only the groom's row has it, with the one bride paired
+  state.rows = w.recordPeople(m).map((p, i) => win.personRow(p, [], ['TEST-KOL', 'TEST-ELI', '', ''][i]));
+  assert.deepEqual(plain(state.rows.map((r) => win.pairedBride(r))), ['TEST-ELI', '', '', '']);
 });
 
 test('factAdditions(): a birthplace the record gives without a year, where FS\'s birth has a date and no place (bug: not offered)', () => {

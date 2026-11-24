@@ -1457,6 +1457,27 @@ function factAdditions(person, record, tree, name, opts = {}) {
     }
   }
 
+  // A marriage: on the couple relationship of the groom and the bride paired with him
+  // (`opts.spouse`), where FS keeps it; added, or FS's (the one its family card shows)
+  // combined with the record's, in the church, a renamed town by its name of the year
+  // ("Halden, Østfold, Norway" for 1849: Fredrikshald, Smaalenene)
+  const family = da.Marriage && da.Marriage.year && opts.spouse &&
+    (full.families || []).find((f) => f.spouse && String(f.spouse.pid || '').toUpperCase() === String(opts.spouse).toUpperCase());
+  if (family) {
+    const fs = family.marriage && (family.marriage.date || family.marriage.place) ? family.marriage : null;
+    const date = da.Marriage.date && da.Marriage.date.year ? da.Marriage.date : { year: da.Marriage.year };
+    const value = { date: mergeDate(date, false, fs && fs.date), place: mergePlace(church.name, fs && fs.place, record, false, false, '', church.place) };
+    value.place = townOfYear(value.place, (parseFsDate(value.date) || {}).year || da.Marriage.year);
+    const couple = { couple: String(opts.spouse).toUpperCase() };
+    if (!fs) out.push({ fact: 'Marriage', action: 'add', type: 'MARRIAGE', ...couple, value });
+    else if (!sameDateText(fs.date, value.date) || value.place !== placeText(fs.place)) {
+      out.push({ fact: 'Marriage', action: 'edit', type: 'MARRIAGE', ...couple, current: joined(fs.date, fs.place),
+        ...(ours(fs) ? refresh(fs, true) : { match: fsYear(fs.date) ? [String(fsYear(fs.date))] : [] }), value });
+    } else if (ours(fs) && stale(fs)) {
+      out.push({ fact: 'Marriage', action: 'edit', type: 'MARRIAGE', ...couple, current: joined(fs.date, fs.place), ...refresh(fs, false), value });
+    }
+  }
+
   // A residence of a year FS has none of: the farm in the place ("Bakken nedre, Vågå,
   // Oppland, Norway"; not when it is the parish's own name), and as its description.
   // An emigrant protocol's residence is the emigrant's home, anywhere in Norway, not in
@@ -1708,7 +1729,9 @@ async function prepareAdditions() {
   status.textContent = t('Filling the changes in FamilySearch\'s forms (nothing is saved)…');
   let tab = null, done = 0, failed = 0;
   const fill = async (pid, a) => {
-    const answer = await step(tab.id, 'addFact', { pid, addition: a, reason: a.reason, save: false });
+    // a marriage in the couple relationship's own form
+    const answer = a.couple ? await step(tab.id, 'coupleFact', { pid, spouse: a.couple, addition: a, reason: a.reason, save: false })
+      : await step(tab.id, 'addFact', { pid, addition: a, reason: a.reason, save: false });
     if (!answer.ok) throw stepError(answer);
     return answer.fields || [];
   };
@@ -1833,7 +1856,7 @@ function personRow(person, family, suggestion, why) {
     const name = nameInput.value.trim();
     unnamedChildTitle(row);  // before the additions, whose reasons quote the title
     const list = tree && !reading ? factAdditions(person, state.record, tree, name,
-      { ids: doneIds(), reason: additionReason(state.record, $('f-title') && $('f-title').value.trim()) }) : [];
+      { ids: doneIds(), reason: additionReason(state.record, $('f-title') && $('f-title').value.trim()), spouse: pairedBride(row) }) : [];
     row.offered = list;
     row.additions = () => [];
     const slip = tree && dateSlip(person, state.record, fullTree(tree.pid));
@@ -1903,6 +1926,14 @@ function personRow(person, family, suggestion, why) {
   row.node = node;
   refresh();
   return row;
+}
+
+// A marriage's groom: the PID of the one bride paired, whose couple relationship with
+// him holds the marriage (factAdditions()); '' for anyone else
+function pairedBride(row) {
+  if (((state.record || {}).recordTypeInfo || {}).type !== 'marriage' || roleKind(row.person) !== 'groom') return '';
+  const brides = (state.rows || []).filter((r) => r !== row && roleKind(r.person) === 'bride' && PID_PATTERN.test(r.pid()));
+  return brides.length === 1 ? brides[0].pid().toUpperCase() : '';
 }
 
 // A baptized or buried child whose name DA couldn't read ("!! Halvorsd.*") starts the
@@ -3061,6 +3092,21 @@ async function saveAdditions(tabId, pair, sourceId, title) {
   const changes = [];
   for (const a of pair.additions) {
     const what = additionLabel(a).toLowerCase() + ': ' + additionText(a);
+    // A marriage: in the couple relationship, saved and tagged by one step (the source
+    // is the couple's by now, attachToCouple()); FS's other marriages of the couple
+    // are named, not changed
+    if (a.couple) {
+      const saved = await factStep(tabId, 'coupleFact', { pid: pair.pid, spouse: a.couple, addition: a, reason: a.reason, save: true, sourceId, title });
+      if (!saved.ok) { log(t('Not changed for {name} ({what}): {error}', { name: pair.label, what, error: saved.error }), 'bad'); continue; }
+      if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
+      else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changes.push(what); }
+      if (saved.others && saved.others.length) {
+        log(t('FamilySearch has another marriage for the couple, left as it is: {others}. Delete it there if it is a copy.', { others: saved.others.join('; ') }), 'near');
+      }
+      if (saved.tagError) log(t('The source is not tagged to it: {error}', { error: saved.tagError }), 'near');
+      else log(t(saved.tagged === 'already' ? 'The source was tagged to it already.' : 'The source is tagged to it.'), 'ok');
+      continue;
+    }
     if (fresh && onTreeAlready(fresh, a)) {
       log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
     } else {
@@ -3089,7 +3135,7 @@ async function saveAdditions(tabId, pair, sourceId, title) {
 // left as it is.
 async function factStep(tabId, name, args) {
   const answer = await step(tabId, name, args);
-  if (answer.ok || !answer.timeout || (name === 'addFact' && !answer.unsaved)) return answer;
+  if (answer.ok || !answer.timeout || ((name === 'addFact' || name === 'coupleFact') && !answer.unsaved)) return answer;
   log(t('{error} Trying once more, with the page loaded again.', { error: answer.error }), 'near');
   await navigate(tabId, personDetailsUrl(args.pid));
   return step(tabId, name, args);
@@ -3149,6 +3195,8 @@ async function keepTree(pid, person) {
 // the vital with the same date and place, a residence of the year, the occupation, an
 // emigration of the year
 function onTreeAlready(tree, a) {
+  // a marriage: the couple's dialog lists them all (fs_attach.js coupleFact() checks)
+  if (a.couple) return false;
   const v = a.value || {};
   // an update of this record's fact: not done until its reason is the one to write
   if (a.refresh) {

@@ -12,6 +12,14 @@ fixes, new features, changes that break what users have).
   the log says so, and the source is attached to each of them. The linker waits for
   FamilySearch's dialog to show the two people, so a dialog still loading
   ("[UNKNOWN NAME]") is no longer taken for another couple.
+- **The marriage's date and place on the couple:** the linker now compares the
+  record's marriage with the one FamilySearch keeps on the couple relationship, and
+  offers to add it, or to change it where it differs, under the groom's facts: a
+  marriage in Halden parish in 1849 that FamilySearch has in "Halden, Ostfold, Norway"
+  becomes "Fredrikshald, Smaalenene, Norway", the town's name of the time. Once the
+  couple has the source, the marriage is saved there with the source tagged to it.
+  Another marriage FamilySearch has for the couple is named in the log and left as it
+  is.
 - **Facts saved without their place:** a birth or residence whose place the linker
   gives in FamilySearch's own form ("Fredrikshald, Smaalenene, Norway") was saved with
   no place at all, though the log said it was done. FamilySearch has no entry of its

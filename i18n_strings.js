@@ -681,6 +681,7 @@ function i18nTable() {
     'Not changed for {name} ({what}): {error}': ['Ikke endret for {name} ({what}): {error}', 'Ikkje endra for {name} ({what}): {error}'],
     '{name}: {what}.': ['{name}: {what}.', '{name}: {what}.'],
     'The source is not tagged to it: {error}': ['Kilden er ikke merket til den: {error}', 'Kjelda er ikkje merkt til den: {error}'],
+    'FamilySearch has another marriage for the couple, left as it is: {others}. Delete it there if it is a copy.': ['FamilySearch har en annen vielse for paret, latt være som den er: {others}. Slett den der hvis den er en kopi.', 'FamilySearch har ei anna vigsle for paret, late vere som ho er: {others}. Slett ho der om ho er ein kopi.'],
     'The source was tagged to it already.': ['Kilden var allerede merket til den.', 'Kjelda var alt merkt til den.'],
     'The source is tagged to it.': ['Kilden er merket til den.', 'Kjelda er merkt til den.'],
     'Not tagged: {tags}': ['Ikke merket: {tags}', 'Ikkje merka: {tags}'],

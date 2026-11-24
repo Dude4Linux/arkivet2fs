@@ -1329,6 +1329,120 @@ test('coupleId(): a link without the couple\'s context is no ID; only on the spo
   assert.match(answer.error, /did not open the tree person TEST-KJE/);
 });
 
+// The couple's marriages (FS's testids seen 2026-11-23): in the couple's dialog, each
+// `conclusionDisplay:MARRIAGE` with its pencil, which opens the form in the same dialog
+// (the event type, date, place, reason, the sources with Tag Sources, Delete Event,
+// Cancel back to the couple, Save); Add Event an empty marriage's form. `marriages`:
+// [{date, place, sources: [title]}]; `saveOff`: FS keeps Save off for an unchanged form
+function coupleFacts({ marriages = [{ date: '11 Nov 1849', place: 'Halden, Ostfold, Norway', sources: [] }], couple = ['TEST-S07'] } = {}) {
+  const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-LAR',
+    '<div data-testid="family-TEST-LAR_TEST-KJE"><div data-testid="couple-persons"><a href="/tree/person/details/TEST-LAR">Lars Halvorsen</a>' +
+    '<a href="/tree/person/details/TEST-KJE">Kjersti Olsdatter</a></div><button data-testid="couple-relationship-view-button">View Relationship</button></div>', { clock: true });
+  const { w } = page;
+  const d = w.document;
+  const did = { deleted: 0, saved: [], tagged: [], closed: false };
+  let box = null;
+  const view = () => {
+    box.innerHTML = '<button aria-label="Close">×</button><div data-testid="person1-COUPLE-relationship">Lars Halvorsen TEST-LAR</div>' +
+      '<div data-testid="person2-COUPLE-relationship">Kjersti Olsdatter TEST-KJE</div>' +
+      marriages.map((m) => `<div data-testid="conclusionDisplay:MARRIAGE"><strong>Marriage</strong><div data-testid="conclusion-body"><span data-testid="conclusion-date">${m.date}</span>` +
+        `<span data-testid="conclusion-place">${m.place}</span></div><button data-testid="pencil-edit-button">Edit</button></div>`).join('') +
+      '<button data-testid="add-new-coupleEvent-button">Add Event</button><button data-testid="delete-couple-relationship-button">Delete</button>';
+    box.querySelector('[aria-label="Close"]').addEventListener('click', () => { did.closed = true; box.remove(); box = null; });
+    box.querySelector('[data-testid="delete-couple-relationship-button"]').addEventListener('click', () => did.deleted++);
+    box.querySelectorAll('[data-testid="pencil-edit-button"]').forEach((b, i) => b.addEventListener('click', () => form(marriages[i])));
+    box.querySelector('[data-testid="add-new-coupleEvent-button"]').addEventListener('click', () => form(null));
+  };
+  function form(m) {
+    box.innerHTML = '<button aria-label="Close">×</button><div data-testid="conclusionDetailOverlay:addEditConclusion">' +
+      '<select name="coupleEventType"><option value="ANNULMENT">Annulment</option><option value="MARRIAGE" selected>Marriage</option></select>' +
+      `<input name="date" data-testid="conclusionDetailOverlay:date" value="${m ? m.date : ''}"><input name="place" data-testid="conclusionDetailOverlay:place" value="${m ? m.place : ''}">` +
+      '<textarea name="justification" data-testid="conclusionDetailOverlay:reason"></textarea>' +
+      `<div data-testid="conclusionDetailOverlay:sources-wrapper">Sources (${m ? m.sources.length : 0})` +
+      (m ? m.sources.map((t) => `<div data-testid="source-heading-section">${t}</div>`).join('') : '') + (m ? '<button>Tag Sources</button>' : '') + '</div>' +
+      '<button data-testid="conclusionDetailOverlay:delete:button">Delete Event</button>' +
+      '<button data-testid="add-edit:cancel-action">Cancel</button><button data-testid="conclusionDetailOverlay:submit:button">Save</button></div>';
+    const value = (name) => box.querySelector('[name="' + name + '"]').value;
+    const submit = box.querySelector('[data-testid="conclusionDetailOverlay:submit:button"]');
+    const opened = JSON.stringify([value('date'), value('place')]);
+    let tags = 0;
+    const dirty = () => { submit.disabled = !tags && JSON.stringify([value('date'), value('place')]) === opened; };
+    box.querySelectorAll('input').forEach((i) => i.addEventListener('input', dirty));
+    dirty();
+    box.querySelector('[data-testid="conclusionDetailOverlay:delete:button"]').addEventListener('click', () => did.deleted++);
+    box.querySelector('[data-testid="add-edit:cancel-action"]').addEventListener('click', view);
+    const tag = [...box.querySelectorAll('button')].find((b) => b.textContent === 'Tag Sources');
+    if (tag) tag.addEventListener('click', () => {
+      const list = d.createElement('div');
+      list.innerHTML = couple.map((id) => `<div role="button" name="${id}">${id}</div>`).join('') +
+        '<button data-testid="source-view-tag-button">Tag To</button><button data-testid="restore-source-cancel-button">Close</button>';
+      d.body.append(list);
+      let chosen = null;
+      list.querySelectorAll('[role="button"]').forEach((b) => b.addEventListener('click', () => { chosen = b.getAttribute('name'); }));
+      list.querySelector('[data-testid="source-view-tag-button"]').addEventListener('click', () => { if (chosen) { did.tagged.push(chosen); tags++; m.sources.push(chosen); dirty(); } list.remove(); });
+    });
+    submit.addEventListener('click', () => {
+      if (submit.disabled) return;
+      const saved = { date: value('date'), place: value('place'), reason: value('justification') };
+      did.saved.push(saved);
+      if (m) Object.assign(m, { date: saved.date, place: saved.place });
+      else marriages.push({ ...saved, sources: [] });
+      view();
+    });
+  }
+  d.querySelector('[data-testid="couple-relationship-view-button"]').addEventListener('click', () => {
+    box = d.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Couple Relationship');
+    d.body.append(box);
+    view();
+  });
+  return { ...page, did, marriages };
+}
+const MARRIAGE_EDIT = { fact: 'Marriage', action: 'edit', type: 'MARRIAGE', couple: 'TEST-KJE', match: ['1849'], value: { date: '11 November 1849', place: 'Fredrikshald, Smaalenene, Norway' } };
+
+test('coupleFact(): the couple\'s marriage changed to the record\'s place and the source tagged to it; nothing deleted, the dialog closed', async () => {
+  const { w, step, did, marriages } = coupleFacts();
+  const answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: MARRIAGE_EDIT, reason: 'From the record.', save: true, sourceId: 'TEST-S07', title: TITLE });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(did.saved[0]), { date: '11 November 1849', place: 'Fredrikshald, Smaalenene, Norway', reason: 'From the record.' });
+  assert.deepEqual(plain(did.tagged), ['TEST-S07']);
+  assert.equal(answer.tagged, 'tagged');
+  assert.deepEqual(plain(answer.others), []);
+  assert.equal(marriages.length, 1);
+  assert.equal(did.deleted, 0);
+  assert.equal(did.closed, true);
+  assert.equal(w.document.querySelector('[role="dialog"]'), null);
+});
+
+test('coupleFact(): save false reads the fields and cancels; FS\'s marriage as the record has it is unchanged, only tagged', async () => {
+  let { step, did } = coupleFacts();
+  let answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: MARRIAGE_EDIT, reason: 'From the record.', save: false });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.fields.map((f) => [f.name, f.value])), [['date', '11 November 1849'], ['place', 'Fredrikshald, Smaalenene, Norway']]);
+  assert.deepEqual([did.saved.length, did.tagged.length, did.closed], [0, 0, true]);
+  ({ step, did } = coupleFacts({ marriages: [{ date: '11 November 1849', place: 'Fredrikshald, Smaalenene, Norway', sources: [TITLE] }] }));
+  answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: MARRIAGE_EDIT, reason: 'From the record.', save: true, sourceId: 'TEST-S07', title: TITLE });
+  assert.deepEqual([answer.ok, answer.unchanged, answer.tagged], [true, true, 'already']);
+  assert.deepEqual([did.saved.length, did.tagged.length, did.deleted], [0, 0, 0]);
+});
+
+test('coupleFact(): a marriage FS lacks is added, another of another year named, not changed; two of the year and none clear is an error', async () => {
+  let { step, did, marriages } = coupleFacts({ marriages: [{ date: '1850', place: 'Lom, Oppland, Norway', sources: [] }] });
+  const add = { ...MARRIAGE_EDIT, action: 'add', match: undefined };
+  let answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: add, reason: 'From the record.', save: true, sourceId: 'TEST-S07', title: TITLE });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(marriages.map((m) => m.date)), ['1850', '11 November 1849']);
+  assert.deepEqual(plain(answer.others), ['1850, Lom, Oppland, Norway']);
+  assert.deepEqual(plain(did.tagged), ['TEST-S07']);
+  ({ step, did } = coupleFacts({ marriages: [{ date: '1849', place: 'Lom', sources: [] }, { date: '1849', place: 'Vågå', sources: [] }] }));
+  answer = await step('coupleFact', { pid: 'TEST-LAR', spouse: 'TEST-KJE', addition: MARRIAGE_EDIT, reason: 'From the record.', save: true, sourceId: 'TEST-S07', title: TITLE });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.unsaved, true);
+  assert.match(answer.error, /more than one marriage for the couple/);
+  assert.deepEqual([did.saved.length, did.closed], [0, true]);
+});
+
 // The SourceBox in the couple's context: a row's Attach opens `dialog`: the couple's
 // reason dialog ('couple'), FS's "already attached" ('already'), or, outside the
 // couple's context, the search for a person ('person'). `late`: the couple's dialog
