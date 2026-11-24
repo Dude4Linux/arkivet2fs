@@ -56,6 +56,12 @@ fixes, new features, changes that break what users have).
   entry found in both of the parish's church books. Before, the parish in such a
   title was missed, so rerunning the linker on a baptism in Halden kept "Halden
   parish" in the title.
+- **The citation in three lines:** the record's description and the archive, then the
+  Permanent ID with its link and the day you accessed it, then the scanned image with
+  its link ("Scanned image: kb…"), so the IDs are easy to find. A source made before
+  is given the new form when you open its record in the linker again and update it.
+- In the linker's list of fields that differ from the source in your SourceBox, the
+  choice now says "Use the record's (as below)": the record's fields are below it.
 - **A colon closing a name:** the church books' abbreviation mark, kept in DA's
   transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
   title, the citation, the notes and the names offered for FamilySearch, and the

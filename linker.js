@@ -2591,10 +2591,10 @@ function showSourceDiffs() {
     if (!diffs.length) { box.replaceChildren(); return; }
     const choices = state.fieldChoices || (state.fieldChoices = {});
     box.replaceChildren(
-      el('div', { class: 'label muted', text: t('Your SourceBox has this source with other fields. For each: keep FamilySearch\'s, or use the record\'s as above?') }),
+      el('div', { class: 'label muted', text: t('Your SourceBox has this source with other fields. For each: keep FamilySearch\'s, or use the record\'s as below?') }),
       ...diffs.map((d) => {
         const select = el('select', { 'aria-label': t(d.label) }, [
-          el('option', { value: 'record', text: t('Use the record\'s (as above)') }),
+          el('option', { value: 'record', text: t('Use the record\'s (as below)') }),
           ...(d.key === 'notes' ? [el('option', { value: 'merge', text: t('Keep FamilySearch\'s, with the record\'s new lines added') })] : []),
           el('option', { value: 'fs', text: t('Keep FamilySearch\'s') })]);
         select.value = fieldChoice(i, d);

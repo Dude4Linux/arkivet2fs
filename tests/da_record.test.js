@@ -23,9 +23,10 @@ test('a baptism: the child, the parents, the date of birth with the year', () =>
   assert.equal(r.title, 'Lars, son of Halvor Larsen - Vågå parish, Vågå local parish 1842-1856 (0515P) - Birth, 23 August 1846');
   assert.equal(before(r.citation, ' : accessed'),
     'Norway, Oppland, Vågå Parish, "Church book from Vågå parish, Vågå local parish 1842-1856 (0515P)," Births and baptisms, ' +
-    'p. 24, entry 66, baptism of Lars, 23 August 1846; database, National Archives of Norway, Digitalarkivet, ' +
-    'Permanent ID pd99000000000018 (https://www.digitalarkivet.no/en/pd99000000000018');
-  assert.match(r.citation, /; scanned image kb99000000000020 \(https:\/\/goto\.digitalarkivet\.no\/kb99000000000020\)\.$/);
+    'p. 24, entry 66, baptism of Lars, 23 August 1846; database, National Archives of Norway, Digitalarkivet;\n' +
+    'Permanent ID: pd99000000000018 (https://www.digitalarkivet.no/en/pd99000000000018');
+  // the Permanent ID and the scan each on a line of their own
+  assert.match(r.citation, /\(https:\/\/www\.digitalarkivet\.no\/en\/pd99000000000018 : accessed \d+ \w+ \d{4}\);\nScanned image: kb99000000000020 \(https:\/\/goto\.digitalarkivet\.no\/kb99000000000020\)\.$/);
   assert.deepEqual(people(r), ['Lars (Child)', 'Halvor Larsen (Father)', 'Astri Larsdatter (Mother)']);
   assert.equal(r.people[0].current, true);
   assert.equal(r.people[0].primary, true);
@@ -97,7 +98,7 @@ test("a census of 1865: the open person's household, its head in the title", () 
   assert.equal(r.title, 'Reidar Finleiksen household, Fjeld nordre, Bryn - Vågå - "Norway, Census, 1865"');
   assert.deepEqual(r.census, { district: 'Bryn', residence: 'Fjeld nordre' });
   assert.match(r.citation, /^Norway, Oppland, Vågå, "1865 census for Vågå," census district 004 Bryn, rural residence 0053 Fjeld nordre, Reidar Finleiksen household; /);
-  assert.match(r.citation, /scanned image ft99000000000141 /);
+  assert.match(r.citation, /\nScanned image: ft99000000000141 /);
   assert.equal(r.people.length, 14);
   assert.equal(r.people[0].name, 'Reidar Finleiksen');
   const lars = r.people.find((p) => p.current);

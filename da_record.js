@@ -733,11 +733,12 @@ function extractRecord(document, pageUrl) {
   // (National Archives of Norway, Digitalarkivet) + Permanent ID link + access date
   // → scanned original image(s). Place runs from most general to most specific.
   // FamilySearch citations are plain text, so titles are quoted rather than italicized.
+  // The Permanent ID and each scanned image get a line of their own, to be read at a glance.
   //   Church: Norway, Oslo, Garnisonsmenigheten Parish, Garnisonskirken, "Church book from
   //           Garnisonsmenigheten parish 1828-1841 (0301M4)," Births and baptisms, p. 55, entry 6,
-  //           baptism of Peder Martin, 3 January 1836; database, National Archives of Norway,
-  //           Digitalarkivet, Permanent ID pd99000000000001 (https://www.digitalarkivet.no/en/pd99000000000001
-  //           : accessed 2 November 2026); scanned image kb99000000000002 (https://goto.digitalarkivet.no/kb99000000000002).
+  //           baptism of Peder Martin, 3 January 1836; database, National Archives of Norway, Digitalarkivet;
+  //           Permanent ID: pd99000000000001 (https://www.digitalarkivet.no/en/pd99000000000001 : accessed 2 November 2026);
+  //           Scanned image: kb99000000000002 (https://goto.digitalarkivet.no/kb99000000000002).
   //   Census: Norway, Oppland, Vestre Toten, "1891 census for 0529 Vestre Toten," census district
   //           01 Fjellsmarkas skolekrets, rural residence 009 Hager af Drager,
   //           Andreas Olsen household; database, ...
@@ -781,11 +782,11 @@ function extractRecord(document, pageUrl) {
 
     // Evidence Explained puts the comma inside the closing quote: "Title," next
     let citation = parts.filter(Boolean).join(', ').replace('", ', '," ');
-    citation += '; database, National Archives of Norway, Digitalarkivet' +
-                (c.permanentId ? ', Permanent ID ' + c.permanentId : '') +
-                ' (' + c.permalink + ' : accessed ' + c.accessDate + ')';
+    citation += '; database, National Archives of Norway, Digitalarkivet;\n' +
+                (c.permanentId ? 'Permanent ID: ' + c.permanentId + ' ' : '') +
+                '(' + c.permalink + ' : accessed ' + c.accessDate + ')';
     for (const scan of c.scans) {
-      citation += '; scanned image ' + scan.id + ' (' + scan.url + ')';
+      citation += ';\nScanned image: ' + scan.id + ' (' + scan.url + ')';
     }
     return citation + '.';
   }
