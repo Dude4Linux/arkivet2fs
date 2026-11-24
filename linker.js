@@ -869,6 +869,15 @@ function recordPlace(record) {
   return m ? m[1] : '';
 }
 const joined = (...parts) => parts.filter(Boolean).join(', ');
+// The parish's name as the record's year had it: DA names a town's parish by the town's
+// present name ("Halden parish"), the town Fredrikshald in 1875
+function parishName(record) {
+  const name = recordPlace(record);
+  const code = (parishCode(record.sourceTitle || '').match(/^\d{4}/) || [])[0];
+  if (!code || !TOWN_NAMES[code] || foldPlace(name) !== foldPlace(municipalityName(code))) return name;
+  const town = townIn(code, (daDateParts(record.recordDate) || {}).year);
+  return town ? town.name : name;
+}
 
 // The record's parish as FS names it: a parish that is a municipality ("Vågå,
 // Oppland, Norway"), else the municipality the parish code in the source title names
@@ -896,7 +905,7 @@ function recordFacts(person, record) {
   const type = (record.recordTypeInfo || {}).type;
   const kind = roleKind(person);
   const recorded = daDateParts(record.recordDate);
-  const place = recordPlace(record);
+  const place = parishName(record);
   const mine = isOpenPerson(person, record);  // the open person: their own fields too
   const fields = mine ? record.fields || {} : {};
   facts.Name = { text: stripVariants(person.name) };
@@ -1327,6 +1336,9 @@ function factAdditions(person, record, tree, name) {
     if (!f.year && !placeOnly) continue;
     const date = !f.year ? null : f.date && f.date.year ? f.date : { year: f.year };
     const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(...[vitalPlace[fact][0], fs && fs.place, record].concat(vitalPlace[fact].slice(1))) };
+    // a renamed town by its name of the fact's year, also where FS has it by another
+    // ("Halden, Østfold, Norway" for a birth in 1875: Fredrikshald, Smaalenene)
+    value.place = townOfYear(value.place, (parseFsDate(value.date || '') || {}).year || f.year || year);
     // FS's fact with neither date nor place ("Deceased", of an old import) is changed:
     // FS keeps one of each and has no Add for it
     if (!fs) out.push({ fact, action: 'add', type, value });
@@ -1347,11 +1359,13 @@ function factAdditions(person, record, tree, name) {
   if (da.Residence && year && !placeAbroad(home) && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
     const census = record.census || {};
     // a residence that is a town ("Chr": Kristiania; "Fhald": Fredrikshald) is the town,
-    // not a farm in the parish, and has no farm for a description
+    // not a farm in the parish. The description is the residence as the record writes
+    // it ("Fhald", "Chr", a farm), so the source's name stays with the fact
     const town = home && !isCensus && fsMunicipality(home, record);
-    const description = isCensus ? joined(census.residence, census.district) : town ? '' : person.residence || '';
     const where = kind === 'emigration' ? fsPlace(home, record, true)
       : town || (home && !placeIn(home, parish) ? joined(home, parish) : parish);
+    const written = String(person.residence || '').replace(/\s+/g, ' ').trim();
+    const description = isCensus ? joined(census.residence, census.district) : written;
     if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
   }
   // An emigration: a custom event (FS has no Emigration to add), unless FS has one that year
@@ -2388,6 +2402,9 @@ function fsMessage(text) {
   if ((m = text.match(/^FamilySearch saved the ([a-z ]+) as "(.*)", not (.*)\. Change it by hand\.$/s))) {
     return t('FamilySearch saved the {fact} as "{shown}", not {value}. Change it by hand.', { fact: fact(m[1]), shown: m[2], value: m[3] });
   }
+  if ((m = text.match(/^FamilySearch saved the ([a-z ]+) without its place \((.*)\)\. Add the place by hand\.$/s))) {
+    return t('FamilySearch saved the {fact} without its place ({place}). Add the place by hand.', { fact: fact(m[1]), place: m[2] });
+  }
   if ((m = text.match(/^FamilySearch did not take the ([a-z ]+)(?:\.|: (.*))$/s))) {
     return m[2] === undefined ? t('FamilySearch did not take the {fact}.', { fact: fact(m[1]) })
       : t('FamilySearch did not take the {fact}: {detail}', { fact: fact(m[1]), detail: m[2] });
@@ -3174,9 +3191,27 @@ function fsMunicipality(place, record, elsewhere) {
 // county ("Kristiania, Norway" 1877-1924, else "Oslo, Norway"); `written`, the place as
 // the record has it, for a record without a year
 function townPlace(code, record, written) {
-  const town = townIn(code, (daDateParts(record.recordDate) || {}).year, written);
+  return townPlaceIn(code, (daDateParts(record.recordDate) || {}).year, written);
+}
+function townPlaceIn(code, year, written) {
+  const town = townIn(code, year, written);
   const county = town ? town.county : '';
   return joined(town ? town.name : municipalityName(code), county === null ? '' : county || fsCounty(countyName(code.slice(0, 2))), 'Norway');
+}
+// FS's place of a renamed town under another of its names (its present one, "Halden,
+// Østfold, Norway", for a birth in 1875) as the town was named in `year`: "Fredrikshald,
+// Smaalenene, Norway". Only the town itself, not a place in it; anything else as it is.
+function townOfYear(place, year) {
+  const parts = String(place || '').split(',').map((x) => x.trim());
+  if (!year || parts.length < 2 || parts.length > 3 || parts[parts.length - 1] !== 'Norway') return place;
+  for (const [code, names] of Object.entries(TOWN_NAMES)) {
+    const county = fsCounty(countyName(code.slice(0, 2)));
+    const towns = [municipalityName(code), ...names.map((n) => n[0])].map(foldPlace);
+    const counties = [county, ...names.map((n) => n[1]).filter(Boolean)].map(foldPlace);
+    if (!towns.includes(foldPlace(parts[0])) || (parts.length === 3 && !counties.includes(foldPlace(parts[1])))) continue;
+    return townPlaceIn(code, year);
+  }
+  return place;
 }
 // A DA county as FS names it: DA's Bergen is FS's Hordaland
 const fsCounty = (name) => (name === 'Bergen' ? 'Hordaland' : name);

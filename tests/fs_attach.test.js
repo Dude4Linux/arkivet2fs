@@ -718,8 +718,10 @@ const FACT_LISTS = {
 };
 
 // `saveOff`: Save off while the date and place are what the form opened with (FS's
-// edit form, 2026-11-09); `stuck`: Save does nothing
-function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, saveOff = false, stuck = false, savedAs = null, sameReason = false } = {}) {
+// edit form, 2026-11-09); `stuck`: Save does nothing. `asFs`: as FS's place lists were on
+// 2026-11-24 for a place typed in its standard form: no entry of the text as typed, and a
+// place not chosen from the list saved as none
+function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, saveOff = false, stuck = false, savedAs = null, sameReason = false, asFs = false } = {}) {
   const page = attachPage('https://www.familysearch.org/en/tree/person/details/TEST-LAR',
     '<div id="vitals"><div data-testid="conclusionDisplay:BIRTH"><div data-testid="conclusion-body"><span data-testid="conclusion-date">1846</span> ' +
     '<span data-testid="conclusion-place">Norway</span></div><button data-testid="pencil-edit-button">Edit</button></div>' +
@@ -755,12 +757,15 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
       let old = input.value;
       const show = (typed, forms) => {
         const list = d.getElementById(input.getAttribute('aria-controls'));
-        list.innerHTML = [[typed], ...forms].map(([t, kind]) => `<li role="option"><span>${t}</span>${kind ? `<div>${kind}</div>` : ''}</li>`).join('');
+        const own = !(asFs && input.name === 'place');
+        const entries = own ? [[typed], ...forms] : forms;
+        list.innerHTML = entries.map(([t, kind]) => `<li role="option"><span>${t}</span>${kind ? `<div>${kind}</div>` : ''}</li>`).join('');
         for (const [i, option] of [...list.querySelectorAll('[role="option"]')].entries()) {
-          option.addEventListener('click', () => { input.value = i ? forms[i - 1][0] : typed; list.innerHTML = ''; dirty(); });
+          option.addEventListener('click', () => { input.value = entries[i][0]; input.dataset.chosen = 'yes'; list.innerHTML = ''; dirty(); });
         }
       };
       input.addEventListener('input', () => {
+        delete input.dataset.chosen;
         const typed = input.value;
         if (late) {
           // The old value's places (a church in Lom) under the text as typed, at first
@@ -801,6 +806,8 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
       }
       // `savedAs`: FS saves another date than the form's (as it did one its list still had)
       const v = { ...values(), ...(savedAs ? { date: savedAs } : {}) };
+      const place = box.querySelector('input[name="place"]');
+      if (asFs && place && place.value && !place.dataset.chosen && place.defaultValue !== place.value) v.place = '';
       saved.push({ type, ...v });
       box.remove();
       onSave(v);
@@ -860,7 +867,8 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
         menu.remove();
         const type = types[item.textContent];
         openForm(type, (type === 'OTHER_EVENT' ? text('title') : '') + text('description') + combo('date') + combo('place'), (v) =>
-          d.getElementById('events').append(display(type, [v.title, v.description, v.date, v.place].filter(Boolean).join(' '))));
+          d.getElementById('events').append(display(type, [v.title, v.description, v.date && `<span data-testid="conclusion-date">${v.date}</span>`,
+            v.place && `<span data-testid="conclusion-place">${v.place}</span>`].filter(Boolean).join(' '))));
       });
     }
   });
@@ -981,6 +989,31 @@ test('addFact(): a residence, its fields inside divs of the same name, as FS has
   const answer = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: true });
   assert.equal(answer.ok, true, answer.error);
   assert.deepEqual(plain(saved[0]), { type: 'RESIDENCE', description: 'Nordgard', date: '1846', place: 'Vågå, Oppland, Norway', justification: REASON });
+});
+
+test('addFact(): a place typed in FS\'s standard form is chosen from FS\'s list, which has no entry of its own for it (bug: a birth and a residence saved without their place)', async () => {
+  const { step, saved, w } = factPage({ asFs: true });
+  const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1874', place: 'Vågå, Oppland, Norway', description: 'Vaage' } };
+  const added = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: true });
+  assert.equal(added.ok, true, added.error);
+  assert.equal(saved[0].place, 'Vågå, Oppland, Norway');
+  assert.equal(saved[0].description, 'Vaage');
+  // An edit of the birth's place
+  const edit = { fact: 'Birth', action: 'edit', type: 'BIRTH', value: { date: '1846', place: 'Vågå, Oppland, Norway' } };
+  const changed = await step('addFact', { pid: 'TEST-LAR', addition: edit, reason: REASON, save: true });
+  assert.equal(changed.ok, true, changed.error);
+  assert.equal(saved[1].place, 'Vågå, Oppland, Norway');
+  assert.equal(w.document.querySelector('[data-testid="conclusionDisplay:BIRTH"] [data-testid="conclusion-place"]').textContent, 'Vågå, Oppland, Norway');
+});
+
+test('addFact(): a fact FS saved without its place is an error, not done', async () => {
+  const { step, saved } = factPage({ asFs: true });
+  // FS lists neither the text as typed nor a place of that name: only typed in, saved as none
+  const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1874', place: 'Lom, Oppland, Norway', description: 'Lom' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: residence, reason: REASON, save: true });
+  assert.equal(saved.length, 1);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error, 'FamilySearch saved the residence without its place (Lom, Oppland, Norway). Add the place by hand.');
 });
 
 test('addFact(): a vital FS has already is not added a second time; only on the person\'s page', async () => {
@@ -1242,10 +1275,12 @@ test('coupleId(): a link without the couple\'s context is no ID; only on the spo
 
 // The SourceBox in the couple's context: a row's Attach opens `dialog`: the couple's
 // reason dialog ('couple'), FS's "already attached" ('already'), or, outside the
-// couple's context, the search for a person ('person')
-function coupleSourceBox(dialog = 'couple', spouses = ['TEST-LAR', 'TEST-KJE']) {
+// couple's context, the search for a person ('person'). `late`: the couple's dialog
+// shows FS's "[UNKNOWN NAME]" for the spouses first, the spouses that much later
+// (Infinity: never), as FS did on 2026-11-24
+function coupleSourceBox(dialog = 'couple', spouses = ['TEST-LAR', 'TEST-KJE'], late = 0) {
   const page = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox?context=TEST-CTX', row('TEST-S07', TITLE) +
-    '<button data-testid="row-TEST-S07-attach-button">Attach</button>');
+    '<button data-testid="row-TEST-S07-attach-button">Attach</button>', { clock: !!late });
   const { w } = page;
   const d = w.document;
   const did = {};
@@ -1261,6 +1296,12 @@ function coupleSourceBox(dialog = 'couple', spouses = ['TEST-LAR', 'TEST-KJE']) 
           '<textarea data-testid="reason-to-attach-reason-field"></textarea>' +
           '<button data-testid="reason-to-attach-cancel-button">Cancel</button><button data-testid="reason-to-attach-attach-button">Attach</button>';
     d.body.append(box);
+    if (late && dialog === 'couple') {
+      const shown = ['spouse1', 'spouse2'].map((n) => box.querySelector(`[data-testid="reason-to-attach-${n}"]`));
+      const names = shown.map((el) => el.textContent);
+      for (const el of shown) el.textContent = '[UNKNOWN NAME]UNKNOWN SEXUNKNOWN';
+      if (late !== Infinity) w.setTimeout(() => shown.forEach((el, i) => { el.textContent = names[i]; }), late);
+    }
     for (const [id, what] of [['reason-to-attach-already-attached-ok-button', 'ok'], ['find-options-cancel-button', 'cancelled'], ['reason-to-attach-cancel-button', 'cancelled']]) {
       box.querySelector(`[data-testid="${id}"]`)?.addEventListener('click', () => { did[what] = true; box.remove(); });
     }
@@ -1285,6 +1326,20 @@ test('attachCouple(): another couple in FS\'s dialog is cancelled, not attached'
   const answer = await step('attachCouple', COUPLE);
   assert.equal(answer.ok, false);
   assert.match(answer.error, /FamilySearch showed another couple/);
+  assert.equal(did.cancelled, true);
+  assert.equal(did.reason, undefined);
+});
+
+test('attachCouple(): the spouses FS\'s dialog shows once loaded are waited for (bug: "another couple ([UNKNOWN NAME]…)")', async () => {
+  let { step, did } = coupleSourceBox('couple', ['TEST-LAR', 'TEST-KJE'], 2000);
+  let answer = await step('attachCouple', COUPLE);
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(did.reason, COUPLE.reason);
+  // Never loaded: cancelled, the couple left to the user
+  ({ step, did } = coupleSourceBox('couple', ['TEST-LAR', 'TEST-KJE'], Infinity));
+  answer = await step('attachCouple', COUPLE);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error, 'FamilySearch\'s Attach dialog did not show the couple in time; attach the source to the couple by hand.');
   assert.equal(did.cancelled, true);
   assert.equal(did.reason, undefined);
 });

@@ -507,8 +507,17 @@ if (!window.__arkivet2fsAttach) {
       (byTestId('find-options-cancel-button') || document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
       throw new Error('FamilySearch opened the SourceBox without the couple relationship.');
     }
-    const spouses = ['reason-to-attach-spouse1', 'reason-to-attach-spouse2'].map((id) => clean(byTestId(id)?.textContent).toUpperCase());
-    const found = spouses.join(' ').match(/\b[A-Z0-9]{4}-[A-Z0-9]{2,4}\b/g) || [];
+    // The dialog shows the spouses once FS has loaded them ("[UNKNOWN NAME]" before):
+    // waited for until both are there, or two others are
+    const spousesNow = () => ['reason-to-attach-spouse1', 'reason-to-attach-spouse2'].map((id) => clean(byTestId(id)?.textContent).toUpperCase());
+    const pidsIn = (list) => list.join(' ').match(/\b[A-Z0-9]{4}-[A-Z0-9]{2,4}\b/g) || [];
+    await waitFor(() => { const p = pidsIn(spousesNow()); return want.every((x) => p.includes(x)) || p.length >= 2; }, 'the couple in the Attach dialog', 15000).catch((e) => { if (e.blocked) throw e; });
+    const spouses = spousesNow();
+    const found = pidsIn(spouses);
+    if (!found.length) {
+      byTestId('reason-to-attach-cancel-button')?.click();
+      throw Object.assign(new Error('FamilySearch\'s Attach dialog did not show the couple in time; attach the source to the couple by hand.'), { timeout: true });
+    }
     if (!want.every((p) => found.includes(p))) {
       byTestId('reason-to-attach-cancel-button')?.click();
       throw new Error('FamilySearch showed another couple (' + clean(spouses.join(', ')) + ') for ' + want.join(' and ') + '.');
@@ -653,8 +662,13 @@ if (!window.__arkivet2fsAttach) {
   // FS doesn't list it), since FS also lists places around the name ("Bakken nedre,
   // Vågå" brings the municipality, and farms called Bakken elsewhere) and the farm
   // would be lost
+  // An option's lines: the place's name, then its kind and years, its alternate names
+  function optionLines(o) {
+    const leaves = [...o.querySelectorAll('*')].filter((e) => !e.children.length && clean(e.textContent)).map((e) => clean(e.textContent));
+    return leaves.length ? leaves : [clean(o.textContent)];
+  }
   function pickSuggestion(options, typed, year) {
-    const lines = (o) => [...o.querySelectorAll('*')].filter((e) => !e.children.length && clean(e.textContent)).map((e) => clean(e.textContent));
+    const lines = optionLines;
     const fold = (text) => clean(text).toLowerCase();
     let rest = options;
     if (options.length > 1 && fold(options[0].textContent) === fold(typed)) rest = options.slice(1);
@@ -760,8 +774,12 @@ if (!window.__arkivet2fsAttach) {
     const picked = option && !asTyped(option) ? clean(option.textContent) : '';
     if (keep) {
       // FS's own entry for the text as typed, its first, chosen (a value only typed in
-      // can be saved as none, as a SourceBox date was)
-      const own = found.find(asTyped);
+      // is saved as none, as a SourceBox date was). A text that is a standard form
+      // already ("Fredrikshald, Smaalenene, Norway") has no entry of its own: FS's
+      // standard entry of that name is the one (bug: a birth and a residence saved
+      // without their place)
+      const sameName = (o) => clean(optionLines(o)[0] || '').toLowerCase() === clean(value).toLowerCase();
+      const own = found.find(asTyped) || (option && sameName(option) ? option : found.find(sameName));
       if (own) { own.click(); await sleep(300); }
       return { name, value: input.value, picked: '', standard: picked };
     }
@@ -1157,7 +1175,13 @@ if (!window.__arkivet2fsAttach) {
     try {
       const el = await waitFor(() => (addition.action === 'edit' ? displays(type).find(holds) : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
       shown = clean(el.textContent);
+      // Saved without its place: FS took the place as none (it was only typed in)
+      const place = addition.action !== 'name' && (addition.value || {}).place;
+      if (place && !clean((byTestId('conclusion-place', el) || {}).textContent)) {
+        throw Object.assign(new Error('FamilySearch saved the ' + factName(type) + ' without its place (' + place + '). Add the place by hand.'), { noPlace: true });
+      }
     } catch (e) {
+      if (e.noPlace) throw e;
       // Saved, but FS shows another year: FS's list gave it another date
       const now = addition.action === 'edit' && displays(type)[0];
       if (now && !holds(now)) {

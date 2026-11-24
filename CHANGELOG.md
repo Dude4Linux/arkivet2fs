@@ -9,7 +9,15 @@ fixes, new features, changes that break what users have).
 - **Marriages attached to the couple:** a marriage's source now goes to the couple's
   relationship on FamilySearch too, as FamilySearch attaches its own marriage records,
   besides the groom and the bride. When FamilySearch doesn't have the two as a couple,
-  the log says so, and the source is attached to each of them.
+  the log says so, and the source is attached to each of them. The linker waits for
+  FamilySearch's dialog to show the two people, so a dialog still loading
+  ("[UNKNOWN NAME]") is no longer taken for another couple.
+- **Facts saved without their place:** a birth or residence whose place the linker
+  gives in FamilySearch's own form ("Fredrikshald, Smaalenene, Norway") was saved with
+  no place at all, though the log said it was done. FamilySearch has no entry of its
+  own for such a text, and a place only typed in is saved as none; the linker now
+  chooses FamilySearch's entry of that name. A fact FamilySearch saves without its
+  place is now an error in the log, so you can add the place by hand.
 - **Towns by their names of the time:** a renamed town gets the name it had in the
   record's year, as FamilySearch's places have it: a record of 1874 from Halden gives
   "Fredrikshald, Smaalenene, Norway", one of 1925 "Fredrikshald, Østfold, Norway"
@@ -20,8 +28,14 @@ fixes, new features, changes that break what users have).
   A clerk's abbreviation of a town ("Fhald", "Fr.hald", "Thjem")
   is read as the town and written in full: "Fredrikshald" in the people's facts, "Fhald
   [Fredrikshald]" in the notes. It used to be taken for a farm called Fhald. A
-  residence that is a town or a municipality no longer gets its name repeated as a
-  farm in the description.
+  residence added to the tree keeps the record's name in its description ("Fhald"),
+  with the town as its place. A town's parish, which DigitalArkivet names by the
+  town's present name ("Church book from Halden parish"), is the town of the
+  record's year too: a christening in 1875, and the birth of a baptized child the
+  record gives no birthplace for, are in Fredrikshald. Where FamilySearch has the town
+  of a birth, christening, death or burial under another of its names ("Halden,
+  Østfold, Norway" for 1875), the linker offers to change it to the name of that
+  year.
 - **A colon closing a name:** the church books' abbreviation mark, kept in DA's
   transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
   title, the citation, the notes and the names offered for FamilySearch, and the

@@ -1656,9 +1656,10 @@ test('factAdditions(): a residence that is a town is the town, not a farm in the
   state.record = b;
   state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, death: { date: '12 April 1854', place: 'Oslo, Oslo, Norway' }, burial: { date: '18 April 1854', place: 'Oslo, Oslo, Norway' }, residences: [], occupations: [{ description: 'Lægdslem' }] };
   const adds = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }));
-  assert.deepEqual(adds.filter((a) => a.fact === 'Residence').map((a) => a.value), [{ date: '1854', place: 'Oslo, Norway', description: '' }]);
-  // the burial at the parish: the town its code names
-  assert.deepEqual(adds.filter((a) => a.fact === 'Burial'), []);
+  assert.deepEqual(adds.filter((a) => a.fact === 'Residence').map((a) => a.value), [{ date: '1854', place: 'Oslo, Norway', description: 'Chr' }]);
+  // the burial at the parish: the town its code names, as FS has the town in 1854
+  // (FS's "Oslo, Oslo, Norway" is the present town in its county)
+  assert.deepEqual(adds.filter((a) => a.fact === 'Burial').map((a) => a.value), [{ date: '18 April 1854', place: 'Oslo, Norway' }]);
 });
 
 test('nameParts(): of two patronymics the record father\'s; the tree\'s family name in another spelling', () => {
@@ -1724,8 +1725,8 @@ test('a marriage\'s birthplace without a year: no year compared, and a town\'s a
   assert.equal(w.compareFact('Birth', da.Birth, w.treeFacts(state.fs, m).Birth, groom, { pid: 'TEST-KOL' }, m), '');
   const adds = plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' }));
   assert.deepEqual(adds.filter((a) => a.fact === 'Birth').map((a) => a.value), [{ date: '15 October 1850', place: 'Fredrikshald, Smaalenene, Norway' }]);
-  // the town, with no farm for a description
-  assert.deepEqual(adds.find((a) => a.fact === 'Residence').value, { date: '1874', place: 'Fredrikshald, Smaalenene, Norway', description: '' });
+  // the town, with the record's name of it as the description
+  assert.deepEqual(adds.find((a) => a.fact === 'Residence').value, { date: '1874', place: 'Fredrikshald, Smaalenene, Norway', description: 'Fhald' });
   // FS's place of the town names the record's: kept, nothing to change
   state.fs = { ...state.fs, birth: { date: '15 October 1850', place: 'Fredrikshald, Smaalenene, Norway' } };
   assert.deepEqual(plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' })).filter((a) => a.fact === 'Birth'), []);
@@ -1843,6 +1844,34 @@ test('factAdditions(): FS\'s christening in a part of the parish, without Norweg
   assert.deepEqual(christening({ date: '23 AUG 1846', place: 'Vågå,Oppland,Norway' }), []);
   // FS's "about" is no date of the record's: changed
   assert.deepEqual(christening({ date: 'Abt 1846', place: 'Vågå, Oppland, Norway' }), [['edit', { date: '23 August 1846', place: 'Vågå, Oppland, Norway' }]]);
+});
+
+test('a town\'s parish by its name of the record\'s year, also where FS has the present one (bug: Halden for a christening in 1875)', () => {
+  const { win, state } = checkedPage();
+  const lars = state.people.find((p) => p.name === 'Lars');
+  const b = { ...state.record, county: 'Østfold', church: '', recordDate: '1846-08-23', sourceTitle: 'Church book from Halden parish 1838-1850 (0101P)' };
+  state.record = b;
+  // DA's present name of the parish, the town's name of the time in the facts
+  assert.equal(w.recordPlace(b), 'Halden');
+  assert.equal(w.parishName(b), 'Fredrikshald');
+  assert.equal(win.recordFacts(lars, b).Christening.text, '23 August 1846, Fredrikshald');
+  const changes = (fs) => {
+    state.fs = { ...LARS_1846, ...fs };
+    return plain(win.factAdditions(lars, b, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Birth' || a.fact === 'Christening').map((a) => [a.fact, a.action, a.value.place]);
+  };
+  // a birth FS lacks: in the town of the time
+  assert.deepEqual(changes({ birth: undefined, christening: { date: '23 August 1846', place: 'Fredrikshald, Smaalenene, Norway' } }), [['Birth', 'add', 'Fredrikshald, Smaalenene, Norway']]);
+  // FS's present name of the town (also without its Norwegian letters), changed to the name of the time
+  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Halden, Østfold, Norway' }, christening: { date: '23 August 1846', place: 'Halden,Ostfold,Norway' } }),
+    [['Birth', 'edit', 'Fredrikshald, Smaalenene, Norway'], ['Christening', 'edit', 'Fredrikshald, Smaalenene, Norway']]);
+  // the name of the time already, or a place in the town: left as it is
+  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Immanuels kirke, Halden, Østfold, Norway' } }), []);
+  // the birth's own year decides: a groom of 1850 born in Halden is in Fredrikshald, one of 1930 in Halden
+  assert.equal(w.townOfYear('Halden, Østfold, Norway', 1850), 'Fredrikshald, Smaalenene, Norway');
+  assert.equal(w.townOfYear('Fredrikshald, Smaalenene, Norway', 1930), 'Halden, Østfold, Norway');
+  assert.equal(w.townOfYear('Oslo, Oslo, Norway', 1880), 'Kristiania, Norway');
+  assert.equal(w.townOfYear('Halden, Østfold, Norway', null), 'Halden, Østfold, Norway');
+  assert.equal(w.townOfYear('Vågå, Oppland, Norway', 1850), 'Vågå, Oppland, Norway');
 });
 
 test('factAdditions(): a baptized child\'s birth FS lacks is in the parish of the baptism (reports #8, #9: no place, FS refused it)', () => {
@@ -2032,7 +2061,7 @@ test('factAdditions(): an emigration as a custom event with its destination, unl
   // district; one abroad (an American going back) isn't added
   const home = (residence) => plain(win.factAdditions({ ...lars, residence }, bergen, { pid: 'TEST-LAR' })).find((a) => a.fact === 'Residence');
   state.fs = { ...state.fs, residences: [] };
-  assert.deepEqual(home('Vaage').value, { date: '1902', place: 'Vågå, Oppland, Norway', description: '' });  // a municipality, not a farm: no description
+  assert.deepEqual(home('Vaage').value, { date: '1902', place: 'Vågå, Oppland, Norway', description: 'Vaage' });  // a municipality, the record's name of it the description
   assert.equal(home('Amerika'), undefined);
   assert.equal(home('Chicago, Illinois'), undefined);
   assert.equal(win.additionReason(e), 'From "' + e.title + '", Digitalarkivet, Permanent ID ' + e.permanentId + '.');
