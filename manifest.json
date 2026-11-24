@@ -26,6 +26,7 @@
     "scripts": [
       "i18n.js",
       "i18n_strings.js",
+      "names.js",
       "da_places.js",
       "farms.js",
       "releases.js",

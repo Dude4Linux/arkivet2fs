@@ -30,29 +30,7 @@ const PID_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/i;
 
 // --- Names ----------------------------------------------------------------------------
 
-// A name without what the source struck out (DA's "%...%"), two readings DA gives
-// ("Even@Sven") as "Even/Sven", as da_record.js writes them in the title
-function stripVariants(name) {
-  return (name || '').replace(/%[^%]*%/g, ' ').replace(/(\S)@(?=\S)/g, '$1/').replace(/\s+/g, ' ').trim();
-}
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// The given names of an FS name: up to the patronymic, else all but the last word
-// ("Halvor Larsen Bakken" → "Halvor", "Maren Kristine Lindeman" → "Maren Kristine")
-function givenOf(name) {
-  const words = (name || '').split(/\s+/).filter(Boolean);
-  if (words.length < 2) return words.join(' ');
-  const i = words.findIndex((w, k) => k > 0 && isPatronymic(w));
-  return words.slice(0, i > 0 ? i : -1).join(' ');
-}
-
-// An FS name as {given, surname}: the given names, then the patronymic, else the last
-// word (unreadGivenFits())
-function fsNameParts(name) {
-  const given = givenOf(name);
-  const rest = String(name || '').split(/\s+/).filter(Boolean).slice(given.split(/\s+/).filter(Boolean).length);
-  return { given, surname: rest.find(isPatronymic) || rest[rest.length - 1] || '' };
-}
 
 // A name in a title or citation: "1845, Ole, son of ...", "baptism of Ole, 3 January",
 // "Lars Halvorsen and Kari", "Lars Halvorsen household" (whole names only, so "Lars" isn't
@@ -115,7 +93,7 @@ function treeFamily(fs) {
 function findSelf(people, fs, trusted) {
   const anchor = people.find((p) => p.current);
   if (trusted || !fs) return anchor || null;
-  const given = givenOf(fs.name);
+  const given = splitName(fs.name).given;
   if (anchor && hasGivenName(anchor, given)) return anchor;
   return people.find((p) => hasGivenName(p, given)) || null;
 }
@@ -177,7 +155,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   const against = self && !(self.key in chosen) && !used.has(fs.pid) && !census ? selfContradicted(record, self, fs) : '';
   if (self && !(self.key in chosen) && !used.has(fs.pid)) {
     if (!against) pairs[self.key] = fs.pid;
-    why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripVariants(fs.name), what: against })
+    why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripNameVariants(fs.name), what: against })
       : t('the FamilySearch person');
     used.add(fs.pid);
   }
@@ -206,10 +184,10 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
     const single = (relation, relative) => {
       if (!relative || !relative.pid) return;
       const candidates = found[relation];
-      const byName = candidates.find((p) => hasGivenName(p, givenOf(relative.name)));
+      const byName = candidates.find((p) => hasGivenName(p, splitName(relative.name).given));
       if (byName) pair(byName, relative, t(relation + ', same given name'));
       // DA couldn't read the given name, the surname agrees (report #10)
-      else if (!census && candidates.length === 1 && unreadGivenFits(candidates[0], fsNameParts(relative.name))) {
+      else if (!census && candidates.length === 1 && unreadGivenFits(candidates[0], splitName(relative.name))) {
         pair(candidates[0], relative, t(relation + ', no legible given name on DA, same surname'));
       } else if (!census && candidates.length === 1) other(candidates[0], relative, relation);
     };
@@ -217,11 +195,11 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
     single('mother', tree.mother);
     const spouses = (tree.families || []).map((f) => f.spouse).filter((x) => x && x.pid);
     for (const x of spouses) {
-      const match = found.spouse.find((p) => hasGivenName(p, givenOf(x.name)));
+      const match = found.spouse.find((p) => hasGivenName(p, splitName(x.name).given));
       if (match) pair(match, x, t('spouse, same given name'));
     }
     if (spouses.length === 1 && !census && found.spouse.length === 1) {
-      if (unreadGivenFits(found.spouse[0], fsNameParts(spouses[0].name))) pair(found.spouse[0], spouses[0], t('spouse, no legible given name on DA, same surname'));
+      if (unreadGivenFits(found.spouse[0], splitName(spouses[0].name))) pair(found.spouse[0], spouses[0], t('spouse, no legible given name on DA, same surname'));
       else other(found.spouse[0], spouses[0], 'spouse');
     }
     // Each record child with the FS child that fits best: the first given name before a
@@ -235,7 +213,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
       for (const c of children) {
         if (used.has(c.pid) || (sex && c.gender && c.gender !== sex)) continue;
         const born = Number(((c.lifespan || '').match(/^\d{4}/) || [])[0]) || null;
-        const fit = givenFit(child, givenOf(c.name));
+        const fit = givenFit(child, splitName(c.name).given);
         if (!fit || (born && year && Math.abs(born - year) > 2)) continue;
         const off = born && year ? Math.abs(born - year) : 3;
         if (!best || fit > best.fit || (fit === best.fit && off < best.off)) best = { c, fit, off };
@@ -260,7 +238,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
         if (prefix === 'pg') return (!born || born <= recordYear) && (!dead || Math.abs(dead - recordYear) <= 1);
         return true;
       });
-      const names = could.map((c) => stripVariants(c.name) + (c.lifespan ? ' (' + c.lifespan + ')' : '')).join(t(' or '));
+      const names = could.map((c) => stripNameVariants(c.name) + (c.lifespan ? ' (' + c.lifespan + ')' : '')).join(t(' or '));
       why[child.key] = reason(names
         ? t('no name in the source; FamilySearch children it could be: {names}. Choose one if you know which', { names })
         : t('no name in the source, and no FamilySearch child fits'));
@@ -285,7 +263,7 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
     for (const p of people) if (from(p)) more = true;
   }
   if (against && pairs[self.key] && !(self.key in chosen)) {
-    why[self.key] = t('{why}; not FamilySearch {name}, who {what}', { why: why[self.key], name: stripVariants(fs.name), what: against });
+    why[self.key] = t('{why}; not FamilySearch {name}, who {what}', { why: why[self.key], name: stripNameVariants(fs.name), what: against });
   }
   // Someone unpaired whom only their entry reaches (the bride's father: not the
   // groom's), so a baptism's new child doesn't have the mother's family read too
@@ -334,9 +312,9 @@ function treeRelatives(tree) {
 // 2: a record person has the tree person's given name (or a form of it); 1: a close
 // one (the record's name is a stem of FS's: Astri for Astrid); 0: another name
 function givenNameFit(person, tree) {
-  const given = givenOf(stripVariants(tree.name));
+  const given = splitName(stripNameVariants(tree.name)).given;
   if (hasGivenName(person, given)) return 2;
-  const first = stripVariants(person.name).split(/\s+/)[0] || '';
+  const first = stripNameVariants(person.name).split(/\s+/)[0] || '';
   return first && given.split(/\s+/).some((g) => nameMatch(g, first) || nameNear(first, g) || illegibleFits(first, g)) ? 1 : 0;
 }
 
@@ -362,8 +340,8 @@ function recordSex(person, record) {
   if (/^(brudgom|brudgum|groom)$/i.test(person.role || '') || /^groom$/i.test(person.roleEnglish || '')) return 'Male';
   // A word DA starred ("!! Halvorsd.*") is the transcriber's guess, not the book's: it
   // tells no sex
-  const last = stripVariants(person.name).split(/\s+/).slice(1).filter((w) => !w.endsWith('*')).join(' ');
-  if (/(datter|dotter|dtr\.?|s(?:dattr|datt|datr|dat|dr|d:r|d)\.?)(\s|$)/i.test(last)) return 'Female';
+  const told = stripNameVariants(person.name).split(/\s+/).slice(1).filter((w) => !w.endsWith('*')).map(patronymicSex);
+  if (told.includes('Female')) return 'Female';
   const role = foldRole((person.role || '') + ' ' + (person.roleEnglish || '').replace(/\[.*?\]/g, ''));
   const female = FEMALE_ROLE.test(role) || FEMALE_KIN_END.test(role);
   const male = MALE_ROLE.test(role) || MALE_KIN_END.test(role);
@@ -371,7 +349,7 @@ function recordSex(person, record) {
   if (male && !female) return 'Male';
   if (FEMALE_WORK.test(foldRole(person.position || ''))) return 'Female';
   const year = Number(((record && record.recordDate) || '').slice(0, 4)) || 0;
-  if (/(sen|søn|son)(\s|$)/i.test(last) && !(year >= FAMILY_NAMES_FROM)) return 'Male';
+  if (told.includes('Male') && !(year >= FAMILY_NAMES_FROM)) return 'Male';
   return '';
 }
 
@@ -380,7 +358,7 @@ function recordSex(person, record) {
 // agree (sameFather()): Halvardsen/Halvorsen, Olsson/Olsen, Torsdatter/Tordsdatter,
 // Jonsdatter/Johannesdatter. A farm in the patronymic's place says nothing.
 function patronymicClash(recordName, treeName) {
-  const pats = (name) => stripVariants(name).split(/\s+/).slice(1).filter(isPatronymic)
+  const pats = (name) => stripNameVariants(name).split(/\s+/).slice(1).filter(isPatronymic)
     .map((w) => patronymicBase(w).toLowerCase()).filter(Boolean);
   const a = pats(recordName), b = pats(treeName);
   if (!a.length || !b.length) return false;
@@ -389,9 +367,9 @@ function patronymicClash(recordName, treeName) {
 
 // A record name with the patronymic of a father of this given name (Iver Olsen, Ole)
 function patronymicFrom(name, fatherGiven) {
-  const base = patronymicBase(patronymicOf(firstWord(stripVariants(fatherGiven)))).toLowerCase();
+  const base = patronymicBase(patronymicOf(firstWord(stripNameVariants(fatherGiven)))).toLowerCase();
   if (!base) return false;
-  return stripVariants(name).split(/\s+/).slice(1).filter(isPatronymic).map((w) => patronymicBase(w).toLowerCase())
+  return stripNameVariants(name).split(/\s+/).slice(1).filter(isPatronymic).map((w) => patronymicBase(w).toLowerCase())
     .some((x) => sameFather(x, base));
 }
 
@@ -500,7 +478,7 @@ function relWord(rel, gender) {
 // children), not the resident's own patronymic, so it doesn't clash with FS's
 function familySurname(candidate, from, year) {
   if (!(year >= FAMILY_NAMES_FROM) || candidate.household !== from.household) return false;
-  const surnames = (p) => stripVariants(p.name).toLowerCase().split(/\s+/).slice(1);
+  const surnames = (p) => stripNameVariants(p.name).toLowerCase().split(/\s+/).slice(1);
   const theirs = surnames(from);
   return surnames(candidate).some((w) => isPatronymic(w) && theirs.includes(w));
 }
@@ -517,7 +495,7 @@ function residentFit(record, people, from, fromTree, candidate, rel, tree) {
   if (!familySurname(candidate, from, recordYear) && patronymicClash(candidate.name, tree.name)) return null;
   const yc = birthYearOf(candidate, record), yt = treeYear(tree), yf = birthYearOf(from, record);
   let score = name === 2 ? 3 : 1;
-  const why = [t('{relation} of {name} in FamilySearch', { relation: t(relWord(rel, tree.gender)), name: stripVariants(fromTree.name) }),
+  const why = [t('{relation} of {name} in FamilySearch', { relation: t(relWord(rel, tree.gender)), name: stripNameVariants(fromTree.name) }),
     name === 2 ? t('same given name') : t('close given name (FamilySearch: {name})', { name: tree.name })];
   const yearFits = !!(yc && yt);
   if (yearFits) {
@@ -625,7 +603,7 @@ function suggestResidencePairs(record, people, fs, trees, trusted) {
   // (FS's, or the FS father's) around whom their family fits best
   const year = treeYear(fs);
   const fsSex = /^(male|female)$/i.test(fs.gender || '') ? fs.gender : '';
-  const fsNames = [fs.name, fs.father ? givenOf(fs.name) + ' ' + patronymicOf(fs.father.name, fsSex) : ''].filter(Boolean);
+  const fsNames = [fs.name, fs.father ? splitName(fs.name).given + ' ' + patronymicOf(fs.father.name, fsSex) : ''].filter(Boolean);
   const contradicts = (p) => {
     const y = birthYearOf(p, record), sex = recordSex(p, record), age = ageOff(p, record, fs);
     if (age && age.off > 1) return t('age {age} on census day, here {here}', { age: age.fs, here: age.here });
@@ -649,15 +627,15 @@ function suggestResidencePairs(record, people, fs, trees, trusted) {
     if (n > best) { best = n; self = c; }
   }
   if (!self) {
-    if (trusted && anchor) why[anchor.key] = t('the record opened, but FamilySearch {fs} is {what}: not paired; choose them if it\'s the same person', { fs: stripVariants(fs.name), what: contradicts(anchor) });
+    if (trusted && anchor) why[anchor.key] = t('the record opened, but FamilySearch {fs} is {what}: not paired; choose them if it\'s the same person', { fs: stripNameVariants(fs.name), what: contradicts(anchor) });
     return { pairs, why, need };
   }
   take(self, fs, t('the FamilySearch person'));
   // The opened record person, who the search took for the FS person, but isn't
   if (trusted && anchor && self !== anchor) {
     why[anchor.key] = t('the record opened, but FamilySearch {fs} is {what}; paired with {name} instead', {
-      fs: stripVariants(fs.name), what: contradicts(anchor),
-      name: stripVariants(self.name) + (self.householdNo ? ', ' + t('household no. {n}', { n: self.householdNo }) : '')
+      fs: stripNameVariants(fs.name), what: contradicts(anchor),
+      name: stripNameVariants(self.name) + (self.householdNo ? ', ' + t('household no. {n}', { n: self.householdNo }) : '')
     });
   }
 
@@ -693,7 +671,7 @@ function hintOthers(record, people, paired, why, known, pairs) {
       if (here.length !== 1 || fsOf[rel].length !== 1) continue;
       const fsRel = fsOf[rel][0], p = here[0];
       const y = birthYearOf(p, record), fy = treeYear(fsRel);
-      const word = t('{relation} of {name}', { relation: t(relWord(rel, fsRel.gender)), name: stripVariants(tree.name) });
+      const word = t('{relation} of {name}', { relation: t(relWord(rel, fsRel.gender)), name: stripNameVariants(tree.name) });
       const fsName = fsRel.name + (fy ? ', ' + t('b.') + ' ' + fy : '');
       why[p.key] = !givenNameFit(p, fsRel)
         ? t('FamilySearch {relation} is {name}, another name: choose them if it\'s the same person', { relation: word, name: fsName })
@@ -761,10 +739,10 @@ function defaultReason(record, person) {
 // patronymic (from the record's father, by the sex the record or the paired FS person
 // gives; both when neither does), and the paired FS person's own name
 function surnameSuggestions(person, people, record, tree) {
-  const name = stripVariants(person.name);
+  const name = stripNameVariants(person.name);
   if (!name || name.split(/\s+/).length > 1) return [];
   const out = [];
-  if (tree && tree.name && tree.name.split(/\s+/).length > 1 && hasGivenName(person, givenOf(tree.name))) {
+  if (tree && tree.name && tree.name.split(/\s+/).length > 1 && hasGivenName(person, splitName(tree.name).given)) {
     out.push({ name: tree.name, label: t('FamilySearch name') });
   }
   if (roleKind(person) === 'child' && record.recordTypeInfo && record.recordTypeInfo.type !== 'census') {
@@ -773,7 +751,7 @@ function surnameSuggestions(person, people, record, tree) {
       const own = person.primary ? (record.fields || {})['gender'] : '';  // the fields are the primary person's
       const sex = tree && tree.gender ? tree.gender : /^m/i.test(own || '') ? 'Male' : /^(k|f)/i.test(own || '') ? 'Female' : '';
       for (const s of sex ? [sex] : ['Male', 'Female']) {
-        const pat = patronymicOf(stripVariants(father.name), s);
+        const pat = patronymicOf(stripNameVariants(father.name), s);
         if (pat && !out.some((o) => o.name === name + ' ' + pat)) out.push({ name: name + ' ' + pat, label: t('father\'s patronymic') });
       }
     }
@@ -928,7 +906,7 @@ function recordFacts(person, record) {
   const place = parishName(record);
   const mine = isOpenPerson(person, record);  // the open person: their own fields too
   const fields = mine ? record.fields || {} : {};
-  facts.Name = { text: stripVariants(person.name) };
+  facts.Name = { text: stripNameVariants(person.name) };
   const gender = String(fields.gender || '');
   const sex = /^m/i.test(gender) ? 'Male' : /^(k|f)/i.test(gender) ? 'Female' : childSex(person, record);
   if (sex) facts.Sex = { text: t(sex), value: sex };
@@ -1064,7 +1042,7 @@ function compareFact(fact, da, fs, person, tree, record, name) {
   if (!da || !fs) return '';
   if (fact === 'Name') {
     // (a given name DA couldn't read, "!!", neither agrees nor differs)
-    if (/^!!/.test(String(name || stripVariants(person.name)).trim())) return '';
+    if (/^!!/.test(String(name || stripNameVariants(person.name)).trim())) return '';
     const fit = givenNameFit(name ? { ...person, name } : person, tree);
     const full = record && tree && fullTree(tree.pid);
     if (fit === 2 && full && otherName(person, record, full, name)) return 'near';
@@ -1212,7 +1190,7 @@ function deathFarm(person, record) {
   // in a town's church book the word after the patronymic is a family name
   // (Lars Larsen Lindemann), not a farm he died on
   if (townParish(record)) return '';
-  const farm = nameParts(stripVariants(person.name)).rest;
+  const farm = nameParts(stripNameVariants(person.name)).rest;
   if (!farm) return '';
   const born = cleanPlace(person.birthPlace || fields['birth place'] || '');
   return born && sameFarm(farm, born) ? born : farm;
@@ -1236,37 +1214,27 @@ function churchPlace(record) {
   return { name: church, place: fsMunicipality(church, record) || joined(church, parish) };
 }
 
-// A name split as FS's form takes it: the given names up to the patronymic, which is
-// the surname; a word after it (a farm, an address) left out. No patronymic: the last
-// word is the surname. With `fathers` (the record's father's given names), of two
+// A name split as FS's form takes it, by splitName() (names.js); the words after the
+// surname (a farm, an address) left out. With `fathers` (the record's father's given names), of two
 // patronymics the one of that father is the surname ("Astri Pedersdatter Larsdatter",
 // father Lars: Larsdatter); with `family` (the tree's surname, not a patronymic), a
 // last word that is the family name in another spelling is the surname, the
 // patronymic a given name ("Lars Halvorsen Lindeman", FS's Lindemann).
 function nameParts(name, { fathers = [], family = '' } = {}) {
-  const words = String(name || '').split(/\s+/).filter(Boolean);
+  const words = nameWords(name);
   const last = words[words.length - 1];
   const sameWord = (a, b) => fold(a) === fold(b) || nameNear(a, b);
   if (family && words.length > 2 && !isPatronymic(last) && sameWord(last, family)) {
     return { given: words.slice(0, -1).join(' '), surname: last, rest: '' };
   }
-  const pats = words.map((w, i) => (i > 0 && isPatronymic(w) ? i : -1)).filter((i) => i > 0);
-  if (pats.length) {
-    const first = pats[0];
-    // the father's name as a patronymic's base reads it, without its genitive s (Johannes)
-    const ofFather = (i) => fathers.some((f) => sameFather(patronymicBase(words[i]), f) || sameFather(patronymicBase(words[i]), f.replace(/s$/i, '')));
-    const k = pats.find(ofFather) || first;
-    const rest = words.slice(first).filter((w, i) => i + first !== k);
-    return { given: words.slice(0, first).join(' '), surname: words[k], rest: rest.join(' ') };
-  }
-  if (words.length > 1) return { given: words.slice(0, -1).join(' '), surname: last, rest: '' };
-  return { given: words.join(' '), surname: '', rest: '' };
+  // the father's name as a patronymic's base reads it, without its genitive s (Johannes)
+  return splitName(name, (w) => fathers.some((f) => [f, f.replace(/s$/i, '')].some((g) => sameFather(patronymicBase(w), g))));
 }
 // The given names of a person's fathers in the record (a baptism's father, a groom's
 // or bride's father), for nameParts()
 function recordFathers(person, record) {
   const view = { ...record, people: (record.people || []).map((p) => ({ ...p, current: p.id === person.id })) };
-  return relativesInRecord(view).father.map((p) => stripVariants(p.name).split(/\s+/)[0]).filter(Boolean);
+  return relativesInRecord(view).father.map((p) => stripNameVariants(p.name).split(/\s+/)[0]).filter(Boolean);
 }
 // The tree's family name: the last word of FS's name when it isn't a patronymic
 function treeFamilyName(name) {
@@ -1300,7 +1268,7 @@ const fsYear = (text) => (parseFsDate(text) || {}).year || Number((String(text |
 // name of FS's given names only (a baptism's "Lars Ole" for FS's Lars Ole Halvorsen)
 // has no surname: its last word isn't one, and it's no other name.
 function otherName(person, record, full, name) {
-  const asWritten = name || stripVariants(person.name);
+  const asWritten = name || stripNameVariants(person.name);
   // (DA's "!!" and "??", missing or illegible in the source, are no name to keep: report
   // #10; nor is a word of two readings, "Even/Sven")
   if (asWritten.split(/\s+/).some((w) => unreadableWord(w) || readingsOf(w).length > 1)) return null;
@@ -1576,7 +1544,7 @@ function showChanges() {
 // One person of the record: name (editable, with surname suggestions), role, the
 // tree person to attach to, tags, reason
 function personRow(person, family, suggestion, why) {
-  const row = { person, name: stripVariants(person.name), noteName: person.name };
+  const row = { person, name: stripNameVariants(person.name), noteName: person.name };
   const role = roleText(person);
 
   const nameInput = el('input', { type: 'text', class: 'name', value: row.name, 'aria-label': t('Name in the source') });
@@ -1721,7 +1689,7 @@ function unnamedChildTitle(row) {
   const pid = row.pid();
   const tree = PID_PATTERN.test(pid) ? row.tree() || fullTree(pid) : null;
   const typed = row.name && !/^!!(\s|$)/.test(row.name) ? row.name : '';
-  const name = typed || (tree && tree.name ? stripVariants(tree.name) : '');
+  const name = typed || (tree && tree.name ? stripNameVariants(tree.name) : '');
   state.unnamedTitles = state.unnamedTitles || {};
   let changed = false;
   for (const id of ['f-title', 'g-title']) {
@@ -1758,7 +1726,7 @@ function rename(row, newName) {
   const other = counterpart(row.person);
   if (other) {
     const g = (id) => $('g-' + id);
-    const otherOld = row.otherName || stripVariants(other.name);
+    const otherOld = row.otherName || stripNameVariants(other.name);
     g('title').value = renamePhrase(g('title').value, otherOld, newName);
     if (state.record.recordTypeInfo.type === 'birth_baptism' && roleKind(other) === 'child' && newName.split(/\s+/).length > otherOld.split(/\s+/).length) {
       g('title').value = dropChildOf(g('title').value);
@@ -1887,11 +1855,11 @@ async function switchHousehold(pairs) {
   fillSource(loaded.record);
   const note = $('record-note');
   note.hidden = false;
-  const who = (p) => stripVariants(p.name) + (p.birthYear ? ', ' + p.birthYear : '') +
+  const who = (p) => stripNameVariants(p.name) + (p.birthYear ? ', ' + p.birthYear : '') +
     (p.householdNo ? ', ' + t('household no. {n}', { n: p.householdNo }) : '');
   note.textContent = t(opened ? 'The record opened was {opened}. FamilySearch {fs} fits {self}, so the source is for that household.'
     : 'The record opened was another person\'s. FamilySearch {fs} fits {self}, so the source is for that household.',
-  { opened: opened ? who(opened) : '', fs: stripVariants(state.fs.name), self: who(self) });
+  { opened: opened ? who(opened) : '', fs: stripNameVariants(state.fs.name), self: who(self) });
   return true;
 }
 
@@ -3261,7 +3229,7 @@ function newPersonDraft(row) {
   const notes = [];
   // DA's "!!" and "??", missing, wrong or illegible in the source (report #10), are left
   // out; of two readings ("Even/Sven") the first is taken
-  const written = (row.name || stripVariants(person.name)).split(/\s+/).filter(Boolean);
+  const written = (row.name || stripNameVariants(person.name)).split(/\s+/).filter(Boolean);
   const kept = written.filter((w) => !unreadableWord(w));
   if (kept.length < written.length) notes.push(t('Missing, wrong or illegible on DigitalArkivet, left out of the name: {words}.', { words: written.filter(unreadableWord).join(' ') }));
   const twoReadings = kept.filter((w) => readingsOf(w).length > 1);

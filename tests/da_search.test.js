@@ -447,7 +447,7 @@ test('parseResults(): a page of a larger search (81 hits, 50 on the page)', () =
 
 test('fetchResultPage(): only Digital Arkivet\'s pages are fetched', async () => {
   const asked = [];
-  const w = load(['i18n.js', 'i18n_strings.js', 'da_search.js'], { fetch: (url) => { asked.push(url); return Promise.reject(new Error('offline')); } });
+  const w = load(['i18n.js', 'i18n_strings.js', 'names.js', 'da_search.js'], { fetch: (url) => { asked.push(url); return Promise.reject(new Error('offline')); } });
   for (const url of ['https://example.com/en/view/255/pd99000000000001', 'http://www.digitalarkivet.no/en/view/255/pd99000000000001',
     'https://digitalarkivet.no.example.com/x', 'https://media.digitalarkivet.no/ft99000000000029', 'https://digitalarkivet.no/en/view/255/pd99000000000001',
     'javascript:alert(1)', '/en/view/255/pd99000000000001']) {
@@ -473,7 +473,7 @@ function daAnswering(answer) {
     if (a === 'timeout') throw Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' });
     return new Response(a === 200 ? '<html><body>page</body></html>' : 'error', { status: a });
   };
-  const w = load(['i18n.js', 'i18n_strings.js', 'da_search.js'], { fetch, fast: true });
+  const w = load(['i18n.js', 'i18n_strings.js', 'names.js', 'da_search.js'], { fetch, fast: true });
   return { w, asked };
 }
 

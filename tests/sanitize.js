@@ -43,7 +43,6 @@ const map = fs.existsSync(MAP_FILE) ? JSON.parse(fs.readFileSync(MAP_FILE, 'utf8
 for (const k of ['words', 'ids', 'numbers', 'hex']) map[k] = map[k] || {};
 
 const w = load(SHARED);
-const PATRONYMIC = /(s)(en|øn|on|datter|dotter|dtr\.?|dr\.?|d\.)$/i;
 
 // Made-up names, in the order they're given out
 const MALE = ['Anders', 'Amund', 'Arne', 'Bjørn', 'Embrik', 'Even', 'Gudmund', 'Helge', 'Ivar', 'Jakob', 'Kjetil', 'Mikkel',
@@ -124,13 +123,13 @@ function assign(word, pool) {
 const votes = new Map();
 const vote = (word, female) => { const v = votes.get(fold(word)) || 0; votes.set(fold(word), v + (female ? 1 : -1)); };
 function fakeGiven(word, female = (votes.get(fold(word)) || 0) > 0) { return assign(word, female ? FEMALE : MALE); }
-function fakeFarm(word) { return PATRONYMIC.test(word) ? fakePatronymic(word) : assign(word, FARMS); }
+function fakeFarm(word) { return w.isPatronymic(word) ? fakePatronymic(word) : assign(word, FARMS); }
 // A patronymic: the father's made-up name with the same ending (Ol, Ole → Lars: Olsen →
 // Larsen; Rasmu, Rasmus: Rasmusen; Johannes: Johannessen)
 function fakePatronymic(word) {
   const known = Object.keys(map.words).find((k) => fold(k) === fold(word));
   if (known) return map.words[known];
-  const m = word.match(PATRONYMIC);
+  const m = w.patronymicMatch(word);
   const base = word.slice(0, m.index);
   const given = (b) => Object.keys(config.names).concat(Object.keys(map.words)).find((k) => fold(k) === fold(b));
   const father = given(base) || given(base + 'e') || given(base + 's') || base;
@@ -144,14 +143,14 @@ function fakePatronymic(word) {
 const tasks = [];
 function addName(name, female, surname = false) {
   const words = String(name || '').replace(/[%*]/g, ' ').split(/[\s,]+/).map(clean).filter((x) => x.length >= 2 && !/\d/.test(x));
-  const p = words.findIndex((x, i) => (i > 0 || surname) && PATRONYMIC.test(x));
-  if (p >= 0 && /(datter|dotter|dtr\.?|dr\.?)$/i.test(words[p])) female = true;
+  const p = words.findIndex((x, i) => (i > 0 || surname) && w.isPatronymic(x));
+  if (p >= 0 && w.patronymicSex(words[p]) === 'Female') female = true;
   words.forEach((word, i) => {
     if (STOP.has(fold(word))) return;
     for (const part of word.split('-')) {
       if (part.length < 2 || STOP.has(fold(part))) continue;
       realWords.add(fold(part));
-      if ((i > 0 || surname) && PATRONYMIC.test(part)) tasks.push([2, () => fakePatronymic(part)]);
+      if ((i > 0 || surname) && w.isPatronymic(part)) tasks.push([2, () => fakePatronymic(part)]);
       else if (!surname && (p >= 0 ? i < p : i === 0 || i < words.length - 1)) { vote(part, female); tasks.push([0, () => fakeGiven(part)]); }
       else tasks.push([1, () => fakeFarm(part)]);
     }
@@ -247,7 +246,7 @@ function fakeParam(value) {
     if (!real) return word;
     const fake = assign(real, MALE);
     if (!star) return fake;
-    const cut = PATRONYMIC.test(fake) ? w.surnameStem(fake) : w.givenStem(fake);
+    const cut = w.isPatronymic(fake) ? w.surnameStem(fake) : w.givenStem(fake);
     return cut.endsWith('*') ? cut : cut + '*';
   }).join('');
 }

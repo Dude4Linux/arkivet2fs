@@ -144,14 +144,6 @@ function expandAbbreviations(text, more = []) {
   return out;
 }
 
-// A colon closing a word of a name: the church books' abbreviation mark, which DA's
-// transcriptions keep ("Larsdat:" for Larsdatter, "Halvorsd:"); written as a point, as
-// DA writes the other abbreviations ("Larsdat."), so it reads as one. "d:r" inside a
-// word stays.
-function abbreviationPoint(name) {
-  return String(name || '').replace(/(\p{L}):(?=\s|$)/gu, '$1.');
-}
-
 // A town as clerks abbreviated it in emigrant protocols and moving lists, in full, as
 // the town was named then: "Fhald" is Fredrikshald (Halden since 1928), "Thjem"
 // Trondhjem. Only a place that is the abbreviation alone, a point after it or not;
@@ -321,12 +313,6 @@ function extractRecord(document, pageUrl) {
       if (!(key in map)) map[key] = f.value;
     }
     return map;
-  }
-
-  // --- Helper: A name without the words the source struck out, which DA marks %...%
-  // ("Ommund %Ole% Olsen %Olsen%"); two readings DA gives ("Even@Sven") as "Even/Sven" ---
-  function stripNameVariants(name) {
-    return (name || '').replace(/%[^%]*%/g, ' ').replace(/(\S)@(?=\S)/g, '$1/').replace(/\s+/g, ' ').trim();
   }
 
   // --- Helper: Get the permanent ID from a person link's href ---

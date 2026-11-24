@@ -36,11 +36,6 @@ const REQUEST_GAP_MS = 1000; // DA rate-limits automated traffic
 // The most hits of one search that are read (a function: search.js uses it)
 function readLimit() { return MAX_PAGES * RESULTS_PER_PAGE; }
 
-// Patronymic: genitive s + ending: -sen/-søn/-son, -datter/-dotter and the church
-// books' abbreviations of it (-daatter, -dattr., -datt., -datr., -dat., -dtr., -dr.,
-// -d:r, -d.; Johannesdat. is Johannesdatter)
-const PATRONYMIC_ENDING = /(s)(en|øn|on|datter|dotter|daatter|dattr\.?|datt\.?|datr\.?|dat\.?|dtr\.?|dr\.?|d:r\.?|d\.?)$/i;
-
 const RECORD_TYPES = {
   pd: 'Baptism', pk: 'Confirmation', pv: 'Marriage', pg: 'Burial', pf: 'Census',
   pe: 'Emigration', pu: 'Out-migration', pi: 'In-migration', pa: 'Probate', pt: 'Tax', pl: 'School', pm: 'Property',
@@ -66,8 +61,6 @@ const ROLES = {
 // Functions used by other scripts are declared with `function`: a const in one
 // script isn't visible to the others when they are eval'd separately (tests)
 function firstWord(s) { return ((s || '').trim().split(/\s+/)[0] || '').replace(/[.,]$/, ''); }
-
-function isPatronymic(surname) { return PATRONYMIC_ENDING.test(surname || ''); }
 
 // DA's special signs in its transcriptions (its key: digitalarkivet.no/en/content/
 // abbreviations-census): "??" letters illegible in the source ("Kristi??"); "!!"
@@ -98,8 +91,6 @@ function legibleStart(word) {
   const at = w.search(/!!|\?\?/);
   return (at < 0 ? w : w.slice(0, at)).replace(/[^\p{L}]/gu, '');
 }
-// The father's name in a patronymic (Halvorsen → Halvor, Olsdr. → Ol)
-function patronymicBase(surname) { return (surname || '').replace(PATRONYMIC_ENDING, ''); }
 
 // A word that may be a patronymic of a father's name `base` in a form isPatronymic()
 // doesn't read: the father's name (and a few letters: Johan → Johannes), a genitive s
@@ -228,7 +219,7 @@ const PATRONYMIC_SPELLINGS = [
 function patronymicGroup(surname) {
   const s = (surname || '').trim();
   if (!isPatronymic(s)) return null;
-  const stem = s.replace(PATRONYMIC_ENDING, '$1').toLowerCase();
+  const stem = patronymicStem(s).toLowerCase();
   let found = null;
   for (const group of PATRONYMIC_SPELLINGS) {
     for (const p of group.forms) if (stem.startsWith(p) && (!found || p.length > found.own.length)) found = { group, own: p, rest: stem.slice(p.length) };
@@ -253,7 +244,7 @@ function patronymicOf(father, sex) {
 function surnameStem(surname) {
   const s = (surname || '').trim();
   if (!s || /\s/.test(s)) return s;
-  if (isPatronymic(s)) return s.replace(PATRONYMIC_ENDING, '$1') + '*';
+  if (isPatronymic(s)) return patronymicStem(s) + '*';
   const m = s.match(/^(.*)[aeiouyæøå][^aeiouyæøå]*$/i);
   return m && m[1].length >= 4 ? m[1] + '*' : s;
 }
@@ -311,7 +302,7 @@ function surnameSpellings(surname) {
   if (spelled) return spelled.group.forms.filter((p) => p !== spelled.own).map((p) => s[0] + p.slice(1) + spelled.rest + '*');
   // A father's name ending in e loses it before the genitive s as often as not
   // (Mathiesen and Mathisen)
-  const stem = isPatronymic(s) ? s.replace(PATRONYMIC_ENDING, '$1') : '';
+  const stem = isPatronymic(s) ? patronymicStem(s) : '';
   // (after a vowel or j only: Aslesen is never Aslsen)
   return /[aiouyæøåj]es$/i.test(stem) && stem.length >= 5 ? [stem.slice(0, -2) + 's*'] : [];
 }
@@ -335,10 +326,7 @@ const foldName = (s) => (s || '').toLowerCase().trim();
 // names ("Marte Olsdtr-" Moen; joined by a hyphen, "Olsdtr-Moen") goes to the surname.
 // Without one, the surname is as FS has it ("Anne Cathrine" Lindeman).
 function relativeName(given, surname) {
-  const split = (text) => String(text || '').trim().split(/\s+/).filter(Boolean)
-    .flatMap((w) => { const m = w.match(/^(.+?)-(.*)$/); return m && isPatronymic(m[1]) ? [m[1], m[2]] : [w]; })
-    .filter(Boolean);
-  const givens = split(given), surnames = split(surname);
+  const givens = nameWords(given), surnames = nameWords(surname);
   const at = givens.findIndex((w, k) => k > 0 && isPatronymic(w));
   const last = at > 0 ? [...givens.splice(at), ...surnames] : surnames;
   return { given: givens.join(' '), surname: last.join(' '), patronymic: last.find(isPatronymic) || '' };
@@ -869,7 +857,7 @@ function parseResults(html) {
       id: id,
       url: href ? new URL(href, DA_SEARCH_URL).toString() : '',
       type: RECORD_TYPES[id.slice(0, 2)] || 'Other',
-      name: clean(link).replace(born, '').trim().replace(/(\p{L}):(?=\s|$)/gu, '$1.'),  // "Larsdat:" as "Larsdat." (da_record.js abbreviationPoint())
+      name: abbreviationPoint(clean(link).replace(born, '').trim()),  // "Larsdat:" as "Larsdat."
       born: born.replace(/^\(b\.\s*|\)$/g, ''),
       gender: /female/i.test(clean(unit.querySelector('.gender'))) ? 'Female' : /male/i.test(clean(unit.querySelector('.gender'))) ? 'Male' : '',
       domicile: field(unit, '.place'),

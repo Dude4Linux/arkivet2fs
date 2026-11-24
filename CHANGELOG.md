@@ -37,6 +37,12 @@ fixes, new features, changes that break what users have).
   Østfold, Norway" for 1875), the linker offers to change it to the name of that
   year, and saves the change (it took the two names for the same place and left the
   fact unchanged).
+- Names are read by one set of rules everywhere (the search, the record pages, the
+  linker): a patronymic in any of the church books' abbreviations ("Larsdat.",
+  "Pedersd:r", "Olsdaatter"), one written without the genitive s ("Knutdatter"), and one
+  joined to the farm by a hyphen ("Olsdtr-Moen"). Before, the search page, the
+  FamilySearch entry and the linker each knew a different set, so a patronymic one of
+  them read could be taken for a farm or a family name by another, or tell no sex.
 - The source's title names a town's parish by the town's name of the record's year
   ("Fredrikshald parish 1869-1884 (0101P)" for a baptism in 1875); the citation still
   names the church book as the National Archives do ("Halden parish"). A source made

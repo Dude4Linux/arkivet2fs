@@ -3,7 +3,7 @@
 // loads them; Firefox runs the manifest's background "scripts", these files first,
 // and has no importScripts there.
 if (typeof importScripts === 'function') {
-  importScripts('i18n.js', 'i18n_strings.js', 'da_places.js', 'farms.js', 'releases.js');
+  importScripts('i18n.js', 'i18n_strings.js', 'names.js', 'da_places.js', 'farms.js', 'releases.js');
 }
 
 // Whether an address is a page on DigitalArkivet (https, www.digitalarkivet.no: the
@@ -49,7 +49,7 @@ chrome.action.onClicked.addListener((tab) => {
   // gatherData() there (both run in the extension's isolated world of the page)
   chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    files: ['da_record.js']
+    files: ['names.js', 'da_record.js']
   }).then(() => chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => gatherData()
@@ -126,29 +126,6 @@ async function rememberPerson(person) {
   }
 }
 
-// Patronymic surnames: -sen/-søn/-son, -datter/-dotter and their abbreviations
-// (as da_search.js PATRONYMIC_ENDING: -dattr., -datt., -dat., -dtr., -sdr., -sd:r, -sd.)
-const PATRONYMIC = /(s[eøo]n|datter|dotter|daatter|s(?:dattr|datt|datr|dat|d:r)\.?|dtr\.?|sdr?\.?)$/i;
-
-// Split an FS full name into given name(s), surname, and what follows the surname.
-// Names in this tree are patronymic, often with the farm as an address: "Tollef
-// Johansen Rysstad" → given "Tollef", surname "Johansen", rest "Rysstad". The
-// rest can also be a family or place-derived name (Lindeman), so personToQuery checks
-// it against the farm registers (farms.js). Without a patronymic, the last word is the
-// surname ("Maren Kristine Lindeman"). A patronymic joined to the farm by a hyphen,
-// "Marte Olsdtr-Moen" or "Marte Olsdtr- Moen", is split there.
-function splitName(full) {
-  const words = (full || '').split(/\s+/).filter(Boolean)
-    .flatMap((w) => { const m = w.match(/^(.+?)-(.*)$/); return m && PATRONYMIC.test(m[1]) ? [m[1], m[2]] : [w]; })
-    .filter(Boolean);
-  if (words.length < 2) return { given: words.join(' '), surname: '', rest: '' };
-  const i = words.findIndex((w, k) => k > 0 && PATRONYMIC.test(w));
-  if (i > 0) {
-    return { given: words.slice(0, i).join(' '), surname: words[i], rest: words.slice(i + 1).join(' ') };
-  }
-  return { given: words.slice(0, -1).join(' '), surname: words[words.length - 1], rest: '' };
-}
-
 // The years in an FS date ("11 November 1764", "1764", "1726–Deceased")
 // A name without its nickname: a quoted word ('Stor'), or a leading Big, Little,
 // Old, Young (Stor, Lille, Gamle, Unge, ...) that tells two brothers Lars apart:
@@ -199,7 +176,7 @@ async function personToQuery(person) {
   }
   const checks = await Promise.all(names.map((n) => {
     if (n.rest) return farmNear(n.rest, places, true);
-    if (n.surname && !PATRONYMIC.test(n.surname)) return farmNear(n.surname, places);
+    if (n.surname && !isPatronymic(n.surname)) return farmNear(n.surname, places);
     return { farm: false };
   }));
   const entries = [];
