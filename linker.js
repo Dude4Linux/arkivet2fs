@@ -2940,7 +2940,10 @@ function onTreeAlready(tree, a) {
     const fs = tree[vital.toLowerCase()];
     // FS's place without its Norwegian letters isn't the one to be saved with them
     const respelled = fs && placeText(fs.place) !== norwegianSpelling(fs.place) && placeText(fs.place) !== placeText(v.place);
-    return Boolean(fs && (fs.date || fs.place) && !respelled && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
+    // nor FS's town under another of its names the one of the year ("Halden, Østfold,
+    // Norway" for Fredrikshald, Smaalenene, which sameFsPlace() takes for one place)
+    const renamed = fs && placeText(fs.place) !== placeText(v.place) && townOfYear(norwegianSpelling(fs.place), fsYear(v.date)) === placeText(v.place);
+    return Boolean(fs && (fs.date || fs.place) && !respelled && !renamed && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
   }
   const year = fsYear(v.date);
   if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year);

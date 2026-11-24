@@ -1616,6 +1616,11 @@ test('onTreeAlready(): the same vital in FS\'s standard form; a residence of the
   const christening = (place) => ({ action: 'edit', type: 'CHRISTENING', value: { date: '23 August 1846', place } });
   assert.equal(w.onTreeAlready(ascii, christening('Østre Moss, Østfold, Norway')), false);
   assert.equal(w.onTreeAlready({ ...ascii, christening: { date: '23 August 1846', place: 'Østre Moss, Østfold, Norway' } }, christening('Østre Moss, Østfold, Norway')), true);
+  // FS's town under its present name: the name of the year isn't there yet (bug: "has this already; not changed")
+  const halden = { ...tree, christening: { date: '23 August 1846', place: 'Halden, Østfold, Norway' } };
+  assert.equal(w.onTreeAlready(halden, christening('Fredrikshald, Smaalenene, Norway')), false);
+  assert.equal(w.onTreeAlready({ ...tree, christening: { date: '23 August 1846', place: 'Halden,Ostfold,Norway' } }, christening('Fredrikshald, Smaalenene, Norway')), false);
+  assert.equal(w.onTreeAlready({ ...tree, christening: { date: '23 August 1846', place: 'Fredrikshald, Smaalenene, Norway' } }, christening('Fredrikshald, Smaalenene, Norway')), true);
   assert.equal(w.onTreeAlready(tree, { action: 'add', type: 'RESIDENCE', value: { date: '1900', place: 'Bakken nedre, Vågå, Oppland, Norway' } }), true);
   assert.equal(w.onTreeAlready(tree, { action: 'add', type: 'RESIDENCE', value: { date: '1865', place: 'Vågå, Oppland, Norway' } }), false);
   assert.equal(w.onTreeAlready(tree, { action: 'name', type: 'ALTERNATE_NAME', value: { given: 'Kjersti', surname: 'Larsen' } }), true);

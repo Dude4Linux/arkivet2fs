@@ -35,7 +35,8 @@ fixes, new features, changes that break what users have).
   record gives no birthplace for, are in Fredrikshald. Where FamilySearch has the town
   of a birth, christening, death or burial under another of its names ("Halden,
   Østfold, Norway" for 1875), the linker offers to change it to the name of that
-  year.
+  year, and saves the change (it took the two names for the same place and left the
+  fact unchanged).
 - **A colon closing a name:** the church books' abbreviation mark, kept in DA's
   transcriptions ("Larsdat:" for Larsdatter), is written as a point ("Larsdat.") in the
   title, the citation, the notes and the names offered for FamilySearch, and the
