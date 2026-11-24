@@ -818,6 +818,13 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
     box.querySelector('[aria-label="Close"]').addEventListener('click', () => { log.push('close ' + type); box.remove(); });
     box.querySelector('[data-testid="ConclusionDialog:edit:button"]').addEventListener('click', () => {
       box.remove();
+      // an alternate name's form has the same fields as the add's (seen 2026-11-24)
+      const template = el.querySelector('[data-testid="conclusion-name-template"]');
+      if (template) {
+        const [given, ...rest] = template.textContent.split(' ');
+        return openForm(type, nameFields(given, rest.join(' ')), (v) => { template.textContent = v['nameTemplate.no.firstName'] + ' ' + v['nameTemplate.no.lastName']; openView(type, el); },
+          () => openView(type, el));
+      }
       openForm(type, combo('date', el.querySelector('[data-testid="conclusion-date"]').textContent) + combo('place', el.querySelector('[data-testid="conclusion-place"]').textContent),
         (v) => { el.querySelector('[data-testid="conclusion-date"]').textContent = v.date; el.querySelector('[data-testid="conclusion-place"]').textContent = v.place; openView(type, el); },
         () => openView(type, el));
@@ -849,10 +856,13 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
       slot.replaceWith(display('CHRISTENING', `<span data-testid="conclusion-date">${v.date}</span> <span data-testid="conclusion-place">${v.place}</span>`));
     });
   });
-  d.querySelector('[data-testid="add-alternate-name"]').addEventListener('click', () => {
-    openForm('ALTERNATE_NAME', '<select name="nameType"><option value="BIRTH">Birth Name</option><option value="AKA">Also Known As</option></select>' +
+  function nameFields(given = '', surname = '') {
+    return '<select name="nameType"><option value="BIRTH">Birth Name</option><option value="AKA">Also Known As</option></select>' +
       '<select name="template"><option value="en">English</option><option value="no">Norwegian</option></select>' +
-      '<input name="nameTemplate.no.firstName" data-testid="first-name"><input name="nameTemplate.no.lastName" data-testid="last-name">',
+      `<input name="nameTemplate.no.firstName" data-testid="first-name" value="${given}"><input name="nameTemplate.no.lastName" data-testid="last-name" value="${surname}">`;
+  }
+  d.querySelector('[data-testid="add-alternate-name"]').addEventListener('click', () => {
+    openForm('ALTERNATE_NAME', nameFields(),
     (v) => d.getElementById('events').append(display('ALTERNATE_NAME', '<span data-testid="conclusion-name-type">Also Known As</span>' +
       `<span data-testid="conclusion-name-template">${v['nameTemplate.no.firstName']} ${v['nameTemplate.no.lastName']}</span>`)));
   });
@@ -991,6 +1001,21 @@ test('addFact(): a residence, its fields inside divs of the same name, as FS has
   assert.deepEqual(plain(saved[0]), { type: 'RESIDENCE', description: 'Nordgard', date: '1846', place: 'Vågå, Oppland, Norway', justification: REASON });
 });
 
+test('addFact(): an edit of a residence opens the one of its year, not the first (whose reason may name the year)', async () => {
+  const { step, saved, w } = factPage();
+  const residence = (date, place) => ({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date, place } });
+  await step('addFact', { pid: 'TEST-LAR', addition: residence('1846', 'Vågå, Oppland, Norway'), reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: residence('1865', 'Lom, Oppland, Norway'), reason: REASON, save: true });
+  const [first, second] = w.document.querySelectorAll('[data-testid="conclusionDisplay:RESIDENCE"]');
+  first.querySelector('[data-testid="conclusion-body"]').append(' From "… - Marriage, 21 November 1865"');
+  const edit = { fact: 'Residence', action: 'edit', type: 'RESIDENCE', match: ['1865'], value: { date: '1865', place: 'Skjåk, Oppland, Norway' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: edit, reason: REASON, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.equal(saved[2].place, 'Skjåk, Oppland, Norway');
+  assert.equal(second.querySelector('[data-testid="conclusion-place"]').textContent, 'Skjåk, Oppland, Norway');
+  assert.equal(first.querySelector('[data-testid="conclusion-place"]').textContent, 'Vågå, Oppland, Norway');
+});
+
 test('addFact(): a place typed in FS\'s standard form is chosen from FS\'s list, which has no entry of its own for it (bug: a birth and a residence saved without their place)', async () => {
   const { step, saved, w } = factPage({ asFs: true });
   const residence = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1874', place: 'Vågå, Oppland, Norway', description: 'Vaage' } };
@@ -1075,6 +1100,37 @@ test('tagFact(): an alternate name is found by the name itself, not by words ano
   const answer = await step('tagFact', { pid: 'TEST-LAR', type: 'ALTERNATE_NAME', match: ['Lars', 'Halvorsen'], sourceId: 'TEST-S01' });
   assert.equal(answer.ok, true, answer.error);
   assert.deepEqual(plain(tagged.map((t) => t.fact)), ['Also Known AsLars HalvorsenEdit']);
+});
+
+test('addFact(): an update of the facts a record gave: the alternate name changed, a residence\'s reason alone, each found by the record\'s ID in its reason', async () => {
+  const { step, saved, tagged, w } = factPage();
+  const name = (given, surname) => ({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', value: { given, surname, nameType: 'AKA' } });
+  const home = { fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: '1846', place: 'Vågå, Oppland, Norway', description: 'Nordgard' } };
+  await step('addFact', { pid: 'TEST-LAR', addition: name('Lars', 'Halvorsen'), reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: name('Lars', 'Bakken'), reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: home, reason: REASON, save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: { ...home, value: { ...home.value, description: 'Sørgard' } }, reason: REASON, save: true });
+  // FS shows each fact's reason: the second name and residence are this record's
+  const [, ourName] = w.document.querySelectorAll('[data-testid="conclusionDisplay:ALTERNATE_NAME"]');
+  const [other, ourHome] = w.document.querySelectorAll('[data-testid="conclusionDisplay:RESIDENCE"]');
+  ourName.querySelector('[data-testid="conclusion-body"]').append(' Reason:' + REASON);
+  ourHome.querySelector('[data-testid="conclusion-body"]').append(' Reason:' + REASON);
+  other.querySelector('[data-testid="conclusion-body"]').append(' Reason:From "Another", Digitalarkivet, Permanent ID pd99000000000002.');
+  const NEW = REASON.replace('Birth"', 'Birth, 23 August 1846"');
+  const rename = { fact: 'Name', action: 'edit', type: 'ALTERNATE_NAME', refresh: true, match: ['Lars Bakken', 'pd99000000000001'], value: { given: 'Lars', surname: 'Bakken nedre', nameType: 'AKA' } };
+  const renamed = await step('addFact', { pid: 'TEST-LAR', addition: rename, reason: NEW, save: true });
+  assert.equal(renamed.ok, true, renamed.error);
+  assert.deepEqual(plain(saved[4]), { type: 'ALTERNATE_NAME', nameType: 'AKA', template: 'no', 'nameTemplate.no.firstName': 'Lars', 'nameTemplate.no.lastName': 'Bakken nedre', justification: NEW });
+  assert.equal(ourName.querySelector('[data-testid="conclusion-name-template"]').textContent, 'Lars Bakken nedre');
+  // the same values: only the reason written (the value given is not typed in)
+  const reasonOnly = { ...home, action: 'edit', refresh: true, reasonOnly: true, match: ['1846', 'pd99000000000001'], value: { date: '1850', place: 'Lom, Oppland, Norway', description: 'Changed' } };
+  const answer = await step('addFact', { pid: 'TEST-LAR', addition: reasonOnly, reason: NEW, save: true });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(saved[5]), { type: 'RESIDENCE', date: '1846', place: 'Vågå, Oppland, Norway', justification: NEW });
+  // tagged: the renamed name by its name with the record's ID
+  const tag = await step('tagFact', { pid: 'TEST-LAR', type: 'ALTERNATE_NAME', match: ['Lars', 'Bakken nedre', 'pd99000000000001'], sourceId: 'TEST-S01' });
+  assert.equal(tag.ok, true, tag.error);
+  assert.match(tagged[0].fact, /Lars Bakken nedre/);
 });
 
 test('addFact(): a fact without sources, whose pencil opens the form itself, is changed and cancelled', async () => {

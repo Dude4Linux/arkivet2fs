@@ -42,6 +42,7 @@ w.extractRecord(fixtureDoc(w, 'da/baptism-1846.html'), fixtureUrl('da/baptism-18
 | `background.test.js` | DA addresses, FS names, an FS person as criteria |
 | `linker.test.js` | pairing the record's people with the FS family; renames; what the SourceBox already has, and a run that attaches only those who lack the source (a fake FS behind `chrome.tabs`) |
 | `fs_attach.test.js` | the linker's read-only steps on made-up FS pages: finding a source by title, who it is attached to |
+| `fs_person.test.js` | the tree person as fs_person.js reads it for the linker, on a made-up FS page: the facts a record gave (their reasons) |
 | `releases.test.js` | the update check: versions, GitHub's release (a fake), the signature check, the badge and notification, the Updates page |
 | `tools.test.js` | the release build (which files ship, a zip that's the same every time), signatures, `tools/verify.sh` and `tools/release` |
 | `search.test.js` | the search page end to end, against a fake DA |

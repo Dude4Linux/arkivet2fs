@@ -468,6 +468,8 @@ function i18nTable() {
     'Add the alternate name': ['Legg til det alternative navnet', 'Legg til det alternative namnet'],
     'Add the {fact} as a custom event': ['Legg til {fact} som egendefinert hendelse', 'Legg til {fact} som eigendefinert hending'],
     'Change the {fact}': ['Endre {fact}', 'Endre {fact}'],
+    'Update the {fact} from this record': ['Oppdater {fact} etter denne oppføringen', 'Oppdater {fact} etter denne oppføringa'],
+    'Update the alternate name from this record': ['Oppdater det alternative navnet etter denne oppføringen', 'Oppdater det alternative namnet etter denne oppføringa'],
     'Add the {fact}': ['Legg til {fact}', 'Legg til {fact}'],
     'Also known as': ['Også kjent som', 'Også kjend som'],
     'Birth name': ['Fødselsnavn', 'Fødenamn'],

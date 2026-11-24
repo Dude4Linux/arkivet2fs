@@ -1371,17 +1371,39 @@ function otherName(person, record, full, name) {
   return known.includes(sameNameKey([parts.given, parts.surname].filter(Boolean).join(' '))) ? null : { given: parts.given, surname: parts.surname };
 }
 
-function factAdditions(person, record, tree, name) {
+// `opts`: `ids`, the record's DA permanent IDs (doneIds()), and `reason`, the reason
+// written with the changes (additionReason()). A fact FS has from this record (an
+// earlier run's: its reason names one of `ids`, fs_person.js fromRecord()) is updated
+// on a run again (`refresh`, ticked at first): to the record's values where they
+// differ, else its reason alone (`reasonOnly`) when that is another (a new title).
+function factAdditions(person, record, tree, name, opts = {}) {
   const full = tree && fullTree(tree.pid);
   if (!full) return [];
   const da = recordFacts(person, record);
   const out = [];
   const place = recordPlace(record);
   const year = (daDateParts(record.recordDate) || {}).year;
+  const ids = opts.ids || [];
+  const ours = (f) => Boolean(f && f.from && ids.includes(f.from.id));
+  const stale = (f) => reasonFrom(f.from.reason) !== reasonFrom(opts.reason);
+  // an update of FS's fact from this record: where to find it (its year, the record's
+  // ID in its reason), and only the reason when the values are the same
+  const refresh = (f, changed) => ({ refresh: true, from: f.from.id, ...(changed ? {} : { reasonOnly: true }),
+    match: [fsYear(f.date) ? String(fsYear(f.date)) : '', f.from.id].filter(Boolean) });
 
-  // A name FS has neither as the name nor as an alternate one
+  // A name FS has neither as the name nor as an alternate one; the one this record gave
+  // changed to it, or its reason updated
   const other = otherName(person, record, full, name);
-  if (other) out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { ...other, nameType: 'AKA' } });
+  const ourName = (full.altNamesFrom || []).find(ours);
+  if (ourName) {
+    const renamed = other && sameNameKey([other.given, other.surname].filter(Boolean).join(' ')) !== sameNameKey(ourName.name);
+    if (renamed || stale(ourName)) {
+      const split = splitName(ourName.name);
+      out.push({ fact: 'Name', action: 'edit', type: 'ALTERNATE_NAME', current: ourName.name, ...refresh(ourName, renamed),
+        match: [ourName.name, ourName.from.id],
+        value: renamed ? { ...other, nameType: 'AKA' } : { given: split.given, surname: [split.surname, split.rest].filter(Boolean).join(' '), nameType: 'AKA' } });
+    }
+  } else if (other) out.push({ fact: 'Name', action: 'name', type: 'ALTERNATE_NAME', current: full.name, value: { ...other, nameType: 'AKA' } });
 
   // Birth, christening, death, burial: added, or FS's combined with the record's.
   // A birthplace can lie anywhere (a census's, a burial's). A death took place at the
@@ -1429,7 +1451,9 @@ function factAdditions(person, record, tree, name) {
     if (!fs) out.push({ fact, action: 'add', type, value });
     // not for FS's date in another form or its place's spacing alone
     else if (!sameDateText(fs.date, value.date) || value.place !== placeText(fs.place)) {
-      out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), value });
+      out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), ...(ours(fs) ? refresh(fs, true) : {}), value });
+    } else if (ours(fs) && stale(fs)) {
+      out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), ...refresh(fs, false), value });
     }
   }
 
@@ -1441,7 +1465,9 @@ function factAdditions(person, record, tree, name) {
   const kind = (record.recordTypeInfo || {}).type;
   const isCensus = kind === 'census';
   const home = cleanPlace(isCensus ? (record.census || {}).residence : person.residence);
-  if (da.Residence && year && !placeAbroad(home) && !(full.residences || []).some((r) => fsYear(r.date) === year)) {
+  const ofYear = (full.residences || []).filter((r) => fsYear(r.date) === year);
+  const ourHome = ofYear.find(ours);
+  if (da.Residence && year && !placeAbroad(home) && (ofYear.length < 2 || ourHome)) {
     const census = record.census || {};
     // a residence that is a town ("Chr": Kristiania; "Fhald": Fredrikshald) is the town,
     // not a farm in the parish. The description is the residence as the record writes
@@ -1451,19 +1477,72 @@ function factAdditions(person, record, tree, name) {
       : town || (home && !placeIn(home, parish) ? joined(home, parish) : parish);
     const written = String(person.residence || '').replace(/\s+/g, ' ').trim();
     const description = isCensus ? joined(census.residence, census.district) : written;
-    if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
+    const fs = ourHome || ofYear[0];
+    if (!fs) {
+      if (where) out.push({ fact: 'Residence', action: 'add', type: 'RESIDENCE', value: { date: String(year), place: where, description } });
+    } else if (ourHome) {
+      // this record's: its place and description as the record has them now (a town
+      // by its name of the year), FS's standard form of the same place kept
+      const has = placeText(fs.place);
+      const samePlace = !where || (has && sameFsPlace(has, where) && placeText(fsPlaceOfYear(has, year)) === has);
+      const changed = !samePlace || (description && sameNameKey(description) !== sameNameKey(fs.description));
+      if (changed || stale(fs)) {
+        out.push({ fact: 'Residence', action: 'edit', type: 'RESIDENCE', current: joined(fs.date, fs.place), ...refresh(fs, changed),
+          value: { date: fs.date || String(year), place: samePlace ? has || where : where, description: description || fs.description || '' } });
+      }
+    } else {
+      // FS's residence of the year (an earlier run's, tagged with the source) changed
+      // only where it is wanting: no place (saved without it), the place as the record
+      // writes it, not standardized ("Fhald"), or a renamed town by another name than
+      // the year's ("Halden, Østfold, Norway" for 1874). Another place is FS's to keep.
+      const has = placeText(fs.place);
+      const renamed = has && placeText(fsPlaceOfYear(fs.place, year));
+      const place = !has || (written && sameNameKey(has) === sameNameKey(written)) ? where
+        : renamed !== has ? renamed : '';
+      if (place && place !== has) {
+        out.push({ fact: 'Residence', action: 'edit', type: 'RESIDENCE', current: joined(fs.date, fs.place),
+          match: [String(year)], value: { date: fs.date || String(year), place, description: fs.description || description } });
+      }
+    }
   }
-  // An emigration: a custom event (FS has no Emigration to add), unless FS has one that year
-  if (da.Emigration && da.Emigration.year && !(full.emigration || []).some((e) => fsYear(e.date) === da.Emigration.year)) {
+  // An emigration: a custom event (FS has no Emigration to add), unless FS has one that
+  // year; this record's updated
+  if (da.Emigration && da.Emigration.year) {
     const to = emigrationDestination(record);
-    out.push({ fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration',
-      value: { date: fsDateText(da.Emigration.date), place: fsPlace(departurePlace(record), record), description: to ? 'Destination: ' + to : '' } });
+    const value = { date: fsDateText(da.Emigration.date), place: fsPlace(departurePlace(record), record), description: to ? 'Destination: ' + to : '' };
+    const fs = (full.emigration || []).find(ours);
+    if (fs) {
+      const changed = !sameFsDate(fs.date, value.date) || !sameFsPlace(fs.place, value.place);
+      if (changed || stale(fs)) {
+        out.push({ fact: 'Emigration', action: 'edit', type: 'OTHER_EVENT', title: 'Emigration', current: joined(fs.date, fs.place), ...refresh(fs, changed),
+          value: changed ? value : { ...value, date: fs.date, place: fs.place } });
+      }
+    } else if (!(full.emigration || []).some((e) => fsYear(e.date) === da.Emigration.year)) {
+      out.push({ fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value });
+    }
   }
-  // An occupation FS doesn't have in the same words
-  if (da.Occupation && !(full.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(da.Occupation.text))) {
-    out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date: year ? String(year) : '', place: parishPlace(record), description: da.Occupation.text } });
+  // An occupation FS doesn't have in the same words; this record's updated
+  if (da.Occupation) {
+    const value = { date: year ? String(year) : '', place: parishPlace(record), description: da.Occupation.text };
+    const fs = (full.occupations || []).find(ours);
+    if (fs) {
+      const changed = sameNameKey(fs.description) !== sameNameKey(value.description) || fsYear(fs.date) !== fsYear(value.date) ||
+        !sameFsPlace(fs.place, value.place);
+      if (changed || stale(fs)) {
+        out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(fs.description, fs.date, fs.place), ...refresh(fs, changed),
+          value: changed ? value : { ...value, date: fs.date, place: fs.place } });
+      }
+    } else if (!(full.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(value.description))) {
+      out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value });
+    }
   }
   return out;
+}
+
+// The part of a reason the linker writes (additionReason()) that names the record, as
+// FS shows it: 'From "<title>", Digitalarkivet, Permanent ID <id>'; '' for none
+function reasonFrom(text) {
+  return (String(text || '').replace(/\s+/g, ' ').match(/From ".*", Digitalarkivet, Permanent ID:? ?[a-z]{2}\d{14,}/i) || [''])[0];
 }
 
 // The reason written on FS with an addition (English, as the source is)
@@ -1479,6 +1558,8 @@ const hasDescription = (a) => ['RESIDENCE', 'OCCUPATION', 'OTHER_EVENT'].include
 
 // What an addition says, as the row's tickbox and the summary write it
 function additionLabel(a) {
+  if (a.refresh && a.type === 'ALTERNATE_NAME') return t('Update the alternate name from this record');
+  if (a.refresh) return t('Update the {fact} from this record', { fact: t(a.fact).toLowerCase() });
   if (a.action === 'name') return t('Add the alternate name');
   if (a.type === 'OTHER_EVENT') return t('Add the {fact} as a custom event', { fact: t(a.fact).toLowerCase() });
   if (a.action === 'edit') return t('Change the {fact}', { fact: t(a.fact).toLowerCase() });
@@ -1486,7 +1567,7 @@ function additionLabel(a) {
 }
 function additionText(a) {
   const v = a.value;
-  if (a.action === 'name') return [v.given, v.surname].filter(Boolean).join(' ') + ' (' + t((NAME_TYPES.find(([id]) => id === v.nameType) || NAME_TYPES[0])[1]) + ')';
+  if (a.type === 'ALTERNATE_NAME') return [v.given, v.surname].filter(Boolean).join(' ') + ' (' + t((NAME_TYPES.find(([id]) => id === v.nameType) || NAME_TYPES[0])[1]) + ')';
   return [v.description, v.date, v.place].filter(Boolean).join(', ');
 }
 
@@ -1540,7 +1621,9 @@ function additionsBox(row, person, pid, list) {
   const changed = () => { showChanges(); };
   const items = list.map((a) => {
     const key = additionKey(person, pid, a);
-    const kept = store[key] || { checked: false, value: { ...a.value } };
+    // an update of a fact this record gave is ticked at first: a run on the record
+    // again brings them all up to date (its new title in their reasons)
+    const kept = store[key] || { checked: Boolean(a.refresh), value: { ...a.value } };
     // Filled in FS's own dialog (prepareAdditions()): its standard date and place
     const checkedNote = el('div', { class: 'muted small checked-note', hidden: !kept.fs, text: kept.fs ? fsCheckedText(kept.fs) : '' });
     const box = el('input', { type: 'checkbox' });
@@ -1552,7 +1635,7 @@ function additionsBox(row, person, pid, list) {
       return node;
     };
     let fields;
-    if (a.action === 'name') {
+    if (a.type === 'ALTERNATE_NAME') {
       const type = el('select', { 'aria-label': t('Name type') }, NAME_TYPES.map(([id, label]) => el('option', { value: id, text: t(label) })));
       type.value = kept.value.nameType || 'AKA';
       type.addEventListener('change', () => { kept.value.nameType = type.value; store[key] = kept; changed(); });
@@ -1616,7 +1699,7 @@ async function prepareAdditions() {
   if (state.running || state.preparing) return;
   const store = state.additionEdits || {};
   const todo = (state.rows || []).map((row) => ({ row, pid: row.pid(), additions: row.additions ? row.additions() : [] }))
-    .map((r) => ({ ...r, additions: r.additions.filter((a) => a.action !== 'name' && (a.value.date || a.value.place)) }))
+    .map((r) => ({ ...r, additions: r.additions.filter((a) => a.type !== 'ALTERNATE_NAME' && !a.reasonOnly && (a.value.date || a.value.place)) }))
     .filter((r) => /^[A-Z0-9]{4}-[A-Z0-9]{2,4}$/i.test(r.pid || '') && r.additions.length);
   const status = $('changes-status');
   if (!todo.length) { status.textContent = t('Nothing with a date or place to check.'); return; }
@@ -1749,7 +1832,8 @@ function personRow(person, family, suggestion, why) {
     const reading = !!state.detailsPending && state.detailsPending.has(pid);
     const name = nameInput.value.trim();
     unnamedChildTitle(row);  // before the additions, whose reasons quote the title
-    const list = tree && !reading ? factAdditions(person, state.record, tree, name) : [];
+    const list = tree && !reading ? factAdditions(person, state.record, tree, name,
+      { ids: doneIds(), reason: additionReason(state.record, $('f-title') && $('f-title').value.trim()) }) : [];
     row.offered = list;
     row.additions = () => [];
     const slip = tree && dateSlip(person, state.record, fullTree(tree.pid));
@@ -2431,7 +2515,7 @@ function readPlan(attach) {
       const additions = row.additions ? row.additions() : [];
       for (const a of additions) {
         const v = a.value;
-        const empty = a.action === 'name' ? !(v.given || v.surname) : !(v.date || v.place || v.description);
+        const empty = a.type === 'ALTERNATE_NAME' ? !(v.given || v.surname) : !(v.date || v.place || v.description);
         if (empty) throw new Error(t('"{what}" for {name} is empty: fill it in or untick it.', { what: additionLabel(a), name: row.label() }));
         // FS's form keeps Save off for a birth added with a date and no place (reports #8, #9)
         if (!empty && a.action === 'add' && a.type === 'BIRTH' && !String(v.place || '').trim()) {
@@ -2985,7 +3069,9 @@ async function saveAdditions(tabId, pair, sourceId, title) {
       if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
       else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changes.push(what); }
     }
-    const match = a.action === 'name' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]];
+    // an update: by the record's ID in the reason it has now, too
+    const id = a.refresh ? (reasonFrom(a.reason).match(/[a-z]{2}\d{14,}$/i) || [])[0] : '';
+    const match = (a.type === 'ALTERNATE_NAME' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]]).concat(id ? [id] : []);
     const tagged = await factStep(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
     if (!tagged.ok) log(t('The source is not tagged to it: {error}', { error: tagged.error }), 'near');
     else log(t(tagged.already ? 'The source was tagged to it already.' : 'The source is tagged to it.'), 'ok');
@@ -3064,7 +3150,16 @@ async function keepTree(pid, person) {
 // emigration of the year
 function onTreeAlready(tree, a) {
   const v = a.value || {};
-  if (a.action === 'name') {
+  // an update of this record's fact: not done until its reason is the one to write
+  if (a.refresh) {
+    const facts = { ALTERNATE_NAME: tree.altNamesFrom, RESIDENCE: tree.residences, OCCUPATION: tree.occupations, OTHER_EVENT: tree.emigration }[a.type] ||
+      [tree[(Object.keys(VITAL_TYPES).find((k) => VITAL_TYPES[k] === a.type) || '').toLowerCase()]];
+    const want = reasonFrom(a.reason);
+    const f = (facts || []).find((x) => x && x.from && (x.from.id === a.from || reasonFrom(x.from.reason) === want));
+    if (!f || reasonFrom(f.from.reason) !== want) return false;
+    if (a.reasonOnly) return true;
+  }
+  if (a.type === 'ALTERNATE_NAME') {
     return [tree.name, ...(tree.altNames || [])].map(sameNameKey).includes(sameNameKey([v.given, v.surname].filter(Boolean).join(' ')));
   }
   const vital = Object.keys(VITAL_TYPES).find((k) => VITAL_TYPES[k] === a.type);
@@ -3077,7 +3172,8 @@ function onTreeAlready(tree, a) {
     return Boolean(fs && (fs.date || fs.place) && !stale && sameFsDate(fs.date, v.date) && sameFsPlace(fs.place, v.place));
   }
   const year = fsYear(v.date);
-  if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year);
+  // a residence changed (factAdditions()): FS's of the year has the place by now
+  if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year && (a.action !== 'edit' || placeText(r.place) === placeText(v.place)));
   if (a.type === 'OCCUPATION') return (tree.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(v.description));
   if (a.type === 'OTHER_EVENT') return Boolean(year) && (tree.emigration || []).some((e) => fsYear(e.date) === year);
   return false;

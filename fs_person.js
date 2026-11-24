@@ -15,12 +15,25 @@
 
   // --- Person details ---------------------------------------------------------
 
-  // { date, place } of a conclusion (vital) or a marriage list item
+  // { date, place } of a conclusion (vital) or a marriage list item, with `from` when its
+  // reason is one the linker wrote (fromRecord())
   function conclusionValue(el) {
-    return {
+    const value = {
       date: text(el.querySelector('[data-testid="conclusion-date"]')),
       place: text(el.querySelector('[data-testid="conclusion-place"]'))
     };
+    const from = fromRecord(el);
+    if (from) value.from = from;
+    return value;
+  }
+
+  // The DA record a fact came from, by the reason the linker writes with it ('From
+  // "<title>", Digitalarkivet, Permanent ID <id>.', linker.js additionReason()): {id,
+  // reason}, or null. FS shows the whole reason in the fact's display (its "More" only
+  // unfolds it), so a run on the record again can find and update its facts.
+  function fromRecord(el) {
+    const m = text(el).match(/From ".*", Digitalarkivet, Permanent ID:? ?([a-z]{2}\d{14,})\.?/i);
+    return m ? { id: m[1].toLowerCase(), reason: m[0] } : null;
   }
 
   // Name shown in a NAME / ALTERNATE_NAME conclusion. The alternate name's body is
@@ -77,10 +90,13 @@
     const residences = [];
     for (const el of all('RESIDENCE')) {
       const r = conclusionValue(el);
+      // its description (the residence as a source writes it), kept when FS's is changed
+      const description = text(el.querySelector('[data-testid="conclusion-description"]'));
+      if (description) r.description = description;
       const key = (r.date + '|' + r.place).toLowerCase().replace(/norge$/, 'norway');
-      if (!residences.some(x => (x.date + '|' + x.place).toLowerCase().replace(/norge$/, 'norway') === key)) {
-        residences.push(r);
-      }
+      const same = residences.find(x => (x.date + '|' + x.place).toLowerCase().replace(/norge$/, 'norway') === key);
+      if (!same) residences.push(r);
+      else if (!same.from && r.from) same.from = r.from;  // the one a record gave
     }
 
     // Emigration and immigration: FS's own facts, and custom events of that title
@@ -117,6 +133,8 @@
       url: location.origin + '/en/tree/person/details/' + pid,
       name: nameEl ? conclusionName(nameEl) : '',
       altNames: all('ALTERNATE_NAME').map(conclusionName).filter(Boolean),
+      // the alternate names a record gave (their reasons), for the linker to update
+      altNamesFrom: all('ALTERNATE_NAME').map((el) => ({ name: conclusionName(el), from: fromRecord(el) })).filter((n) => n.name && n.from),
       gender: genderEl ? sexOf(text(genderEl.querySelector('[data-testid="conclusion-body"]'))) : '',
       birth: first('BIRTH'),
       christening: first('CHRISTENING'),

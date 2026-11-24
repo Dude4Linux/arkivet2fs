@@ -42,6 +42,24 @@ fixes, new features, changes that break what users have).
   Halden, Østfold, Norway" for 1858) gets the town's name of the year ("Aasen,
   Fredrikshald, Smaalenene, Norway"). The linker's facts table marks such a place ≈,
   not ✓.
+- **A residence saved without its place, changed on a run again:** a residence an
+  earlier run added from the record and saved with no place (the description "Fhald"
+  only), or with the record's abbreviation as an unstandardized place, or with the town
+  under another of its names ("Halden, Østfold, Norway" for 1874), was left so when you
+  opened the record in the linker again: FamilySearch had a residence of that year, so
+  nothing was offered. The linker now offers to change it to the town of the record's
+  year ("Change the residence"), keeping its description, and the change goes to the
+  residence of that year, not the person's first one. A residence with another place
+  is left as you have it.
+- **Every fact from the record updated on a run again:** when you open a record in the
+  linker again, its source changed (a new title, a corrected place), each fact an
+  earlier run added or changed from it on FamilySearch is now updated too: the birth,
+  christening, death, burial, residence, occupation, emigration and alternate name.
+  They used to be skipped because FamilySearch had them, and kept the old values and a
+  reason naming the old title. The linker finds them by the record's permanent ID in
+  their reason, offers "Update the … from this record", ticked at first, and writes the
+  record's values where they differ, otherwise only the new reason. Facts from other
+  records, or of your own, are left as they are.
 - **A baptized child's given names kept together:** a child baptized as "Marte
   Kristine" was offered as given name Marte and surname Kristine, in the alternate
   name and the new person's form. The given names now stay together, with no surname,

@@ -1733,6 +1733,36 @@ test('factAdditions(): an alternate name with the patronymic of the record\'s fa
   assert.deepEqual(names(groom, { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø' }), []);
 });
 
+test('factAdditions(): FS\'s residence of the record\'s year changed where it is wanting (bug: a residence saved without its place left so on a run again)', () => {
+  const { win, state } = checkedPage();
+  const m = { ...record('marriage-bride'), county: 'Østfold', church: '', recordDate: '1874-05-10', sourceTitle: 'Church book from Halden parish 1869-1884 (0101P)' };
+  const groom = { ...w.recordPeople(m)[0], birthYear: '', residence: 'Fhald' };
+  state.record = m;
+  const residences = (list) => {
+    state.fs = { pid: 'TEST-KOL', name: 'Kolmund Finsteinsen Dalbø', gender: 'Male', occupations: [], altNames: [], birth: { date: '15 October 1850', place: 'Fredrikshald, Smaalenene, Norway' }, residences: list };
+    return plain(win.factAdditions(groom, m, { pid: 'TEST-KOL' })).filter((a) => a.fact === 'Residence').map(({ action, match, current, value }) => ({ action, match, current, value }));
+  };
+  const town = 'Fredrikshald, Smaalenene, Norway';
+  // no place (an earlier run's, saved without it): the town, FS's description kept
+  assert.deepEqual(residences([{ date: '1874', place: '', description: 'Fhald' }, { date: '1891', place: town }]),
+    [{ action: 'edit', match: ['1874'], current: '1874', value: { date: '1874', place: town, description: 'Fhald' } }]);
+  // the record's abbreviation as FS's place, not standardized; the town by its present name
+  assert.deepEqual(residences([{ date: '1874', place: 'Fhald' }]).map((a) => a.value.place), [town]);
+  assert.deepEqual(residences([{ date: '1874', place: 'Halden, Østfold, Norway' }]).map((a) => a.value.place), [town]);
+  assert.deepEqual(residences([{ date: '1874', place: 'Halden,Ostfold,Norway' }]).map((a) => a.value.place), [town]);
+  // FS's place as the year's, or another place FS has: left as it is
+  assert.deepEqual(residences([{ date: '1874', place: town }]), []);
+  assert.deepEqual(residences([{ date: '1874', place: 'Idd, Østfold, Norway' }]), []);
+  // two of the year: which one isn't for the linker to say
+  assert.deepEqual(residences([{ date: '1874', place: '' }, { date: '1874', place: 'Fhald' }]), []);
+  // none of the year: added
+  assert.deepEqual(residences([{ date: '1891', place: town }]).map((a) => a.action), ['add']);
+  // the edit done once FS has the place
+  const edit = { action: 'edit', type: 'RESIDENCE', value: { date: '1874', place: town } };
+  assert.equal(w.onTreeAlready({ residences: [{ date: '1874', place: '' }] }, edit), false);
+  assert.equal(w.onTreeAlready({ residences: [{ date: '1874', place: town }] }, edit), true);
+});
+
 test('factAdditions(): a birthplace the record gives without a year, where FS\'s birth has a date and no place (bug: not offered)', () => {
   const { win, state } = checkedPage();
   const m = record('marriage-bride');
@@ -2061,6 +2091,77 @@ test('factAdditions(): a burial\'s death date into FS\'s year, the burial, resid
   // FS has the residence of that year and the occupation: not offered again
   state.fs = { ...state.fs, residences: [{ date: '1854', place: 'Vinger' }], occupations: [{ description: 'lægdslem' }] };
   assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).map((a) => a.fact)), ['Death', 'Burial']);
+});
+
+test('factAdditions(): on a run again, every fact this record gave is updated, its reason too (bug: facts FS had were skipped, their reasons left naming the old title)', () => {
+  const { win, state } = checkedPage();
+  const b = record('burial-1854');
+  const lars = w.recordPeople(b)[0];
+  state.record = b;
+  const id = b.permanentId;
+  const from = (title) => ({ id, reason: win.additionReason(b, title) });
+  const old = from('Old title');
+  // FS as the first run left it: each fact with the reason naming the old title
+  const fs = (more = {}) => ({ pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' },
+    death: { date: '12 April 1854', place: 'Aasen, Vinger, Hedmark, Norway', from: old },
+    burial: { date: '18 April 1854', place: 'Vinger, Hedmark, Norway', from: old },
+    residences: [{ date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen', from: old }],
+    occupations: [{ date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem', from: old }],
+    altNames: ['Lars Larsen Holt'], altNamesFrom: [{ name: 'Lars Larsen Holt', from: old }], ...more });
+  const opts = { ids: [id], reason: win.additionReason(b, 'New title') };
+  const run = (tree, o = opts) => { state.fs = tree; return plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }, 'Lars Larsen Holt', o)); };
+  // the same values, another title: every one updated, the reason only, found by the record's ID
+  assert.deepEqual(run(fs()).map((a) => [a.fact, a.action, a.refresh, a.reasonOnly, a.match]), [
+    ['Name', 'edit', true, true, ['Lars Larsen Holt', id]],
+    ['Death', 'edit', true, true, ['1854', id]],
+    ['Burial', 'edit', true, true, ['1854', id]],
+    ['Residence', 'edit', true, true, ['1854', id]],
+    ['Occupation', 'edit', true, true, ['1854', id]]
+  ]);
+  assert.equal(w.additionLabel(run(fs())[1]), 'Update the death from this record');
+  // the reason as it is now: nothing; nor for facts another record gave, or FS's own
+  assert.deepEqual(run(fs(), { ...opts, reason: old.reason }), []);
+  assert.deepEqual(run(fs(), { ...opts, ids: ['pg99000000000099'] }), []);
+  // FS's display adds "More" after the reason: the same reason
+  const more = { id, reason: old.reason.replace(/\.$/, '') + 'More' };
+  assert.deepEqual(run(fs({ death: { ...fs().death, from: more } }), { ...opts, reason: old.reason }), []);
+  // a value changed since: the record's (a residence of the year besides another one,
+  // and an occupation in other words: this record's changed, not a second added)
+  const changed = run(fs({
+    residences: [{ date: '1854', place: 'Kongsvinger, Hedmark, Norway' }, { date: '1854', place: 'Halden, Østfold, Norway', description: 'Aasen', from: old }],
+    occupations: [{ date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Inderst', from: old }, { description: 'Husmand' }] }));
+  assert.deepEqual(changed.filter((a) => !a.reasonOnly).map((a) => [a.fact, a.action, a.value]), [
+    ['Residence', 'edit', { date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen' }],
+    ['Occupation', 'edit', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem' }]
+  ]);
+  // done once FS's fact has the reason written (and, but for the reason alone, the values)
+  const death = run(fs())[1];
+  const reason = opts.reason;
+  assert.equal(win.onTreeAlready(fs(), { ...death, reason }), false);
+  assert.equal(win.onTreeAlready(fs({ death: { ...fs().death, from: { id, reason } } }), { ...death, reason }), true);
+  const home = changed.find((a) => a.fact === 'Residence');
+  assert.equal(win.onTreeAlready(fs({ residences: [{ date: '1854', place: 'Halden, Østfold, Norway', from: { id, reason } }] }), { ...home, reason }), false);
+  assert.equal(win.onTreeAlready(fs({ residences: [{ date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', from: { id, reason } }] }), { ...home, reason }), true);
+});
+
+test('factAdditions(): a residence this record gave, in a renamed town under its present name, is updated to the town of the year (bug: "Aasen, Halden, Østfold, Norway" for 1858 kept)', () => {
+  const { win, state } = checkedPage();
+  const base = record('burial-1854');
+  const b = { ...base, county: 'Østfold', church: '', sourceTitle: 'Church book from Halden parish 1850-1860 (0101P)' };
+  const lars = w.recordPeople(b)[0];
+  state.record = b;
+  const id = b.permanentId;
+  const old = { id, reason: win.additionReason(b, 'Old title') };
+  const reason = win.additionReason(b, 'New title');
+  state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', birth: { date: 'about 1797' }, occupations: [],
+    residences: [{ date: '1854', place: 'Aasen, Halden, Østfold, Norway', description: 'Aasen', from: old }] };
+  const home = plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }, 'Lars Larsen', { ids: [id], reason })).find((a) => a.fact === 'Residence');
+  assert.deepEqual([home.action, home.refresh, home.reasonOnly, home.value.place], ['edit', true, undefined, 'Aasen, Fredrikshald, Smaalenene, Norway']);
+  // the facts table marks FS's residence near, not the same
+  const facts = win.treeFacts({ pid: 'TEST-LLA' }, b);
+  assert.equal(win.compareFact('Residence', win.recordFacts(lars, b).Residence, facts.Residence, lars, { pid: 'TEST-LLA' }, b), 'near');
+  // not done until FS has the town of the year
+  assert.equal(win.onTreeAlready({ ...state.fs, residences: [{ ...state.fs.residences[0], from: { id, reason } }] }, { ...home, reason }), false);
 });
 
 test('recordFacts(): a date of death without a year field takes the burial\'s year, or the year before', () => {

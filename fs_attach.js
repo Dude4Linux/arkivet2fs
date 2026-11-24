@@ -998,7 +998,8 @@ if (!window.__arkivet2fsAttach) {
     if (action === 'name') {
       opener = await waitFor(() => byTestId('add-alternate-name'), 'Add Alternate Name');
     } else if (action === 'edit') {
-      const display = await waitFor(() => displays(type)[0], 'the ' + factName(type) + ' to change');
+      // a vital: FS's one; else the one `match` names (a residence by its year)
+      const display = await waitFor(() => (addition.match ? whichFact(displays(type), type, addition.match) : displays(type)[0]), 'the ' + factName(type) + ' to change');
       opener = byTestId('pencil-edit-button', display);
     } else if (VITALS.includes(type)) {
       opener = document.querySelector('[data-testid="highlight-' + type + '"] [data-testid="conclusion:add:button"]');
@@ -1028,7 +1029,9 @@ if (!window.__arkivet2fsAttach) {
   async function fillFactForm(form, addition, reason) {
     const v = addition.value || {};
     const fields = [];
-    if (addition.action === 'name') {
+    // an update of a fact a record gave whose values are the same: its reason only
+    const fill = !addition.reasonOnly;
+    if (fill && addition.type === 'ALTERNATE_NAME') {
       const set = (name, value) => {
         const select = form.querySelector('select[name="' + name + '"]');
         if (!select || ![...select.options].some((o) => o.value === value) || select.value === value) return;
@@ -1042,7 +1045,7 @@ if (!window.__arkivet2fsAttach) {
       setValue(await waitFor(() => byTestId('first-name', now), 'the name fields'), v.given);
       setValue(byTestId('last-name', now), v.surname);
       fields.push({ name: 'given', value: v.given || '' }, { name: 'surname', value: v.surname || '' });
-    } else {
+    } else if (fill) {
       // FS wraps each field in a div of the same name: the input itself
       const input = (name) => form.querySelector('input[name="' + name + '"], textarea[name="' + name + '"]');
       if (addition.title && input('title')) { setValue(input('title'), addition.title); fields.push({ name: 'title', value: addition.title }); }
@@ -1176,7 +1179,7 @@ if (!window.__arkivet2fsAttach) {
     } catch (e) {
       if (e.noPlace) throw e;
       // Saved, but FS shows another year: FS's list gave it another date
-      const now = addition.action === 'edit' && displays(type)[0];
+      const now = addition.action === 'edit' && !addition.match && displays(type)[0];
       if (now && !holds(now)) {
         throw new Error('FamilySearch saved the ' + factName(type) + ' as "' + clean(now.textContent) + '", not ' + date + '. Change it by hand.');
       }
@@ -1191,18 +1194,7 @@ if (!window.__arkivet2fsAttach) {
     onPersonPage(pid);
     await noFactDialog();
     const all = await waitFor(() => { const d = displays(type); return d.length ? d : null; }, 'the ' + factName(type));
-    const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
-    // An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann Olsen too
-    const nameOf = (e) => clean((byTestId('conclusion-name-template', e) || {}).textContent).toLowerCase();
-    // Else the one with every word, else the one of the year; a guess only when FS has
-    // one of the type: a person can have several residences (sorted by date), and a
-    // source tagged to another year's would be wrong without a word said
-    const has = (e, w) => clean(e.textContent).toLowerCase().includes(w);
-    const year = words.find((w) => /^\d{4}$/.test(w));
-    const only = (list) => (list.length === 1 ? list[0] : null);
-    const fact = (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === words.join(' '))) ||
-      all.find((e) => words.length && words.every((w) => has(e, w))) ||
-      (year && only(all.filter((e) => has(e, year)))) || only(all);
+    const fact = whichFact(all, type, match);
     if (!fact) throw new Error('FamilySearch has more than one ' + factName(type) + ' and none is clearly this one; tag the source to it by hand.');
     const pencil = byTestId('pencil-edit-button', fact);
     if (!pencil) throw new Error('FamilySearch shows no way to open the ' + factName(type) + '.');
@@ -1216,6 +1208,25 @@ if (!window.__arkivet2fsAttach) {
       await closeFactDialog();
       throw error;
     }
+  }
+
+  // Of a type's displays, the one `match` names (its words: a description, a year), else
+  // null. An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann
+  // Olsen too. Else the one with every word, else the one of the year; a guess only when
+  // FS has one of the type: a person can have several residences (sorted by date), and
+  // a source tagged to (or a place put in) another year's would be wrong without a word
+  function whichFact(all, type, match) {
+    const words = (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
+    const nameOf = (e) => clean((byTestId('conclusion-name-template', e) || {}).textContent).toLowerCase();
+    // a year in the fact's date, not in its reason ("From ..., Marriage, 21 November 1874")
+    const has = (e, w) => clean(((/^\d{4}$/.test(w) && byTestId('conclusion-date', e)) || e).textContent).toLowerCase().includes(w);
+    const year = words.find((w) => /^\d{4}$/.test(w));
+    const only = (list) => (list.length === 1 ? list[0] : null);
+    // the name without a record's permanent ID (one in the reason tells an update's fact)
+    const name = words.filter((w) => !/^[a-z]{2}\d{14,}$/.test(w)).join(' ');
+    return (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === name)) ||
+      all.find((e) => words.length && words.every((w) => has(e, w))) ||
+      (year && only(all.filter((e) => has(e, year)))) || only(all);
   }
 
   // The rest of tagFact, in the fact's view just opened
