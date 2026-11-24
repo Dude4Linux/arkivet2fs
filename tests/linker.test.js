@@ -1915,7 +1915,7 @@ test('a town\'s parish by its name of the record\'s year, also where FS has the 
   assert.equal(w.townOfYear('Vågå, Oppland, Norway', 1850), 'Vågå, Oppland, Norway');
 });
 
-test('baptismAfterBirth(), factAdditions(): a baptism dated before the birth is a slip of the year, never offered (bug: 12 March 1892 for a child born 29 July 1892)', () => {
+test('dateSlip(), factAdditions(), slipBox(): a baptism dated before the birth, either year the slip: the user chooses, neither offered until then (bugs: baptism 1892 for a birth 1893; birth 1851 for a baptism 1851)', () => {
   assert.deepEqual(plain(w.baptismAfterBirth({ year: 1846, month: 3, day: 12 }, { year: 1846, month: 7, day: 16 })), { year: 1847, month: 3, day: 12 });
   assert.equal(w.baptismAfterBirth({ year: 1846, month: 8, day: 23 }, { year: 1846, month: 7, day: 16 }), null);
   assert.equal(w.baptismAfterBirth({ year: 1846, month: 8, day: 23 }, { year: 1846 }), null);
@@ -1923,29 +1923,70 @@ test('baptismAfterBirth(), factAdditions(): a baptism dated before the birth is 
   assert.deepEqual(plain(w.baptismAfterBirth({ year: 1846, month: 8, day: 1 }, { year: 1846, month: 9, day: 16 })), { year: 1847, month: 8, day: 1 });
   // the same year when the slip is a year back: born 16 July 1846, baptized "23 August 1845"
   assert.deepEqual(plain(w.baptismAfterBirth({ year: 1845, month: 8, day: 23 }, { year: 1846, month: 7, day: 16 })), { year: 1846, month: 8, day: 23 });
+  // the other reading: the birth's day in the year before the baptism (or in its year)
+  assert.deepEqual(plain(w.birthBeforeBaptism({ year: 1846, month: 10, day: 16 }, { year: 1846, month: 5, day: 18 })), { year: 1845, month: 10, day: 16 });
+  assert.deepEqual(plain(w.birthBeforeBaptism({ year: 1847, month: 3, day: 2 }, { year: 1846, month: 5, day: 18 })), { year: 1846, month: 3, day: 2 });
 
-  const { win, state } = checkedPage();
+  const { win, state, $ } = checkedPage();
   const lars = state.people.find((p) => p.name === 'Lars');
-  // the record: born 16 July 1846 (its birth year), baptized "12 March 1846"
-  const b = { ...state.record, recordDate: '1846-03-12', fields: { ...state.record.fields, 'date of birth': '07-16', 'birth year': '1846' } };
+  const row = state.rows.find((r) => r.name === 'Lars');
+  // the record: born 16 October 1846 (its birth year), baptized "18 May 1846"
+  const b = { ...state.record, recordDate: '1846-05-18', fields: { ...state.record.fields, 'date of birth': '10-16', 'birth year': '1846' } };
   state.record = b;
   const facts = win.recordFacts(lars, b);
-  assert.match(facts.Christening.text, /^12 March 1846, .*\(before the birth, 16 July 1846: read as 12 March 1847\)$/);
-  const christening = (fs, tree = {}) => {
-    state.fs = { ...LARS_1846, ...tree, christening: fs };
-    return plain(win.factAdditions(lars, b, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Christening').map((a) => [a.action, a.value.date]);
-  };
-  // FS's 12 March 1847 agrees with the year it must be: no change, and ✓ in the table
-  assert.deepEqual(christening({ date: '12 March 1847', place: 'Vågå, Oppland, Norway' }), []);
-  assert.equal(win.compareFact('Christening', facts.Christening, { year: 1847, date: { year: 1847, month: 3, day: 12 } }), 'same');
-  // FS's own christening date stands, whatever its year: the slip's never offered
-  assert.deepEqual(christening({ date: '14 March 1847', place: 'Vågå, Oppland, Norway' }), []);
-  // FS without a christening: the day in the year after the birth, not the slip
-  assert.deepEqual(christening(undefined), [['add', '12 March 1847']]);
-  // the record without a birth date of its own: FS's full birth date tells the same
-  state.record = { ...b, fields: { ...state.record.fields, 'date of birth': '', 'birth year': '' } };
-  state.fs = { ...LARS_1846, christening: undefined };
-  assert.deepEqual(plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Christening').map((a) => a.value.date), ['12 March 1847']);
+  assert.match(facts.Christening.text, /^18 May 1846, .*\(before the birth, 16 October 1846\)$/);
+  const slip = plain(win.dateSlip(lars, b, null));
+  assert.deepEqual(slip.baptism, { year: 1847, month: 5, day: 18 });
+  assert.deepEqual(slip.birth, { year: 1845, month: 10, day: 16 });
+  assert.equal(slip.fromFs, false);
+  const vitals = () => plain(win.factAdditions(lars, b, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Birth' || a.fact === 'Christening').map((a) => [a.fact, a.action, a.value.date]);
+  // FS: born 15 October 1845, christened 18 May 1846 (the birth's year is the slip)
+  state.fs = { ...LARS_1846, birth: { date: '15 October 1845', place: 'Vågå, Oppland, Norway' }, christening: { date: '18 May 1846', place: 'Vågå, Oppland, Norway' } };
+  // not sure (the default): neither date offered
+  assert.deepEqual(vitals(), []);
+  // either reading may fit: the birth near FS's (a day off), the christening the same
+  const tree = { pid: 'TEST-LAR' };
+  const readings = win.factReadings(facts, lars, b, tree);
+  assert.equal(readings.length, 3);
+  const fsFacts = win.treeFacts(tree, b);
+  assert.equal(win.bestMark('Christening', readings, fsFacts, lars, tree, b), 'same');
+  assert.equal(win.bestMark('Birth', readings, fsFacts, lars, tree, b), 'near');
+  // the box: three choices, the birth's reading marked as FS's
+  row.showFacts();
+  const box = row.node.querySelector('.slip');
+  assert.ok(box, 'the slip box');
+  assert.match(box.textContent, /The baptism, 18 May 1846, is dated before the birth, 16 October 1846/);
+  const radios = [...box.querySelectorAll('input[type=radio]')];
+  assert.deepEqual(radios.map((r) => [r.value, r.checked]), [['baptism', false], ['birth', false], ['', true]]);
+  assert.match(radios[1].parentNode.textContent, /born 16 October 1845, baptized 18 May 1846 \(as FamilySearch has it\)/);
+  assert.doesNotMatch(radios[0].parentNode.textContent, /as FamilySearch has it/);
+  // the birth's year chosen: the birth by that reading (the record's day), the christening as written
+  radios[1].checked = true;
+  radios[1].dispatchEvent(new win.Event('change'));
+  assert.equal(win.slipChoice(lars), 'birth');
+  assert.deepEqual(vitals(), [['Birth', 'edit', '16 October 1845']]);
+  assert.match(row.node.querySelector('table.facts').textContent, /16 October 1846 \(read as 16 October 1845\)/);
+  assert.equal(win.bestMark('Christening', win.factReadings(facts, lars, b, tree), fsFacts, lars, tree, b), 'same');
+  // the baptism's year chosen: the christening a year later, the birth as written
+  state.slipChoices[lars.key] = 'baptism';
+  assert.deepEqual(vitals(), [['Birth', 'edit', '16 October 1846'], ['Christening', 'edit', '18 May 1847']]);
+  assert.match(win.linkerReport(), /Baptism before the birth; the year that is wrong: the baptism's/);
+  state.slipChoices = {};
+
+  // the record without a birth date of its own: FS's full birth date clashes with it
+  state.record = { ...b, fields: { ...b.fields, 'date of birth': '', 'birth year': '' } };
+  state.fs = { ...LARS_1846, birth: { date: '16 October 1846', place: 'Vågå, Oppland, Norway' }, christening: undefined };
+  const fsSlip = plain(win.dateSlip(lars, state.record, win.fullTree('TEST-LAR')));
+  assert.equal(fsSlip.fromFs, true);
+  const fsVitals = () => plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Birth' || a.fact === 'Christening').map((a) => [a.fact, a.action, a.value.date]);
+  assert.deepEqual(fsVitals(), []);
+  state.slipChoices = { [lars.key]: 'baptism' };
+  assert.deepEqual(fsVitals(), [['Christening', 'add', '18 May 1847']]);
+  // FS's birth the slip: its year changed, its place kept; the christening as written
+  state.slipChoices = { [lars.key]: 'birth' };
+  const fixedBirth = plain(win.factAdditions(lars, state.record, { pid: 'TEST-LAR' })).filter((a) => a.fact === 'Birth' || a.fact === 'Christening');
+  assert.deepEqual(fixedBirth.map((a) => [a.fact, a.action, a.value.date]), [['Birth', 'edit', '16 October 1845'], ['Christening', 'add', '18 May 1846']]);
+  assert.equal(fixedBirth[0].value.place, 'Vågå, Oppland, Norway');
 });
 
 test('townOfYear(): FS\'s place not standardized, the town and county without Norway (bug: "Halden, Østfold" kept for 1893)', () => {

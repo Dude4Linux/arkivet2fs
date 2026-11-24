@@ -62,7 +62,7 @@ test('a baptism dated before the birth it gives: a remark in the notes (bug: bap
     year.nextElementSibling.textContent = '1846';
     return w.extractRecord(doc, fixtureUrl(file)).notes;
   };
-  assert.match(withBirth('09-16'), /^Remark: the baptism, 23 August 1846, is dated before the birth, 16 September 1846: the year is evidently wrong in the source or its transcription\.$/m);
+  assert.match(withBirth('09-16'), /^Remark: the baptism, 23 August 1846, is dated before the birth, 16 September 1846: one of the two years is wrong in the source or its transcription\.$/m);
   // born before the baptism, also the same day: nothing to remark
   assert.doesNotMatch(withBirth('07-16'), /^Remark: the baptism/m);
   assert.doesNotMatch(withBirth('08-23'), /^Remark: the baptism/m);

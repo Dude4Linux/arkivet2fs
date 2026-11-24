@@ -885,15 +885,15 @@ function extractRecord(document, pageUrl) {
       fields.forEach(function(field, i) {
         if (!merged.has(i)) lines.push(field.label + ': ' + values[i]);
       });
-      // A baptism dated before the birth it gives: a slip of the year, the clerk's or
-      // the transcriber's, said here since the title and citation keep DA's date
+      // A baptism dated before the birth it gives: a slip of one of the two years, the
+      // clerk's or a transcriber's, said here since the title and citation keep DA's date
       const birthIdx = fields.findIndex(function(field) { return /^date of birth$/i.test(field.label); });
       if ((permanentId || '').slice(0, 2) === 'pd' && recDate && merged.has(yearFor.birth) && birthIdx >= 0) {
         const md = fields[birthIdx].value.split('-').map(Number);
         const born = Number(fields[yearFor.birth].value) * 10000 + md[0] * 100 + md[1];
         if (born > Number(recDate[1] + recDate[2] + recDate[3])) {
           lines.push('Remark: the baptism, ' + formatDate(recordDate) + ', is dated before the birth, ' + values[birthIdx]
-            + ': the year is evidently wrong in the source or its transcription.');
+            + ': one of the two years is wrong in the source or its transcription.');
         }
       }
     }

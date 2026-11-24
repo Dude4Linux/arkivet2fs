@@ -841,9 +841,10 @@ function dateText(d) {
   return d.month ? formatDate(d.year, d.month, d.day) : String(d.year);
 }
 // A baptism dated before the birth it records (DA's "Date of birth: 07-29", "Birth
-// year: 1892", baptized "1892-03-12"): a slip of the year, the clerk's or the
-// transcriber's. The baptism's day in the first year that puts it after the birth
-// ({year, month, day}); null when it comes after it, or either lacks a day.
+// year: 1892", baptized "1892-03-12"): a slip of one of the two years, the clerk's (a
+// church book copied from the other) or a transcriber's. The baptism's day in the first
+// year that puts it after the birth ({year, month, day}); null when it comes after it,
+// or either lacks a day.
 function baptismAfterBirth(baptized, born) {
   const full = (d) => Boolean(d && d.year && d.month && d.day);
   if (!full(baptized) || !full(born)) return null;
@@ -851,6 +852,49 @@ function baptismAfterBirth(baptized, born) {
   if (key(baptized) >= key(born)) return null;
   const year = born.year + (baptized.month * 100 + baptized.day < born.month * 100 + born.day ? 1 : 0);
   return { year, month: baptized.month, day: baptized.day };
+}
+// The other reading: the birth's day in the last year that puts it before the baptism
+function birthBeforeBaptism(born, baptized) {
+  return { year: baptized.year - (born.month * 100 + born.day > baptized.month * 100 + baptized.day ? 1 : 0), month: born.month, day: born.day };
+}
+// A baptized child's baptism dated before the birth (the record's own date of birth,
+// else FS's full date): which year is the slip only the scan or other evidence tells,
+// so both readings are kept for the user to choose from (slipChoice()): the baptism a
+// year later (`baptism`, the birth as written) or the birth earlier (`birth`, the
+// baptism as written); `born`, `baptized` as written, `fromFs` when the birth is FS's.
+// Null: no clash.
+function dateSlip(person, record, full) {
+  const da = recordFacts(person, record);
+  const c = da.Christening;
+  if (!c) return null;
+  const own = da.Birth && da.Birth.date && da.Birth.date.day ? da.Birth.date : null;
+  const fsBorn = !own && full && full.birth && parseFsDate(full.birth.date || '');
+  const born = own || (fsBorn && fsBorn.exact ? fsBorn : null);
+  const baptism = baptismAfterBirth(c.date, born);
+  return baptism && { baptized: c.date, born, fromFs: !own, baptism, birth: birthBeforeBaptism(born, c.date) };
+}
+// The user's reading of a row's slip: 'baptism' (its year is wrong), 'birth', or '' (not sure)
+function slipChoice(person) {
+  return (state.slipChoices || {})[person.key] || '';
+}
+// The record's facts by a reading of the slip, the date chosen in its text
+function slipReading(da, slip, which) {
+  const fact = which === 'baptism' ? 'Christening' : 'Birth';
+  if (!da[fact]) return da;
+  const date = slip[which];
+  return { ...da, [fact]: { ...da[fact], date, year: date.year, approx: false, text: da[fact].text + ' (' + t('read as {date}', { date: dateText(date) }) + ')' } };
+}
+// The record's facts to compare with FS's: as written, or with a slip by the reading
+// chosen, or each of the three while none is (bestMark())
+function factReadings(da, person, record, tree) {
+  const slip = dateSlip(person, record, tree && fullTree(tree.pid));
+  if (!slip) return [da];
+  const choice = slipChoice(person);
+  return choice ? [slipReading(da, slip, choice)] : [da, slipReading(da, slip, 'baptism'), slipReading(da, slip, 'birth')];
+}
+function bestMark(fact, readings, fs, ...rest) {
+  const rank = { same: 3, near: 2, differs: 1 };
+  return readings.map((da) => compareFact(fact, da[fact], fs[fact], ...rest)).reduce((a, b) => ((rank[b] || 0) > (rank[a] || 0) ? b : a));
 }
 
 // The record's place, from the source title: "Church book from Vågå parish, ..." → Vågå
@@ -950,12 +994,8 @@ function recordFacts(person, record) {
   const event = (label, extra) => { facts[label] = { text: joined(dateText(recorded), place, extra), date: recorded, year: recorded && recorded.year }; };
   if (type === 'birth_baptism' && kind === 'child') {
     event('Christening');
-    // dated before the birth the record gives: the year read as the one after it
-    const fixed = baptismAfterBirth(recorded, born);
-    if (fixed) {
-      facts.Christening.fixed = fixed;
-      facts.Christening.text += ' (' + t('before the birth, {born}: read as {date}', { born: dateText(born), date: dateText(fixed) }) + ')';
-    }
+    // dated before the birth the record gives: one of the years is a slip (dateSlip())
+    if (baptismAfterBirth(recorded, born)) facts.Christening.text += ' (' + t('before the birth, {born}', { born: dateText(born) }) + ')';
   } else if (type === 'confirmation' && kind === 'child') event('Confirmation');
   else if (type === 'marriage' && (kind === 'groom' || kind === 'bride')) event('Marriage');
   else if (type === 'death_burial' && kind === 'deceased') {
@@ -1076,8 +1116,6 @@ function compareFact(fact, da, fs, person, tree, record, name) {
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
   if (!da.year || !fs.year) return '';
-  // a baptism dated before the birth: by the year it must have been (baptismAfterBirth())
-  if (da.fixed) da = { ...da, date: da.fixed, year: da.fixed.year };
   const a = da.date || {}, b = fs.date || {};
   // An age against FS's full birth date: the age on the day it was counted, one off ≈
   if (fact === 'Birth' && da.age != null && da.on && b.exact) {
@@ -1100,12 +1138,15 @@ function factsTable(person, record, tree, reading, name) {
   const da = recordFacts(person, record);
   if (name) da.Name = { text: name };
   const fs = treeFacts(tree, record);
+  // a baptism dated before the birth: by the reading chosen, else by either (dateSlip())
+  const readings = tree ? factReadings(da, person, record, tree) : [da];
+  const shown = readings[0];
   const head = el('tr', {}, [el('th', {}), el('th', { text: 'DigitalArkivet' }), el('th', { text: 'FamilySearch' })]);
   const rows = FACTS.filter((f) => da[f] || fs[f]).map((f) => {
-    const how = compareFact(f, da[f], fs[f], person, tree, record, name);
+    const how = bestMark(f, readings, fs, person, tree, record, name);
     const fsCell = el('td', {}, how ? [el('span', { class: 'mark ' + how, text: MARKS[how] + ' ' }), document.createTextNode(fs[f].text)]
       : [document.createTextNode(fs[f] ? fs[f].text : '')]);
-    return el('tr', { class: how }, [el('th', { text: t(f) }), el('td', { text: da[f] ? da[f].text : '' }), fsCell]);
+    return el('tr', { class: how }, [el('th', { text: t(f) }), el('td', { text: shown[f] ? shown[f].text : '' }), fsCell]);
   });
   const note = !tree ? '' : reading ? t('Reading the details from FamilySearch…')
     : !fullTree(tree.pid) ? t('Only the years are known here; the details could not be read from FamilySearch.') : '';
@@ -1358,19 +1399,20 @@ function factAdditions(person, record, tree, name) {
     Death: [died || place, !died, false, place, died ? diedAt : ''],
     Burial: [church.name, false, false, '', church.place]
   };
+  // A baptism dated before the birth: neither date offered until the user says which
+  // year is the slip (dateSlip()); then that one by the reading chosen
+  const slip = dateSlip(person, record, full);
+  const choice = slip ? slipChoice(person) : '';
+  const read = choice ? { [choice === 'baptism' ? 'Christening' : 'Birth']: slip[choice] } : {};
   for (const [fact, type] of Object.entries(VITAL_TYPES)) {
-    const f = da[fact];
+    if (slip && !choice && (fact === 'Christening' || (fact === 'Birth' && !slip.fromFs))) continue;
+    const f = read[fact] ? { ...(da[fact] || {}), date: read[fact], year: read[fact].year, approx: false } : da[fact];
     if (!f) continue;
     const fs = full[fact.toLowerCase()] || null;
     // no year in the record (a marriage's birthplace): only a place FS's dated fact lacks
     const placeOnly = fs && String(fs.date || '').trim() && !String(fs.place || '').trim() && cleanPlace(vitalPlace[fact][0]);
     if (!f.year && !placeOnly) continue;
-    // a baptism dated before the birth (the record's, else FS's full date): never the
-    // slip's year; FS's own date when it has one, else the day in the year after the birth
-    const fsBorn = fact === 'Christening' && parseFsDate((full.birth && full.birth.date) || '');
-    const fixed = fact === 'Christening' && (f.fixed || baptismAfterBirth(f.date, fsBorn && fsBorn.exact ? fsBorn : null));
-    const fsDate = fixed && fs && parseFsDate(fs.date || '');
-    const date = (fsDate && fsDate.year ? fsDate : fixed) || (!f.year ? null : f.date && f.date.year ? f.date : { year: f.year });
+    const date = !f.year ? null : f.date && f.date.year ? f.date : { year: f.year };
     const value = { date: mergeDate(date, f.approx || !(f.date && f.date.year), fs && fs.date), place: mergePlace(...[vitalPlace[fact][0], fs && fs.place, record].concat(vitalPlace[fact].slice(1))) };
     // a renamed town by its name of the fact's year, also where FS has it by another
     // ("Halden, Østfold, Norway" for a birth in 1875: Fredrikshald, Smaalenene)
@@ -1439,6 +1481,49 @@ function additionText(a) {
   const v = a.value;
   if (a.action === 'name') return [v.given, v.surname].filter(Boolean).join(' ') + ' (' + t((NAME_TYPES.find(([id]) => id === v.nameType) || NAME_TYPES[0])[1]) + ')';
   return [v.description, v.date, v.place].filter(Boolean).join(', ');
+}
+
+// A baptism dated before the birth (dateSlip()): which year is wrong is the user's to
+// say, from the scan or other evidence; a reading FS has is marked. Until one is
+// chosen neither date is offered to FS. A choice redraws the row, and drops what the
+// user had made of the birth and christening for the other reading.
+function slipBox(row, person, pid, slip) {
+  const full = fullTree(pid);
+  const fsDate = (fact) => full && full[fact] && parseFsDate(full[fact].date || '');
+  // the reading FS has: the years of its christening (and birth, when the record's)
+  const onFs = (which) => {
+    const pairs = [[which === 'baptism' ? slip.baptism : slip.baptized, fsDate('christening')]];
+    if (!slip.fromFs) pairs.push([which === 'birth' ? slip.birth : slip.born, fsDate('birth')]);
+    const known = pairs.filter(([, fs]) => fs && fs.year);
+    return known.length > 0 && known.every(([d, fs]) => fs.year === d.year);
+  };
+  const choice = slipChoice(person);
+  const name = 'slip-' + person.key + '-' + pid;
+  const option = (value, text) => {
+    const radio = el('input', { type: 'radio', name, value });
+    radio.checked = choice === value;
+    radio.addEventListener('change', () => {
+      (state.slipChoices || (state.slipChoices = {}))[person.key] = value;
+      const store = state.additionEdits || {};
+      for (const key of Object.keys(store)) if (key.startsWith(person.key + '|') && /\|(Birth|Christening):/.test(key)) delete store[key];
+      row.showFacts();
+    });
+    const mark = value && onFs(value) ? [el('span', { class: 'muted', text: ' ' + t('(as FamilySearch has it)') })] : [];
+    return el('li', {}, [el('label', {}, [radio, document.createTextNode(text), ...mark])]);
+  };
+  const born = dateText(slip.born), baptized = dateText(slip.baptized);
+  const scan = (state.record.scans || [])[0];
+  return el('div', { class: 'slip' }, [
+    el('div', { text: slip.fromFs
+      ? t('The baptism, {baptized}, is dated before the birth FamilySearch has, {born}. Which year is wrong?', { baptized, born })
+      : t('The baptism, {baptized}, is dated before the birth, {born}: one of the two years is wrong in the source or its transcription. Which one?', { baptized, born }) }),
+    ...(scan ? [el('a', { href: scan.url, target: '_blank', rel: 'noopener', text: t('See the scanned image') })] : []),
+    el('ul', {}, [
+      option('baptism', t('The baptism\'s: born {born}, baptized {baptized}', { born, baptized: dateText(slip.baptism) })),
+      option('birth', t('The birth\'s: born {born}, baptized {baptized}', { born: dateText(slip.birth), baptized })),
+      option('', t('Not sure: neither date is offered to FamilySearch'))
+    ])
+  ]);
 }
 
 // The additions of a row paired with a tree person whose page was read: a tickbox
@@ -1660,7 +1745,9 @@ function personRow(person, family, suggestion, why) {
     const list = tree && !reading ? factAdditions(person, state.record, tree, name) : [];
     row.offered = list;
     row.additions = () => [];
-    facts.replaceChildren(factsTable(person, state.record, tree, reading, name), ...(list.length ? [additionsBox(row, person, pid, list)] : []));
+    const slip = tree && dateSlip(person, state.record, fullTree(tree.pid));
+    facts.replaceChildren(factsTable(person, state.record, tree, reading, name), ...(slip ? [slipBox(row, person, pid, slip)] : []),
+      ...(list.length ? [additionsBox(row, person, pid, list)] : []));
     showChanges();
   };
   row.showCheck = () => {
@@ -3705,10 +3792,13 @@ function linkerReport() {
       const name = row.name;
       const da = recordFacts(row.person, state.record), fs = treeFacts(tree, state.record);
       if (name) da.Name = { text: name };
+      const readings = factReadings(da, row.person, state.record, tree);
       for (const f of FACTS.filter((f) => da[f] || fs[f])) {
-        const how = compareFact(f, da[f], fs[f], row.person, tree, state.record, name);
-        lines.push('  - ' + f + ': ' + (da[f] ? da[f].text : '—') + ' | FS: ' + (fs[f] ? fs[f].text : '—') + (how ? ' ' + MARKS[how] : ''));
+        const how = bestMark(f, readings, fs, row.person, tree, state.record, name);
+        lines.push('  - ' + f + ': ' + (readings[0][f] ? readings[0][f].text : '—') + ' | FS: ' + (fs[f] ? fs[f].text : '—') + (how ? ' ' + MARKS[how] : ''));
       }
+      const slip = dateSlip(row.person, state.record, fullTree(tree.pid));
+      if (slip) lines.push('  - Baptism before the birth; the year that is wrong: ' + ({ baptism: 'the baptism\'s', birth: 'the birth\'s' }[slipChoice(row.person)] || 'not chosen'));
       if (!fullTree(tree.pid)) lines.push('  - (the FS person\'s page was not read)');
       say('Tags', row.tags().join(', '));
       const ticked = new Map((row.additions ? row.additions() : []).map((a) => [a.key, a]));

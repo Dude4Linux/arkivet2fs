@@ -44,14 +44,17 @@ fixes, new features, changes that break what users have).
   unless the last word is a patronymic or DigitalArkivet gives a last name; the
   father's patronymic is offered as the surname for two given names too, as it was for
   one.
-- **A baptism dated before the birth:** when a record gives the child's date of birth
-  with its year and is dated before it (born 29 July, baptized 12 March of the same
-  year), the year is a slip, the clerk's or the transcriber's. The linker no longer
-  offers to change the christening on FamilySearch to the wrong year: it keeps
-  FamilySearch's date, or, when FamilySearch has no christening, takes the day in the
-  year after the birth. The people's facts show the slip ("12 March 1892 (before the
-  birth, 29 July 1892: read as 12 March 1893)"), and the source's notes say it in a
-  remark; the title and citation keep the date as DigitalArkivet has it.
+- **A baptism dated before the birth:** when a record dates a child's baptism before
+  the birth it gives (born 16 October, baptized 18 May of the same year), one of the
+  two years is wrong: the church book's copy, or a transcriber's slip. Which one, only
+  the scanned image or other evidence can tell. The linker now says so in the child's
+  row and asks which year is wrong: the baptism's (baptized the year after), the
+  birth's (born the year before), or not sure. It marks the reading FamilySearch has,
+  and links to the scan. Until you choose, it offers to change neither the birth nor
+  the christening on FamilySearch; then it offers the dates of the reading you chose.
+  The same applies when FamilySearch's birth date, not the record's, comes after the
+  baptism. The source's notes say it in a remark; the title and citation keep the date
+  as DigitalArkivet has it.
 - Names are read by one set of rules everywhere (the search, the record pages, the
   linker): a patronymic in any of the church books' abbreviations ("Larsdat.",
   "Pedersd:r", "Olsdaatter"), one written without the genitive s ("Knutdatter"), and one

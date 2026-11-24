@@ -155,6 +155,8 @@ body.with-sidebar .linker-page { margin-right: 396px; }
 /* Adding the record's facts to the tree person: a tickbox per fact, unticked, and the
    suggested entry to edit once ticked */
 .person .additions { margin-top: 8px; font-size: 14px; }
+.person .slip { margin-top: 8px; font-size: 14px; padding-left: 8px; border-left: 3px solid var(--bad); }
+.person .slip ul { list-style: none; margin: 4px 0 0; padding: 0; }
 .person .additions ul { list-style: none; margin: 0; padding: 0; }
 .person .additions li { padding: 3px 0; }
 .person .additions label { display: inline-flex; align-items: center; gap: 6px; }
