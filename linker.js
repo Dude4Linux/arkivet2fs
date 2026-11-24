@@ -1072,7 +1072,7 @@ function treeFacts(tree, record) {
     if (/\d{4}/.test(to || '')) facts.Death = { text: to.trim(), year: Number(to.match(/\d{4}/)[0]) };
     return facts;
   }
-  const event = (e) => (e && (e.date || e.place) ? { text: joined(e.date, e.place), date: parseFsDate(e.date) } : null);
+  const event = (e) => (e && (e.date || e.place) ? { text: joined(e.date, e.place), date: parseFsDate(e.date), place: e.place } : null);
   for (const [fact, key] of [['Birth', 'birth'], ['Christening', 'christening'], ['Death', 'death'], ['Burial', 'burial']]) {
     const f = event(full[key]);
     if (f) facts[fact] = { ...f, year: f.date && f.date.year };
@@ -1116,6 +1116,13 @@ function compareFact(fact, da, fs, person, tree, record, name) {
   }
   if (fact === 'Sex') return da.value && fs.value ? (da.value === fs.value ? 'same' : 'differs') : '';
   if (!da.year || !fs.year) return '';
+  const mark = dateMark(fact, da, fs);
+  // a renamed town under another name than the year's ("Halden, Østfold, Norway" for
+  // 1858) is near at best: the linker offers the town of the year
+  const place = fs.place && placeText(norwegianSpelling(fs.place));
+  return mark === 'same' && place && placeText(fsPlaceOfYear(fs.place, fs.year)) !== place ? 'near' : mark;
+}
+function dateMark(fact, da, fs) {
   const a = da.date || {}, b = fs.date || {};
   // An age against FS's full birth date: the age on the day it was counted, one off ≈
   if (fact === 'Birth' && da.age != null && da.on && b.exact) {
@@ -3327,7 +3334,9 @@ function townPlaceIn(code, year, written) {
 }
 // FS's place of a renamed town under another of its names (its present one, "Halden,
 // Østfold, Norway", for a birth in 1875) as the town was named in `year`: "Fredrikshald,
-// Smaalenene, Norway". Only the town itself, not a place in it; anything else as it is.
+// Smaalenene, Norway"; a place in the town too, the town's part renamed ("Aasen,
+// Halden, Østfold, Norway" for 1858: "Aasen, Fredrikshald, Smaalenene, Norway").
+// Anything else as it is.
 // FS's place as an addition would write it: with its Norwegian letters, a renamed town
 // by its name of the year (onTreeAlready(): what FS hasn't yet)
 function fsPlaceOfYear(place, year) {
@@ -3335,19 +3344,35 @@ function fsPlaceOfYear(place, year) {
 }
 
 function townOfYear(place, year) {
+  if (!year) return place;
+  const code = townCode(place);
+  if (code) return townPlaceIn(code, year);
+  // a place in the town: the town, its county (none for Oslo) and Norway after it
+  const parts = String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
+  if (parts.length >= 3 && parts[parts.length - 1] === 'Norway') {
+    for (const size of [3, 2]) {
+      const tail = parts.slice(-size);
+      if (parts.length > size && townCode(tail.join(', '))) return joined(...parts.slice(0, -size), townOfYear(tail.join(', '), year));
+    }
+  }
+  return place;
+}
+// The town of TOWN_NAMES that a place of the town alone names (two or three parts, a
+// county the town's, now or then), or ''
+function townCode(place) {
   const parts = String(place || '').split(',').map((x) => x.trim().replace(/\.$/, '')).filter(Boolean);
   // also FS's place not standardized, the town and its county without Norway ("Halden,
   // Østfold."; the county checked below, so not a farm of the town's name elsewhere)
   if (parts.length === 2 && parts[1] !== 'Norway') parts.push('Norway');
-  if (!year || parts.length < 2 || parts.length > 3) return place;
+  if (parts.length < 2 || parts.length > 3) return '';
   for (const [code, names] of Object.entries(TOWN_NAMES)) {
     const county = fsCounty(countyName(code.slice(0, 2)));
     const towns = [municipalityName(code), ...names.map((n) => n[0])].map(foldPlace);
     const counties = [county, ...names.map((n) => n[1]).filter(Boolean)].map(foldPlace);
     if (!towns.includes(foldPlace(parts[0])) || (parts.length === 3 && !counties.includes(foldPlace(parts[1])))) continue;
-    return townPlaceIn(code, year);
+    return code;
   }
-  return place;
+  return '';
 }
 // A DA county as FS names it: DA's Bergen is FS's Hordaland
 const fsCounty = (name) => (name === 'Bergen' ? 'Hordaland' : name);

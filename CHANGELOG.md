@@ -37,7 +37,11 @@ fixes, new features, changes that break what users have).
   Østfold, Norway" for 1875), the linker offers to change it to the name of that
   year, and saves the change (it took the two names for the same place and left the
   fact unchanged). That is also so for a place FamilySearch hasn't standardized, the
-  town and its county without the country ("Halden, Østfold").
+  town and its county without the country ("Halden, Østfold"), and for a place in the
+  town: a farm or church FamilySearch has under the town's present name ("Aasen,
+  Halden, Østfold, Norway" for 1858) gets the town's name of the year ("Aasen,
+  Fredrikshald, Smaalenene, Norway"). The linker's facts table marks such a place ≈,
+  not ✓.
 - **A baptized child's given names kept together:** a child baptized as "Marte
   Kristine" was offered as given name Marte and surname Kristine, in the alternate
   name and the new person's form. The given names now stay together, with no surname,

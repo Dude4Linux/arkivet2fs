@@ -1905,8 +1905,23 @@ test('a town\'s parish by its name of the record\'s year, also where FS has the 
   // FS's place not standardized, without Norway: the town of the time too
   assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Halden, Østfold' } }),
     [['Christening', 'edit', 'Fredrikshald, Smaalenene, Norway']]);
-  // the name of the time already, or a place in the town: left as it is
-  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Immanuels kirke, Halden, Østfold, Norway' } }), []);
+  // the name of the time already: left as it is
+  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Fredrikshald, Smaalenene, Norway' } }), []);
+  // a place in the town: the town's part by its name of the time (bug: "Aasen, Halden,
+  // Østfold, Norway" for 1858 kept)
+  assert.deepEqual(changes({ birth: { date: '16 July 1846', place: 'Fredrikshald, Smaalenene, Norway' }, christening: { date: '23 August 1846', place: 'Immanuels kirke, Halden, Østfold, Norway' } }),
+    [['Christening', 'edit', 'Immanuels kirke, Fredrikshald, Smaalenene, Norway']]);
+  assert.equal(w.townOfYear('Aasen, Halden, Østfold, Norway', 1858), 'Aasen, Fredrikshald, Smaalenene, Norway');
+  assert.equal(w.townOfYear('Aasen, Oslo, Norway', 1880), 'Aasen, Kristiania, Norway');
+  assert.equal(w.townOfYear('Aasen, Halden, Østfold, Norway', 1950), 'Aasen, Halden, Østfold, Norway');
+  assert.equal(w.townOfYear('Bakken nedre, Vågå, Oppland, Norway', 1850), 'Bakken nedre, Vågå, Oppland, Norway');
+  // the facts table: FS's place under another name than the year's is near, not the same
+  state.fs = { ...LARS_1846, christening: { date: '23 August 1846', place: 'Fredrikshald, Smaalenene, Norway' } };
+  const facts = win.treeFacts({ pid: 'TEST-LAR' }, b);
+  assert.equal(facts.Christening.place, 'Fredrikshald, Smaalenene, Norway');
+  assert.equal(win.compareFact('Christening', win.recordFacts(lars, b).Christening, facts.Christening, lars, { pid: 'TEST-LAR' }, b), 'same');
+  state.fs = { ...LARS_1846, christening: { date: '23 August 1846', place: 'Halden,Ostfold,Norway' } };
+  assert.equal(win.compareFact('Christening', win.recordFacts(lars, b).Christening, win.treeFacts({ pid: 'TEST-LAR' }, b).Christening, lars, { pid: 'TEST-LAR' }, b), 'near');
   // the birth's own year decides: a groom of 1850 born in Halden is in Fredrikshald, one of 1930 in Halden
   assert.equal(w.townOfYear('Halden, Østfold, Norway', 1850), 'Fredrikshald, Smaalenene, Norway');
   assert.equal(w.townOfYear('Fredrikshald, Smaalenene, Norway', 1930), 'Halden, Østfold, Norway');
