@@ -133,9 +133,34 @@ export function zipVersion(buf) {
   return JSON.parse(manifest.data.toString('utf8')).version;
 }
 
-// Release notes as AMO shows them: plain text, without the Markdown's ** and `
-export function storeNotes(markdown) {
-  return String(markdown).replace(/\*\*/g, '').replace(/`/g, '').trim();
+// AMO takes release notes of at most 3000 characters
+export const AMO_NOTES_MAX = 3000;
+
+// Release notes as AMO shows them: plain text, without the Markdown's ** and `. Notes
+// longer than AMO takes become one line per item (its bold heading, or a short item
+// whole, else its first clause), with a link to the whole notes on GitHub; items that
+// still don't fit are left out from the end.
+export function storeNotes(markdown, version, max = AMO_NOTES_MAX) {
+  const plain = (text) => text.replace(/\*\*/g, '').replace(/`/g, '').trim();
+  const full = plain(String(markdown));
+  if (full.length <= max) return full;
+  const more = `\n\nAll the changes: https://github.com/Dude4Linux/arkivet2fs/releases/tag/v${version}`;
+  const items = String(markdown).split('\n').filter((l) => /^- /.test(l)).map((line) => {
+    const item = line.slice(2).trim();
+    const bold = item.match(/^\*\*(.+?)\*\*/);
+    let short = plain(item);
+    if (short.length <= 140) return '- ' + short;
+    if (bold) short = plain(bold[1]).replace(/:$/, '');
+    else short = short.split(/: |\. /)[0];
+    if (short.length > 140) short = short.slice(0, 139).replace(/\s+\S*$/, '') + '…';
+    return '- ' + short;
+  });
+  const kept = [];
+  for (const item of items) {
+    if ([...kept, item].join('\n').length + more.length > max) break;
+    kept.push(item);
+  }
+  return kept.join('\n') + more;
 }
 
 // ---- Chrome Web Store (API V2)
@@ -276,7 +301,7 @@ export async function main(argv, deps) {
     deps.log(state === 'PENDING_REVIEW' ? `Submitted ${version} to ${STORE_NAMES.chrome}: in review; it goes live once approved.`
       : `Sent ${version} to ${STORE_NAMES.chrome}: ${stateText(state)}.`);
   } else {
-    const status = await firefoxUpload(c, zip, version, storeNotes(deps.notes(version)), deps);
+    const status = await firefoxUpload(c, zip, version, storeNotes(deps.notes(version), version), deps);
     deps.log(status === 'public' ? `${version} is live on ${STORE_NAMES.firefox}.`
       : `Submitted ${version} to ${STORE_NAMES.firefox}: in review; it goes live once approved.`);
   }

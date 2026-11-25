@@ -330,6 +330,20 @@ test('stores.mjs: the command sends only the package of the tag\'s version; note
   if (process.platform === 'win32') return t.skip('no file modes');
   const [b, , st] = await Promise.all([...(await tools), stores]);
   assert.equal(st.storeNotes('- **Places** as `written`\n'), '- Places as written');
+  // Longer than AMO takes (3000): one line per item, the link to the whole notes
+  const long = [
+    '- **Marriages attached to the couple:** ' + 'a marriage\'s source goes to the couple. '.repeat(10),
+    '- Names are read by one set of rules everywhere: ' + 'a patronymic in any form. '.repeat(10),
+    '- **"ektemann"** is "Husband" in the notes.',
+  ].join('\n');
+  const link = 'All the changes: https://github.com/Dude4Linux/arkivet2fs/releases/tag/v1.8.3';
+  assert.equal(st.storeNotes(long, '1.8.3', 500), [
+    '- Marriages attached to the couple',
+    '- Names are read by one set of rules everywhere',
+    '- "ektemann" is "Husband" in the notes.',
+    '', link].join('\n'));
+  assert.equal(st.storeNotes(long, '1.8.3', 100 + link.length), '- Marriages attached to the couple\n- Names are read by one set of rules everywhere\n\n' + link, 'items that don\'t fit left out from the end');
+  assert.equal(st.storeNotes(long, '1.8.3').length <= 3000, true);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arkivet2fs-stores-'));
   const zipFile = path.join(dir, 'arkivet2fs-1.8.2.zip');
   fs.writeFileSync(zipFile, b.makeZip([{ name: 'manifest.json', data: Buffer.from('{"version": "1.8.2"}') }], 1_800_000_000));
