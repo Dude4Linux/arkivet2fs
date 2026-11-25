@@ -4,7 +4,7 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
-## 1.8.3 - not released yet
+## 1.8.3 - 2026-11-24
 
 - **Marriages attached to the couple:** a marriage's source now goes to the couple's
   relationship on FamilySearch too, as FamilySearch attaches its own marriage records,
