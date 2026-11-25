@@ -169,6 +169,12 @@ test("a census position's compound kin words get English: \"hans Søstersøn [si
   // the simple words as before, and an occupation's family word in passing is left
   assert.equal(english('hans Søster'), 'hans Søster [sister]');
   assert.equal(w.expandAbbreviations('Husmand'), 'Husmand [cottager]');
+  // 1865's abbreviations, with a point or without, and the land a cottager has
+  assert.equal(w.expandAbbreviations('Husm med Jord'), 'Husm [cottager] med Jord [with land]');
+  assert.equal(w.expandAbbreviations('Husm. uden Jord'), 'Husm. [cottager] uden Jord [without land]');
+  assert.equal(w.expandAbbreviations('Føderaadsm'), 'Føderaadsm [retired farmer]');
+  assert.equal(w.expandAbbreviations('Snedker'), 'Snedker [joiner]');
+  assert.equal(w.expandAbbreviations('Husmand [cottager]'), 'Husmand [cottager]');
   // a church book's position too: a parent named as the other's betrothed
   assert.equal(w.expandAbbreviations('Kiæresten'), 'Kiæresten [betrothed]');
   assert.equal(w.expandAbbreviations('hans Kjæreste'), 'hans Kjæreste [betrothed]');

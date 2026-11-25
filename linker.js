@@ -1339,6 +1339,9 @@ function treeFamilyName(name) {
   return words.length > 1 && !isPatronymic(last) ? last : '';
 }
 const sameNameKey = (name) => String(name || '').toLowerCase().replace(/[.,'"]/g, '').replace(/\s+/g, ' ').trim();
+// An occupation's words without the English in brackets: FS's "Snedker" or "Snedker
+// [carpenter]" is the record's "Snedker [joiner]"
+const occupationKey = (text) => sameNameKey(String(text || '').replace(/\s*\[[^\]]*\]/g, ' '));
 
 // The emigrant protocol's place of departure: "Oslo police district, ..." → Oslo; DA
 // leaves some titles Norwegian: "Bergen Politidistrikt, ..." → Bergen
@@ -1549,9 +1552,10 @@ function factAdditions(person, record, tree, name, opts = {}) {
       out.push({ fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value });
     }
   }
-  // An occupation FS doesn't have in the same words; this record's updated
+  // An occupation, written with the English after the words, as the notes have it
+  // ("Snedker [joiner]"); this record's updated
   if (da.Occupation) {
-    const value = { date: year ? String(year) : '', place: parishPlace(record), description: da.Occupation.text };
+    const value = { date: year ? String(year) : '', place: parishPlace(record), description: expandAbbreviations(da.Occupation.text) };
     const fs = (full.occupations || []).find(ours);
     if (fs) {
       const changed = sameNameKey(fs.description) !== sameNameKey(value.description) || fsYear(fs.date) !== fsYear(value.date) ||
@@ -1560,8 +1564,21 @@ function factAdditions(person, record, tree, name, opts = {}) {
         out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(fs.description, fs.date, fs.place), ...refresh(fs, changed),
           value: changed ? value : { ...value, date: fs.date, place: fs.place } });
       }
-    } else if (!(full.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(value.description))) {
-      out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value });
+    } else {
+      // FS's in the same words (the English aside: "Snedker [carpenter]") of the record's
+      // year, at its place or with none, is changed to the record's; one already in these
+      // words and place is left; another year or place (none too) is a new one, which
+      // tells the occupation over the years and places
+      const same = (full.occupations || []).filter((o) => occupationKey(o.description) === occupationKey(value.description) &&
+        fsYear(o.date) === fsYear(value.date) && (!String(o.place || '').trim() || sameFsPlace(o.place, value.place)));
+      const there = same.some((o) => sameNameKey(o.description) === sameNameKey(value.description) && String(o.place || '').trim());
+      if (same.length === 1 && !there) {
+        const [o] = same;
+        out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(o.description, o.date, o.place),
+          match: [o.description, fsYear(o.date) ? String(fsYear(o.date)) : ''].filter(Boolean), value: { ...value, date: o.date || value.date } });
+      } else if (!same.length) {
+        out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value });
+      }
     }
   }
   return out;
@@ -3122,8 +3139,9 @@ async function saveAdditions(tabId, pair, sourceId, title) {
       if (saved.unchanged) log(t('{name} has this on FamilySearch already ({what}); not changed.', { name: pair.label, what }), 'ok');
       else { log(t('{name}: {what}.', { name: pair.label, what }), 'ok'); changes.push(what); }
     }
-    // an update: by the record's ID in the reason it has now, too
-    const id = a.refresh ? (reasonFrom(a.reason).match(/[a-z]{2}\d{14,}$/i) || [])[0] : '';
+    // by the record's ID in the reason it has now, too: of two facts of the year with the
+    // same words (one the user's or another record's), the one just added or changed
+    const id = (reasonFrom(a.reason).match(/[a-z]{2}\d{14,}$/i) || [])[0];
     const match = (a.type === 'ALTERNATE_NAME' ? [a.value.given, a.value.surname] : [a.value.description, (String(a.value.date || '').match(/\d{4}/) || [])[0]]).concat(id ? [id] : []);
     const tagged = await factStep(tabId, 'tagFact', { pid: pair.pid, type: a.type, match, sourceId, title });
     if (!tagged.ok) log(t('The source is not tagged to it: {error}', { error: tagged.error }), 'near');
@@ -3229,7 +3247,12 @@ function onTreeAlready(tree, a) {
   const year = fsYear(v.date);
   // a residence changed (factAdditions()): FS's of the year has the place by now
   if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year && (a.action !== 'edit' || placeText(r.place) === placeText(v.place)));
-  if (a.type === 'OCCUPATION') return (tree.occupations || []).some((o) => sameNameKey(o.description) === sameNameKey(v.description));
+  // of the year (an edit by the words as written, the English too; an add by the words
+  // alone, as offered)
+  if (a.type === 'OCCUPATION') {
+    const key = a.action === 'edit' ? sameNameKey : occupationKey;
+    return (tree.occupations || []).some((o) => key(o.description) === key(v.description) && fsYear(o.date) === year);
+  }
   if (a.type === 'OTHER_EVENT') return Boolean(year) && (tree.emigration || []).some((e) => fsYear(e.date) === year);
   return false;
 }
@@ -3998,8 +4021,16 @@ function linkerReport() {
   return reportText('linker', sections.filter(([, body]) => body && (!Array.isArray(body) || body.length)), navigator);
 }
 
+// The FS person and their family: kept by the search (fs_person.js's searchDA), else,
+// for a linker opened with a PID never searched from (a link made by hand), read from
+// their FS page in a hidden window (readTreePersons(): `tree:<PID>` if read before)
 async function setPerson(pid) {
   state.fs = await storedPerson(pid);
+  if (!state.fs && PID_PATTERN.test(pid || '')) {
+    const status = $('status');
+    if (status && !status.hidden) status.textContent = t('Reading the FamilySearch family…') + ' ' + windowNote();
+    state.fs = (await readTreePersons([pid]))[pid] || null;
+  }
   await showPeople();
 }
 

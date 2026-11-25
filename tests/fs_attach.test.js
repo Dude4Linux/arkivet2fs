@@ -825,8 +825,15 @@ function factPage({ sources = ['TEST-S01'], birthSources = true, late = false, s
         return openForm(type, nameFields(given, rest.join(' ')), (v) => { template.textContent = v['nameTemplate.no.firstName'] + ' ' + v['nameTemplate.no.lastName']; openView(type, el); },
           () => openView(type, el));
       }
-      openForm(type, combo('date', el.querySelector('[data-testid="conclusion-date"]').textContent) + combo('place', el.querySelector('[data-testid="conclusion-place"]').textContent),
-        (v) => { el.querySelector('[data-testid="conclusion-date"]').textContent = v.date; el.querySelector('[data-testid="conclusion-place"]').textContent = v.place; openView(type, el); },
+      // an occupation's form has its description too, its words before the date
+      const body = el.querySelector('[data-testid="conclusion-body"]');
+      const words = type === 'OCCUPATION' ? body.firstChild : null;
+      openForm(type, (words ? text('description', words.textContent.trim()) : '') +
+        combo('date', el.querySelector('[data-testid="conclusion-date"]').textContent) + combo('place', el.querySelector('[data-testid="conclusion-place"]').textContent),
+        (v) => {
+          if (words) words.textContent = v.description + ' ';
+          el.querySelector('[data-testid="conclusion-date"]').textContent = v.date; el.querySelector('[data-testid="conclusion-place"]').textContent = v.place; openView(type, el);
+        },
         () => openView(type, el));
     });
     [...box.querySelectorAll('button')].find((b) => b.textContent === 'Tag Sources').addEventListener('click', () => {
@@ -1131,6 +1138,46 @@ test('addFact(): an update of the facts a record gave: the alternate name change
   const tag = await step('tagFact', { pid: 'TEST-LAR', type: 'ALTERNATE_NAME', match: ['Lars', 'Bakken nedre', 'pd99000000000001'], sourceId: 'TEST-S01' });
   assert.equal(tag.ok, true, tag.error);
   assert.match(tagged[0].fact, /Lars Bakken nedre/);
+});
+
+test('addFact(), tagFact(): of two occupations of the year in the same words, the record\'s by its ID in the reason, not the first', async () => {
+  const { step, saved, tagged, w } = factPage();
+  const job = (description, place) => ({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date: '1865', place, description } });
+  // the user's own, without a place, first; the record's after it
+  await step('addFact', { pid: 'TEST-LAR', addition: job('Snedker [carpenter]', ''), reason: 'Mine', save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: job('Snedker', 'Vågå, Oppland, Norway'), reason: REASON, save: true });
+  const [mine, ours] = w.document.querySelectorAll('[data-testid="conclusionDisplay:OCCUPATION"]');
+  mine.querySelector('[data-testid="conclusion-body"]').append(' Reason:From "Another", Digitalarkivet, Permanent ID pd99000000000002.');
+  ours.querySelector('[data-testid="conclusion-body"]').append(' Reason:' + REASON);
+  // tagged: the record's, by its ID; without the ID neither is clearly it
+  const tag = await step('tagFact', { pid: 'TEST-LAR', type: 'OCCUPATION', match: ['Snedker', '1865', 'pd99000000000001'], sourceId: 'TEST-S01' });
+  assert.equal(tag.ok, true, tag.error);
+  assert.match(tagged[0].fact, /Vågå/);
+  const unclear = await step('tagFact', { pid: 'TEST-LAR', type: 'OCCUPATION', match: ['Snedker', '1865'], sourceId: 'TEST-S01' });
+  assert.equal(unclear.ok, false);
+  assert.equal(tagged.length, 1);
+  // changed: the place checked on the record's, not on the user's without one
+  const NEW = REASON.replace('Birth"', 'Birth, 23 August 1846"');
+  const edit = { ...job('Snedker', 'Lom, Oppland, Norway'), action: 'edit', refresh: true, match: ['1865', 'pd99000000000001'] };
+  const changed = await step('addFact', { pid: 'TEST-LAR', addition: edit, reason: NEW, save: true });
+  assert.equal(changed.ok, true, changed.error);
+  assert.equal(saved.at(-1).place, 'Lom, Oppland, Norway');
+  assert.equal(ours.querySelector('[data-testid="conclusion-place"]').textContent, 'Lom, Oppland, Norway');
+  assert.equal(mine.querySelector('[data-testid="conclusion-place"]'), null);
+});
+
+test('addFact(): the user\'s occupation of the year in the same words, by its words, changed to the record\'s', async () => {
+  const { step, saved, w } = factPage();
+  const job = (description, date, place = '') => ({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value: { date, place, description } });
+  await step('addFact', { pid: 'TEST-LAR', addition: job('Murer', '1865', 'Lom, Oppland, Norway'), reason: 'Mine', save: true });
+  await step('addFact', { pid: 'TEST-LAR', addition: job('Snedker [carpenter]', '1865', 'Vågå, Oppland, Norway'), reason: 'Mine', save: true });
+  const [murer, snedker] = w.document.querySelectorAll('[data-testid="conclusionDisplay:OCCUPATION"]');
+  const edit = { ...job('Snedker [joiner]', '1865', 'Vågå, Oppland, Norway'), action: 'edit', match: ['Snedker [carpenter]', '1865'] };
+  const changed = await step('addFact', { pid: 'TEST-LAR', addition: edit, reason: REASON, save: true });
+  assert.equal(changed.ok, true, changed.error);
+  assert.equal(saved.at(-1).description, 'Snedker [joiner]');
+  assert.match(snedker.textContent, /Snedker \[joiner\].*Vågå/);
+  assert.doesNotMatch(murer.textContent, /Snedker/);
 });
 
 test('addFact(): a fact without sources, whose pencil opens the form itself, is changed and cancelled', async () => {

@@ -55,7 +55,8 @@ function positionWords() {
   // added after them: "Gmd." → "Gmd. [farmer]", "... Hj. Søn" → "... Hj. Søn [son living at home]"
   const abbreviations = [
     ['Gmd.', 'farmer'], ['Gaardm.', 'farmer'], ['Gdm.', 'farmer'],
-    ['Hmd.', 'cottager'],
+    ['Hmd.', 'cottager'], ['Husm.', 'cottager'], ['Husm', 'cottager'],
+    ['Føderaadsm.', 'retired farmer'], ['Føderaadsm', 'retired farmer'],
     ['Ugk.', 'bachelor'], ['Ungk.', 'bachelor'],
     ['Enkem.', 'widower'],
     ['Hj. Søn', 'son living at home'], ['Hj. Dtr.', 'daughter living at home'],
@@ -70,6 +71,7 @@ function positionWords() {
     [['Leilænding', 'Leilending', 'Bygselmand', 'Bygselmann'], 'tenant farmer'],
     [['Husmand', 'Husmann', 'Huusmand', 'Pladsmand', 'Plasmand', 'Plassmann'], 'cottager'],
     [['Husmandsfolk', 'Pladsfolk', 'Plasfolk', 'Plassfolk'], 'crofters'],
+    [['med Jord'], 'with land'], [['uden Jord', 'uten Jord'], 'without land'],
     [['Husmandskone', 'Pladskone'], "cottager's wife"],
     [['Strandsidder', 'Strandsitter'], 'shore cottager'],
     [['Inderst', 'Inderste', 'Innerst', 'Innerste', 'Losjerende', 'Logerende'], 'lodger'],
@@ -134,8 +136,8 @@ function expandAbbreviations(text, more = []) {
   const annotate = (word, english, flags) => {
     const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Whole words only (\b is ASCII-only, so use Unicode letter classes), and not
-    // again where the English already follows
-    const re = new RegExp('(^|[^\\p{L}])(' + escaped + ')(?![\\p{L}])(?! \\[)', flags);
+    // again where the English already follows (also after a point: "Husm." before "Husm")
+    const re = new RegExp('(^|[^\\p{L}])(' + escaped + ')(?![\\p{L}])(?!\\.? \\[)', flags);
     out = out.replace(re, '$1$2 [' + english + ']');
   };
   const { abbreviations, occupations } = positionWords();

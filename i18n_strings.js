@@ -486,6 +486,7 @@ function i18nTable() {
     'FamilySearch takes no birth without a place: fill in the place of "{what}" for {name}, or untick it.': ['FamilySearch tar ikke imot en fødsel uten sted: fyll ut stedet i «{what}» for {name}, eller fjern haken.', 'FamilySearch tek ikkje imot ei fødsel utan stad: fyll ut staden i «{what}» for {name}, eller ta bort haken.'],
     '"{what}" for {name} is empty: fill it in or untick it.': ['«{what}» for {name} er tom: fyll den ut eller fjern haken.', '«{what}» for {name} er tom: fyll ho ut eller ta bort haken.'],
     'Reading the details from FamilySearch…': ['Leser opplysningene fra FamilySearch…', 'Les opplysningane frå FamilySearch…'],
+    'Reading the FamilySearch family…': ['Leser familien fra FamilySearch…', 'Les familien frå FamilySearch…'],
     'Only the years are known here; the details could not be read from FamilySearch.': ['Bare årene er kjent her; opplysningene kunne ikke leses fra FamilySearch.', 'Berre åra er kjende her; opplysningane kunne ikkje lesast frå FamilySearch.'],
     'Death': ['Død', 'Død'],
     'Residence': ['Bosted', 'Bustad'],

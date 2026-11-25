@@ -1189,9 +1189,16 @@ if (!window.__arkivet2fsAttach) {
     const date = value.date;
     const year = yearIn(date);
     const holds = (el) => !year || yearIn(clean((el.querySelector('[data-testid="conclusion-date"]') || el).textContent)) === year;
+    // an edit's fact by the record's ID in the reason it has now, when FS shows it: of two
+    // facts of the year (one the user's or another record's), not the first
+    const id = (String(reason || '').match(/Permanent ID:? ?([a-z]{2}\d{14,})/i) || [])[1];
+    const edited = () => {
+      const all = displays(type).filter(holds);
+      return (id && only(all.filter((e) => clean(e.textContent).toLowerCase().includes(id.toLowerCase())))) || only(all);
+    };
     let shown = '';
     try {
-      const el = await waitFor(() => (addition.action === 'edit' ? displays(type).find(holds) : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
+      const el = await waitFor(() => (addition.action === 'edit' ? edited() : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
       shown = clean(el.textContent);
       // Saved without its place: FS took the place as none (it was only typed in)
       const place = value.place;
@@ -1234,7 +1241,7 @@ if (!window.__arkivet2fsAttach) {
 
   // Of a type's displays, the one `match` names (its words: a description, a year), else
   // null. An alternate name by the name itself: Ola Olsen's words are in Ola Nordmann
-  // Olsen too. Else the one with every word, else the one of the year; a guess only when
+  // Olsen too. Else the only one with every word, else the one of the year; a guess only when
   // FS has one of the type: a person can have several residences (sorted by date), and
   // a source tagged to (or a place put in) another year's would be wrong without a word
   const matchWords = (match) => (match || []).filter(Boolean).map((m) => clean(m).toLowerCase());
@@ -1249,7 +1256,7 @@ if (!window.__arkivet2fsAttach) {
     // the name without a record's permanent ID (one in the reason tells an update's fact)
     const name = words.filter((w) => !/^[a-z]{2}\d{14,}$/.test(w)).join(' ');
     return (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === name)) ||
-      all.find((e) => words.length && words.every((w) => factHas(e, w))) ||
+      (words.length && only(all.filter((e) => words.every((w) => factHas(e, w))))) ||
       (year && only(all.filter((e) => factHas(e, year)))) || only(all);
   }
 

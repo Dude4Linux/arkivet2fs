@@ -513,6 +513,32 @@ function checkedPage(chrome) {
   return { win, state, $: (id) => win.document.getElementById(id) };
 }
 
+test('setPerson(): a PID never searched from (a link made by hand) has its FS family read from FS, so the relatives pair', async () => {
+  const reads = [];
+  const { chrome } = fakeFs({ readPerson: (url) => { reads.push(url); return url.endsWith('/TEST-LAR') ? { person: LARS_1846 } : { error: 'not here' }; } });
+  const session = {};
+  chrome.storage = {
+    local: { async get() { return {}; } },  // no person:TEST-LAR: not searched from
+    session: { async get(key) { return key in session ? { [key]: session[key] } : {}; }, async set(o) { Object.assign(session, o); } }
+  };
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/baptism-1846.html'), fixtureUrl('da/baptism-1846.html'));
+  Object.assign(state, { record: r, people: win.recordPeople(r) });
+  win.document.getElementById('fs-pid').value = 'TEST-LAR';
+  await win.setPerson('TEST-LAR');
+  assert.equal(state.fs.pid, 'TEST-LAR');
+  assert.ok(reads.some((url) => /\/tree\/person\/details\/TEST-LAR$/.test(url)));
+  const pid = (name) => state.rows.find((row) => row.person.name === name).pid();
+  assert.equal(pid('Lars'), 'TEST-LAR');
+  assert.equal(pid('Halvor Larsen'), 'TEST-HAL');  // the father, from the family read
+  // read once: kept for the session
+  assert.ok(session['tree:TEST-LAR']);
+  const before = reads.length;
+  await win.setPerson('TEST-LAR');
+  assert.equal(reads.length, before);
+});
+
 test('showFsCheck(): a source in the SourceBox tints its box, and the rows of people who have it', () => {
   const { win, state, $ } = checkedPage();
   const title = $('f-title').value;
@@ -1465,6 +1491,8 @@ test('run(): a ticked fact is saved on the tree person once the source is attach
   const [, tag] = asked[5];
   assert.deepEqual(plain([tag.type, tag.sourceId, tag.title]), ['CHRISTENING', 'TEST-S05', $('f-title').value]);
   assert.ok(tag.match.includes('1846'));  // the fact of that year, if FS has several
+  // and the record's ID, which its reason has: not the user's of that year in the same words
+  assert.ok(tag.match.includes(add.reason.match(/pd99\d+/)[0]));
   assert.match($('log').textContent, /Lars: add the christening: 23 August 1846, Vågå, Oppland, Norway\./);
   assert.match($('log').textContent, /The source is tagged to it\./);
   assert.deepEqual(tabs.closed, [2]);  // all done: the work tab closed
@@ -2139,11 +2167,34 @@ test('factAdditions(): a burial\'s death date into FS\'s year, the burial, resid
     ['Death', 'edit', { date: '12 April 1854', place: 'Kongsvinger, Hedmark, Norway' }],  // the parish of burial doesn't replace FS's place
     ['Burial', 'add', { date: '18 April 1854', place: 'Vinger, Hedmark, Norway' }],
     ['Residence', 'add', { date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen' }],
-    ['Occupation', 'add', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem' }]
+    // the English after the words, as the notes have it
+    ['Occupation', 'add', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem [pauper]' }]
   ]);
-  // FS has the residence of that year and the occupation: not offered again
-  state.fs = { ...state.fs, residences: [{ date: '1854', place: 'Vinger' }], occupations: [{ description: 'lægdslem' }] };
-  assert.deepEqual(plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).map((a) => a.fact)), ['Death', 'Burial']);
+  // FS has the residence of that year and the occupation in these words, year and place: not offered again
+  const vinger = 'Vinger, Hedmark, Norway';
+  const occupation = (...occupations) => {
+    state.fs = { ...state.fs, residences: [{ date: '1854', place: 'Vinger' }], occupations };
+    return plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }).filter((a) => a.fact !== 'Death' && a.fact !== 'Burial')
+      .map((a) => [a.action, a.value.description, a.current, a.match]));
+  };
+  assert.deepEqual(occupation({ date: '1854', place: vinger, description: 'lægdslem [pauper]' }), []);
+  // in the same words but other English, or none, the year's at the place or without one:
+  // changed to the record's (bug: "Snedker [carpenter]" on FS, "Snedker" added besides)
+  assert.deepEqual(occupation({ date: '1854', place: vinger, description: 'Lægdslem [poor relief recipient]' }),
+    [['edit', 'Lægdslem [pauper]', 'Lægdslem [poor relief recipient], 1854, ' + vinger, ['Lægdslem [poor relief recipient]', '1854']]]);
+  assert.deepEqual(occupation({ date: '1854', description: 'Lægdslem' }), [['edit', 'Lægdslem [pauper]', 'Lægdslem, 1854', ['Lægdslem', '1854']]]);
+  assert.deepEqual(occupation({ date: '1854', description: 'Lægdslem [pauper]' }), [['edit', 'Lægdslem [pauper]', 'Lægdslem [pauper], 1854', ['Lægdslem [pauper]', '1854']]]);
+  // another year, another place or none: a new one, which tells the occupation over time and places
+  for (const other of [{ date: '1853', place: vinger }, { date: '1854', place: 'Oslo, Norway' }, {}]) {
+    assert.deepEqual(occupation({ ...other, description: 'Lægdslem' }), [['add', 'Lægdslem [pauper]', null, null]]);
+  }
+  // two of the year that could be it: neither changed, none added
+  assert.deepEqual(occupation({ date: '1854', description: 'Lægdslem' }, { date: '1854', description: 'Lægdslem [poor]' }), []);
+  // on FS by now: of the year, in the words offered (an edit's as written)
+  const add = { action: 'add', type: 'OCCUPATION', value: { date: '1854', description: 'Lægdslem [pauper]' } };
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', description: 'Lægdslem' }] }, add), true);
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1853', description: 'Lægdslem [pauper]' }] }, add), false);
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', description: 'Lægdslem' }] }, { ...add, action: 'edit' }), false);
 });
 
 test('factAdditions(): on a run again, every fact this record gave is updated, its reason too (bug: facts FS had were skipped, their reasons left naming the old title)', () => {
@@ -2159,7 +2210,7 @@ test('factAdditions(): on a run again, every fact this record gave is updated, i
     death: { date: '12 April 1854', place: 'Aasen, Vinger, Hedmark, Norway', from: old },
     burial: { date: '18 April 1854', place: 'Vinger, Hedmark, Norway', from: old },
     residences: [{ date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen', from: old }],
-    occupations: [{ date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem', from: old }],
+    occupations: [{ date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem [pauper]', from: old }],
     altNames: ['Lars Larsen Holt'], altNamesFrom: [{ name: 'Lars Larsen Holt', from: old }], ...more });
   const opts = { ids: [id], reason: win.additionReason(b, 'New title') };
   const run = (tree, o = opts) => { state.fs = tree; return plain(win.factAdditions(lars, b, { pid: 'TEST-LLA' }, 'Lars Larsen Holt', o)); };
@@ -2185,8 +2236,12 @@ test('factAdditions(): on a run again, every fact this record gave is updated, i
     occupations: [{ date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Inderst', from: old }, { description: 'Husmand' }] }));
   assert.deepEqual(changed.filter((a) => !a.reasonOnly).map((a) => [a.fact, a.action, a.value]), [
     ['Residence', 'edit', { date: '1854', place: 'Aasen, Vinger, Hedmark, Norway', description: 'Aasen' }],
-    ['Occupation', 'edit', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem' }]
+    ['Occupation', 'edit', { date: '1854', place: 'Vinger, Hedmark, Norway', description: 'Lægdslem [pauper]' }]
   ]);
+  // an earlier run's occupation without the English: given it
+  const english = run(fs({ occupations: [{ ...fs().occupations[0], description: 'Lægdslem' }] })).find((a) => a.fact === 'Occupation');
+  assert.deepEqual([english.reasonOnly, english.value.description, english.current], [undefined, 'Lægdslem [pauper]', 'Lægdslem, 1854, Vinger, Hedmark, Norway']);
+  assert.equal(win.onTreeAlready(fs({ occupations: [{ ...fs().occupations[0], description: 'Lægdslem', from: { id, reason: opts.reason } }] }), { ...english, reason: opts.reason }), false);
   // done once FS's fact has the reason written (and, but for the reason alone, the values)
   const death = run(fs())[1];
   const reason = opts.reason;
@@ -2282,9 +2337,9 @@ test('factAdditions(): a deceased died at the farm in the name, in the birthplac
   const lars = w.recordPeople(holden)[0];
   state.record = holden;
   const places = (fs) => {
-    state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', residences: [], occupations: [{ description: 'Lægdslem' }], ...fs };
+    state.fs = { pid: 'TEST-LLA', name: 'Lars Larsen', residences: [], occupations: [], ...fs };
     return Object.fromEntries(plain(win.factAdditions(lars, holden, { pid: 'TEST-LLA' }))
-      .filter((a) => a.value.place !== undefined).map((a) => [a.fact, a.value.place]));
+      .filter((a) => a.value.place !== undefined && a.fact !== 'Occupation').map((a) => [a.fact, a.value.place]));
   };
   // FS has none: born and died on the farm, in the parish; buried in the parish
   assert.deepEqual(places({}), { Birth: 'Holten, Vinger, Hedmark, Norway', Death: 'Holten, Vinger, Hedmark, Norway', Burial: 'Vinger, Hedmark, Norway' });
@@ -2335,7 +2390,7 @@ test('factAdditions(): an emigration as a custom event with its destination, unl
   const e = record('emigration-1902');
   const lars = w.recordPeople(e).find((p) => p.current);
   state.record = e;
-  state.fs = { pid: 'TEST-LAR', name: 'Lars Halvorsen', birth: { date: '1843' }, emigration: [], residences: [{ date: '1902' }], occupations: [{ description: 'Farmer' }] };
+  state.fs = { pid: 'TEST-LAR', name: 'Lars Halvorsen', birth: { date: '1843' }, emigration: [], residences: [{ date: '1902' }], occupations: [{ date: '1902', place: 'Minneapolis, Minnesota', description: 'Farmer' }] };
   assert.deepEqual(plain(win.factAdditions(lars, e, { pid: 'TEST-LAR' })), [
     { fact: 'Emigration', action: 'add', type: 'OTHER_EVENT', title: 'Emigration', value: { date: '5 September 1902', place: 'Kristiania, Norway', description: 'Destination: Minnesota' } }
   ]);
