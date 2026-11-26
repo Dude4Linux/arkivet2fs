@@ -1342,6 +1342,14 @@ const sameNameKey = (name) => String(name || '').toLowerCase().replace(/[.,'"]/g
 // An occupation's words without the English in brackets: FS's "Snedker" or "Snedker
 // [carpenter]" is the record's "Snedker [joiner]"
 const occupationKey = (text) => sameNameKey(String(text || '').replace(/\s*\[[^\]]*\]/g, ' '));
+// FS's occupations that may be the record's (factAdditions(), onTreeAlready()): in the
+// same words (the English aside) of the record's year, at its place or with none
+function sameOccupations(list, value) {
+  return (list || []).filter((o) => occupationKey(o.description) === occupationKey(value.description) &&
+    fsYear(o.date) === fsYear(value.date) && (!String(o.place || '').trim() || sameFsPlace(o.place, value.place)));
+}
+// FS's occupation that is the record's already: these words as written, at its place
+const isRecordsOccupation = (o, value) => sameNameKey(o.description) === sameNameKey(value.description) && sameFsPlace(o.place, value.place);
 
 // The emigrant protocol's place of departure: "Oslo police district, ..." → Oslo; DA
 // leaves some titles Norwegian: "Bergen Politidistrikt, ..." → Bergen
@@ -1557,27 +1565,20 @@ function factAdditions(person, record, tree, name, opts = {}) {
   if (da.Occupation) {
     const value = { date: year ? String(year) : '', place: parishPlace(record), description: expandAbbreviations(da.Occupation.text) };
     const fs = (full.occupations || []).find(ours);
+    const edit = (o, rest) => out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(o.description, o.date, o.place), ...rest });
     if (fs) {
       const changed = sameNameKey(fs.description) !== sameNameKey(value.description) || fsYear(fs.date) !== fsYear(value.date) ||
         !sameFsPlace(fs.place, value.place);
-      if (changed || stale(fs)) {
-        out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(fs.description, fs.date, fs.place), ...refresh(fs, changed),
-          value: changed ? value : { ...value, date: fs.date, place: fs.place } });
-      }
+      if (changed || stale(fs)) edit(fs, { ...refresh(fs, changed), value: changed ? value : { ...value, date: fs.date, place: fs.place } });
     } else {
       // FS's in the same words (the English aside: "Snedker [carpenter]") of the record's
       // year, at its place or with none, is changed to the record's; one already in these
       // words and place is left; another year or place (none too) is a new one, which
       // tells the occupation over the years and places
-      const same = (full.occupations || []).filter((o) => occupationKey(o.description) === occupationKey(value.description) &&
-        fsYear(o.date) === fsYear(value.date) && (!String(o.place || '').trim() || sameFsPlace(o.place, value.place)));
-      const there = same.some((o) => sameNameKey(o.description) === sameNameKey(value.description) && String(o.place || '').trim());
-      if (same.length === 1 && !there) {
-        const [o] = same;
-        out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(o.description, o.date, o.place),
-          match: [o.description, fsYear(o.date) ? String(fsYear(o.date)) : ''].filter(Boolean), value: { ...value, date: o.date || value.date } });
-      } else if (!same.length) {
-        out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value });
+      const [o, other] = sameOccupations(full.occupations, value);
+      if (!o) out.push({ fact: 'Occupation', action: 'add', type: 'OCCUPATION', value });
+      else if (!other && !isRecordsOccupation(o, value)) {
+        edit(o, { match: [o.description, fsYear(o.date) ? String(fsYear(o.date)) : ''].filter(Boolean), value: { ...value, date: o.date || value.date } });
       }
     }
   }
@@ -3247,11 +3248,11 @@ function onTreeAlready(tree, a) {
   const year = fsYear(v.date);
   // a residence changed (factAdditions()): FS's of the year has the place by now
   if (a.type === 'RESIDENCE') return Boolean(year) && (tree.residences || []).some((r) => fsYear(r.date) === year && (a.action !== 'edit' || placeText(r.place) === placeText(v.place)));
-  // of the year (an edit by the words as written, the English too; an add by the words
-  // alone, as offered)
+  // as factAdditions() decides: an add, one that may be the record's has come since; an
+  // edit, FS's is the record's in its words and place by now
   if (a.type === 'OCCUPATION') {
-    const key = a.action === 'edit' ? sameNameKey : occupationKey;
-    return (tree.occupations || []).some((o) => key(o.description) === key(v.description) && fsYear(o.date) === year);
+    const same = sameOccupations(tree.occupations, v);
+    return a.action === 'edit' ? same.some((o) => isRecordsOccupation(o, v)) : same.length > 0;
   }
   if (a.type === 'OTHER_EVENT') return Boolean(year) && (tree.emigration || []).some((e) => fsYear(e.date) === year);
   return false;

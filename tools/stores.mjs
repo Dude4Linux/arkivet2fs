@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { changelogSection, readZip } from './build.mjs';
+import { REPO, changelogSection, readZip } from './build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const CWS = 'https://chromewebstore.googleapis.com';
@@ -144,7 +144,7 @@ export function storeNotes(markdown, version, max = AMO_NOTES_MAX) {
   const plain = (text) => text.replace(/\*\*/g, '').replace(/`/g, '').trim();
   const full = plain(String(markdown));
   if (full.length <= max) return full;
-  const more = `\n\nAll the changes: https://github.com/Dude4Linux/arkivet2fs/releases/tag/v${version}`;
+  const more = `\n\nAll the changes: https://github.com/${REPO}/releases/tag/v${version}`;
   const items = String(markdown).split('\n').filter((l) => /^- /.test(l)).map((line) => {
     const item = line.slice(2).trim();
     const bold = item.match(/^\*\*(.+?)\*\*/);

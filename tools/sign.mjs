@@ -20,12 +20,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildAll, checkTag } from './build.mjs';
+import { REPO, buildAll, checkTag } from './build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_KEY = path.join(ROOT, 'keys', 'release.pub');
 const DEFAULT_KEY = path.join(os.homedir(), '.config', 'arkivet2fs', 'release-key.pem');
-const REPO = 'Dude4Linux/arkivet2fs';
 
 export function sign(data, privateKey) {
   return crypto.sign(null, data, privateKey).toString('base64') + '\n';

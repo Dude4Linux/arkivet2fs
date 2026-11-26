@@ -2195,6 +2195,12 @@ test('factAdditions(): a burial\'s death date into FS\'s year, the burial, resid
   assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', description: 'Lægdslem' }] }, add), true);
   assert.equal(win.onTreeAlready({ occupations: [{ date: '1853', description: 'Lægdslem [pauper]' }] }, add), false);
   assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', description: 'Lægdslem' }] }, { ...add, action: 'edit' }), false);
+  // as factAdditions() decides: another place is another occupation; an edit is done once
+  // FS has the record's words at its place
+  const at = { ...add, value: { ...add.value, place: vinger } };
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', place: 'Oslo, Norway', description: 'Lægdslem' }] }, at), false);
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', place: vinger, description: 'Lægdslem [pauper]' }] }, { ...at, action: 'edit' }), true);
+  assert.equal(win.onTreeAlready({ occupations: [{ date: '1854', description: 'Lægdslem [pauper]' }] }, { ...at, action: 'edit' }), false);
 });
 
 test('factAdditions(): on a run again, every fact this record gave is updated, its reason too (bug: facts FS had were skipped, their reasons left naming the old title)', () => {

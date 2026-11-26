@@ -1189,13 +1189,11 @@ if (!window.__arkivet2fsAttach) {
     const date = value.date;
     const year = yearIn(date);
     const holds = (el) => !year || yearIn(clean((el.querySelector('[data-testid="conclusion-date"]') || el).textContent)) === year;
-    // an edit's fact by the record's ID in the reason it has now, when FS shows it: of two
-    // facts of the year (one the user's or another record's), not the first
-    const id = (String(reason || '').match(/Permanent ID:? ?([a-z]{2}\d{14,})/i) || [])[1];
-    const edited = () => {
-      const all = displays(type).filter(holds);
-      return (id && only(all.filter((e) => clean(e.textContent).toLowerCase().includes(id.toLowerCase())))) || only(all);
-    };
+    // an edit's fact of the year by the record's ID in the reason it has now, when FS shows
+    // it (whichFact()): of two facts of the year (one the user's or another record's), not
+    // the first
+    const [id] = recordIds('', reason);
+    const edited = () => whichFact(displays(type).filter(holds), type, [id]);
     let shown = '';
     try {
       const el = await waitFor(() => (addition.action === 'edit' ? edited() : displays(type).find((e) => !before.has(clean(e.textContent)))), 'the saved fact', 10000);
@@ -1255,7 +1253,7 @@ if (!window.__arkivet2fsAttach) {
     const year = words.find((w) => /^\d{4}$/.test(w));
     // the name without a record's permanent ID (one in the reason tells an update's fact)
     const name = words.filter((w) => !/^[a-z]{2}\d{14,}$/.test(w)).join(' ');
-    return (type === 'ALTERNATE_NAME' && all.find((e) => nameOf(e) === name)) ||
+    return (type === 'ALTERNATE_NAME' && name && all.find((e) => nameOf(e) === name)) ||
       (words.length && only(all.filter((e) => words.every((w) => factHas(e, w))))) ||
       (year && only(all.filter((e) => factHas(e, year)))) || only(all);
   }

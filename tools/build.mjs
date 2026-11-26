@@ -19,6 +19,8 @@ import { crc32 } from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// the repository the releases are on (sign.mjs, stores.mjs)
+export const REPO = 'Dude4Linux/arkivet2fs';
 const SHIP = [
   /^manifest\.json$/,
   /^_locales\/[a-z_A-Z]+\/messages\.json$/,
