@@ -4,6 +4,30 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.8.4 - 2026-11-26
+
+- **Occupations with their English:** an occupation added to a person is written as
+  the source's notes write it, with the English after the Norwegian words: "Snedker
+  [joiner]", "Husm [cottager] med Jord [with land]". More of the census's words now
+  get their English: "Husm" and "Husm." (cottager), "Føderaadsm" (retired farmer),
+  "med Jord" and "uden Jord" (with and without land).
+- **One occupation of the year, not two:** when FamilySearch already has the
+  occupation in the same words for the record's year, at its place or with no place
+  (also with other English after it, "Snedker [carpenter]"), the linker offers to
+  change that one instead of adding a second. An occupation of another year or place
+  is still added, so the tree shows whether a person kept the same work over the
+  years and places.
+- **The right fact tagged:** when a person has two facts of the same year in the same
+  words (one the user's, one this record's), the source is now tagged to the one the
+  record added or changed, found by the record's permanent ID in its reason, not to
+  the first one FamilySearch lists.
+- **A person paired by hand:** a linker opened for a FamilySearch person you never
+  searched from (a PID typed in) now reads that person's family from FamilySearch, so
+  the parents, spouse and children are paired as for a person searched from.
+- **Firefox release notes:** the notes sent to Firefox Add-ons are cut to its 3000
+  characters, one line per change with a link to the whole notes, so a long release
+  is no longer refused.
+
 ## 1.8.3 - 2026-11-24
 
 - **Marriages attached to the couple:** a marriage's source now goes to the couple's
