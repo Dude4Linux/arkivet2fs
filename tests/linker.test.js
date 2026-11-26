@@ -1530,6 +1530,37 @@ test('run(false): "Update source only" saves the ticked facts of those who have 
   assert.deepEqual(plain(checkedPage(fakeFs({}).chrome).win.readPlan(false).pairs), []);
 });
 
+test('run(): an attach FS was slow to show the person for is tried once more on the SourceBox loaded again (report: three attaches timed out on a busy day)', async () => {
+  const tries = {};
+  const slow = (times) => ({ pid }) => {
+    tries[pid] = (tries[pid] || 0) + 1;
+    return tries[pid] <= times ? { ok: false, timeout: true, dialog: 'Find Person ID Searching',
+      error: 'FamilySearch did not show the person ' + pid + ' (is the ID right, and is the source not already attached?) in time.' } : { ok: true, tagged: { changed: [], notes: [] } };
+  };
+  const answers = (attach) => ({
+    findSource: () => ({ ok: true, sources: [] }),
+    createSource: () => ({ ok: true, sourceId: 'TEST-S05', missing: [] }),
+    attach,
+    addFact: () => ({ ok: true, fields: [], shown: 'Christening 23 August 1846 Vågå' }),
+    tagFact: () => ({ ok: true })
+  });
+  const once = fakeFs(answers(slow(1)));
+  const page = withChristening(once.chrome);
+  await page.win.run(true);
+  const attaches = plain(once.asked.filter(([name]) => name === 'attach').map(([, args]) => args.pid));
+  assert.equal(attaches.length, 4);  // each of the two once more
+  assert.match(page.$('log').textContent, /in time\. FamilySearch showed: "Find Person ID Searching" Trying once more, with the page loaded again\./);
+  assert.doesNotMatch(page.$('log').textContent, /Not attached/);
+  // still too slow the second time: not attached, said with what FS's dialog showed, the tab left open
+  for (const pid of Object.keys(tries)) delete tries[pid];
+  const twice = fakeFs(answers(slow(2)));
+  const second = withChristening(twice.chrome);
+  await second.win.run(true);
+  assert.equal(twice.asked.filter(([name]) => name === 'attach').length, 4);
+  assert.match(second.$('log').textContent, /Not attached to Lars \(TEST-LAR\): FamilySearch did not show the person TEST-LAR .* in time\. FamilySearch showed: "Find Person ID Searching"/);
+  assert.deepEqual(twice.tabs.closed, []);
+});
+
 test('run(): a fact FS has by now (saved by an earlier run) is not saved again, only tagged; the rows learn it', async () => {
   const { chrome, asked, tabs } = fakeFs({
     findSource: () => ({ ok: true, sources: [] }),

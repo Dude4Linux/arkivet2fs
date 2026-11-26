@@ -199,6 +199,25 @@ const person = (pid, name) => `<div data-testid="attach-to-${pid}-persons"><div 
   `<span data-testid="lifespan">1810–1880</span><span data-testid="pid">${pid}</span></div>` +
   `<div data-testid="attach-to-${pid}-reason">Baptism</div><button data-testid="attach-to-${pid}-detach-button">Detach</button></div>`;
 
+test('attach(): FS not showing the person in time closes the Attach dialog, with what it showed (report: the next attaches met it open)', async () => {
+  const dialog = '<div role="dialog"><button data-testid="find-options-by-id-tab">Find by ID</button>' +
+    '<input data-testid="find-options-id-field"><button data-testid="find-options-by-id-next-button">Find</button>' +
+    '<p>Searching</p><button aria-label="Close">×</button></div>';
+  const { w, step } = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox', row('TEST-S01', TITLE), { clock: true });
+  let closed = false;
+  w.document.querySelector('[data-testid="row-TEST-S01-attach-button"]').addEventListener('click', () => {
+    w.document.body.insertAdjacentHTML('beforeend', dialog);
+    w.document.querySelector('[aria-label="Close"]').addEventListener('click', () => { closed = true; w.document.querySelector('[role="dialog"]').remove(); });
+  });
+  const answer = await step('attach', { sourceId: 'TEST-S01', title: TITLE, pid: 'TEST-LAR', reason: 'Baptism' });
+  assert.equal(answer.ok, false);
+  assert.equal(answer.timeout, true);
+  assert.match(answer.error, /^FamilySearch did not show the person TEST-LAR \(is the ID right/);
+  assert.equal(answer.dialog, 'Find by ID Find Searching ×');
+  assert.equal(closed, true);
+  assert.equal(w.document.querySelector('[role="dialog"]'), null);
+});
+
 test('attachedTo(): the persons on the source\'s Attached To page', async () => {
   const { step } = attachPage('https://www.familysearch.org/en/tree/sources/attachedTo/TEST-S01',
     `<h1 data-testid="attach-to-title">${TITLE}</h1>` + person('TEST-LAR', 'Lars Halvorsen') + person('TEST-HAL', 'Halvor Larsen'));

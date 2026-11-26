@@ -3159,13 +3159,15 @@ async function saveAdditions(tabId, pair, sourceId, title) {
 // first try is left over; an addition only when it failed before its Save (`unsaved`),
 // so it can't be added twice. Tagging is safe to try again: a source tagged already is
 // left as it is.
-async function factStep(tabId, name, args) {
+async function factStep(tabId, name, args, url = personDetailsUrl(args.pid)) {
   const answer = await step(tabId, name, args);
   if (answer.ok || !answer.timeout || ((name === 'addFact' || name === 'coupleFact') && !answer.unsaved)) return answer;
-  log(t('{error} Trying once more, with the page loaded again.', { error: answer.error }), 'near');
-  await navigate(tabId, personDetailsUrl(args.pid));
+  log(t('{error} Trying once more, with the page loaded again.', { error: withDialog(answer) }), 'near');
+  await navigate(tabId, url);
   return step(tabId, name, args);
 }
+// A step's error with what FS's dialog showed when it gave up (attach)
+const withDialog = (answer) => answer.error + (answer.dialog ? ' ' + t('FamilySearch showed: "{text}"', { text: answer.dialog }) : '');
 
 // The SourceBox in a couple relationship's context: its Attach attaches to the couple
 const coupleSourceBoxUrl = (id) => SOURCEBOX_URL + '?entityId=' + encodeURIComponent(id) + '&entityType=couple';
@@ -3378,8 +3380,9 @@ async function run(attach) {
           log(t('{name} ({pid}) already has this source on FamilySearch; left as it is.', { name: pair.label, pid: pair.pid }), 'ok');
           continue;
         }
-        const result = await step(tabId, 'attach', { sourceId, title: source.title, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence });
-        if (!result.ok) { log(t('Not attached to {name} ({pid}): {error}', { name: pair.label, pid: pair.pid, error: result.error }), 'bad'); continue; }
+        // FS slow to find the person (a busy day): tried once more on the SourceBox loaded again
+        const result = await factStep(tabId, 'attach', { sourceId, title: source.title, pid: pair.pid, reason: pair.reason, tags: pair.tags, residence: pair.residence }, SOURCEBOX_URL);
+        if (!result.ok) { log(t('Not attached to {name} ({pid}): {error}', { name: pair.label, pid: pair.pid, error: withDialog(result) }), 'bad'); continue; }
         log(t('Attached to {name} ({pid}).', { name: pair.label, pid: pair.pid }), 'ok');
         persons.push({ pid: pair.pid, name: pair.label });
         // Tagged in FS's own dialog after attaching, or later on the Sources tab

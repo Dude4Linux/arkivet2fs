@@ -380,6 +380,18 @@ if (!window.__arkivet2fsAttach) {
     }
   }
 
+  const ATTACH_WAIT_MS = 45000;
+  // FS's Attach dialog at its Find step (the ID field or its tab in it)
+  const attachDialog = () => [...document.querySelectorAll('[role="dialog"]')]
+    .find((d) => byTestId('find-options-id-field', d) || byTestId('find-options-by-id-tab', d));
+  // Closed by its Close or Cancel button, else by Escape: nothing attached
+  function closeAttachDialog(dialog) {
+    const button = [...dialog.querySelectorAll('button')].find((b) => /^close$/i.test(b.getAttribute('aria-label') || '') ||
+      /^cancel$/i.test(clean(b.textContent)));
+    if (button) button.click();
+    else dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+  }
+
   // Attach the source to a person by PID, with a reason
   // (a source Home doesn't show, in a folder or older, is found by its title)
   async function attach({ sourceId, title, pid, reason, tags, residence }) {
@@ -395,9 +407,25 @@ if (!window.__arkivet2fsAttach) {
     }, 'the Find button');
     next.click();
 
-    // The person's reason dialog, or an error under the ID field
-    const reasonField = await waitFor(() => document.querySelector('textarea[data-testid="reason-to-attach-reason-field"]'),
-      'the person ' + pid + ' (is the ID right, and is the source not already attached?)');
+    // The person's reason dialog, or an error under the ID field. FS can take long to
+    // find the person on a busy day: 45 s. On a failure the Attach dialog is closed, so
+    // the next attach doesn't meet it, and what it showed goes with the error.
+    let reasonField;
+    try {
+      reasonField = await waitFor(() => document.querySelector('textarea[data-testid="reason-to-attach-reason-field"]'),
+        'the person ' + pid + ' (is the ID right, and is the source not already attached?)', ATTACH_WAIT_MS);
+    } catch (e) {
+      const dialog = attachDialog();
+      if (dialog && !e.blocked) {
+        // its words with a space between elements (textContent runs "Find by IDFind" together)
+        const words = [];
+        const walk = document.createTreeWalker(dialog, NodeFilter.SHOW_TEXT);
+        while (walk.nextNode()) if (clean(walk.currentNode.textContent)) words.push(clean(walk.currentNode.textContent));
+        e.dialog = words.join(' ').slice(0, 300);
+        closeAttachDialog(dialog);
+      }
+      throw e;
+    }
     const person = byTestId('reason-to-attach-person');
     const shown = person ? clean(person.textContent) : '';
     const pids = shown.toUpperCase().match(/\b[A-Z0-9]{4}-[A-Z0-9]{2,4}\b/g) || [];
@@ -1441,7 +1469,7 @@ if (!window.__arkivet2fsAttach) {
     if (!step) return false;
     step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error),
       ...(error && error.blocked ? { blocked: true } : {}), ...(error && error.timeout ? { timeout: true } : {}),
-      ...(error && error.unsaved ? { unsaved: true } : {}) }));
+      ...(error && error.unsaved ? { unsaved: true } : {}), ...(error && error.dialog ? { dialog: error.dialog } : {}) }));
     return true;  // answers later
   });
 }
