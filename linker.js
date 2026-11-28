@@ -127,6 +127,27 @@ function selfContradicted(record, person, fs) {
   return '';
 }
 
+// The one record person besides `self` who has the FS person's given name and
+// surname (a patronymic of the same father, else the same word), is old enough for
+// their role (MIN_AGE) and whom the record doesn't contradict (selfContradicted())
+function namesakeSelf(record, people, self, fs, chosen = {}) {
+  const name = splitName(stripNameVariants(fs.name));
+  if (!name.surname) return null;
+  const born = (parseFsDate((fs.birth || fs.christening || {}).date || '') || {}).year
+    || Number(((fs.lifespan || '').match(/^\d{4}/) || [])[0]) || null;
+  const recordYear = recordYearOf(record);
+  const sameSurname = (word) => {
+    const a = fold(word || ''), b = fold(name.surname);
+    if (!a) return false;
+    if (isPatronymic(a) && isPatronymic(b)) return sameFather(patronymicBase(a), patronymicBase(b));
+    return a === b;
+  };
+  const fits = people.filter((p) => p !== self && !(p.key in chosen) && hasGivenName(p, name.given) &&
+    sameSurname(splitName(stripNameVariants(p.name)).surname) && !selfContradicted(record, p, fs) &&
+    !(born && recordYear && MIN_AGE[p.roleEnglish] && recordYear - born < MIN_AGE[p.roleEnglish]));
+  return fits.length === 1 ? fits[0] : null;
+}
+
 // Suggested pairs {key: pid}: the FS person, and the relatives the record names (by
 // relativesInRecord() from the FS person's entry) with an FS relative's given name
 // (children by the best fitting given name and birth year ±2, and the sex where both
@@ -152,8 +173,12 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   // The record against the FS person (buried before this baptism): not paired, but
   // their parents are still the record person's, and the parents' FS families, read
   // as `need`, can pair the namesake brother or sister who fits
-  const open = self && !(self.key in chosen) && !used.has(fs.pid);
-  const against = open && !census ? selfContradicted(record, self, fs) : '';
+  let open = self && !(self.key in chosen) && !used.has(fs.pid);
+  let against = open && !census ? selfContradicted(record, self, fs) : '';
+  // Opened on a namesake (the child Halvor, FS's Halvor Larsen his father):
+  // the record person of the FS person's full name whom nothing contradicts is them
+  const namesake = against ? namesakeSelf(record, people, self, fs, chosen) : null;
+  if (namesake) { self = namesake; against = ''; open = true; }
   if (open) {
     if (!against) pairs[self.key] = fs.pid;
     why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripNameVariants(fs.name), what: against })

@@ -3110,3 +3110,26 @@ test('outsideFamily(): a census resident whose position says they are not of the
   const c = w.recordPeople(record('census-1865'));
   assert.equal(w.outsideFamily(c.find((p) => p.name === 'Lars Ormsen'), c), false);
 });
+
+// Bug: a baptism opened on the child, named after his father, with the father's PID:
+// the child was taken for the FS person, ruled out by the birth year, and no one was
+// paired. The record person of the FS person's full name, the father, is them.
+test('suggestPairs(): opened on a namesake child, the father of the FS person\'s full name is paired', () => {
+  const r = record('baptism-1846');
+  const child = r.people.find((p) => p.current);
+  child.name = 'Halvor';
+  const people = w.recordPeople(r);
+  const fs = HALVOR_FAMILY([{ pid: 'TEST-HA2', name: 'Halvor Halvorsen', gender: 'Male', lifespan: '1846-1920' }]);
+  const self = w.findSelf(people, fs, true);
+  assert.equal(self.name, 'Halvor');
+  const { pairs, why } = w.suggestPairs(r, people, self, fs);
+  const named = byName(people, pairs);
+  assert.equal(named['Halvor Larsen'], 'TEST-HAL');
+  assert.equal(why[people.find((p) => p.name === 'Halvor Larsen').key], 'the FamilySearch person');
+  assert.equal(named['Halvor'], 'TEST-HA2');
+  assert.ok(Object.values(named).includes('TEST-AST'), 'the mother is paired as the spouse');
+  // A namesake too young for the role isn't them: the child stays unpaired
+  const young = { ...fs, birth: { date: '1840' } };
+  assert.equal(w.suggestPairs(r, people, w.findSelf(people, young, true), young).pairs[self.key], undefined);
+});
+
