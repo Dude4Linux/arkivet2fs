@@ -31,6 +31,19 @@ test('treeFamily(): the person, parents, spouses and children, each once', () =>
     ['person TEST-LAR', 'father TEST-HAL', 'mother TEST-DAG', 'spouse TEST-KJE', 'child TEST-REI', 'child TEST-ASG', 'child TEST-ELI']);
 });
 
+// Bug: opened as the buried child (the FS person), the burial's father wasn't paired:
+// from the deceased's entry the record named no father
+test('suggestPairs(): a child\'s burial opened as the child pairs the father from the child\'s entry', () => {
+  const r = w.extractRecord(unnamedBurial(w), fixtureUrl('da/burial-1854.html'));
+  const people = w.recordPeople(r);
+  const child = { pid: 'TEST-LAR', name: 'Lars Halvorsen', gender: 'Male', father: { pid: 'TEST-HAL', name: 'Halvor Larsen', lifespan: '1820-1890' }, families: [] };
+  const { pairs, why } = w.suggestPairs(r, people, w.findSelf(people, child, true), child);
+  const father = people.find((p) => p.name === 'Halvor Larsen');
+  assert.equal(pairs[people[0].key], 'TEST-LAR');
+  assert.equal(pairs[father.key], 'TEST-HAL');
+  assert.equal(why[father.key], 'father, same given name');
+});
+
 test('suggestPairs(): a baptism; a parent with another given name is only named', () => {
   const r = record('baptism-1846');
   const people = w.recordPeople(r);

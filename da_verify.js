@@ -105,6 +105,9 @@ function relativesInRecord(record) {
       if (theirs === (mine === 'groomFather' ? 'groom' : 'bride')) found.child.push(other);
     } else if (mine === 'deceased') {
       if (theirs === 'spouse') found.spouse.push(other);
+      // a child's burial names the child's father (and mother): the deceased's parents
+      if (theirs === 'father') found.father.push(other);
+      if (theirs === 'mother') found.mother.push(other);
     }
   }
   return found;

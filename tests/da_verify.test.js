@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, fixture, fixtureDoc, fixtureUrl, plain, SHARED } = require('./harness.js');
+const { load, fixture, fixtureDoc, fixtureUrl, plain, unnamedBurial, SHARED } = require('./harness.js');
 const { criteria } = require('./criteria.js');
 
 const w = load(SHARED);
@@ -103,6 +103,18 @@ test('roleKind(): DA roles and census positions, in Norwegian or English', () =>
   // another one's: a lodger's child isn't the head's
   assert.equal(kind('Logerendes Barn'), '');
   assert.equal(kind('Tjenestepigens Søn'), '');
+});
+
+// Bug: from a buried child's own entry the father the church book names wasn't the
+// child's father, so the linker paired only the child
+test('relativesInRecord(): a child\'s burial, the father and mother named the deceased\'s parents', () => {
+  const r = w.extractRecord(unnamedBurial(w), fixtureUrl('da/burial-1854.html'));
+  r.people.push({ ...r.people[1], id: 'pg99000000000025', name: 'Astri Larsdatter', role: 'mor', roleEnglish: 'Mother', current: false });
+  const found = w.relativesInRecord(open(r, 0));
+  assert.deepEqual(names(found.father), ['Halvor Larsen']);
+  assert.deepEqual(names(found.mother), ['Astri Larsdatter']);
+  // and the other way round, as before: the deceased the father's child
+  assert.deepEqual(names(w.relativesInRecord(open(r, 1)).child), ['!! Halvorsd.*']);
 });
 
 test('relativesInRecord(): an 1891 page, the grandchildren the son\'s and his wife\'s', () => {
