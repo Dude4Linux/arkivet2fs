@@ -912,6 +912,9 @@ const joined = (...parts) => parts.filter(Boolean).join(', ');
 // (`{code, name}`), or null
 function parishTown(record) {
   const code = parishMunicipality(record.sourceTitle);
+  if (!code) return null;
+  const fs = fsNameOfYear(code, recordYearOf(record));
+  if (fs) return { code, name: placeParts(fs)[0] };
   const town = TOWN_NAMES[code] && townIn(code, recordYearOf(record));
   return town ? { code, name: town.name } : null;
 }
@@ -933,8 +936,9 @@ function titleOfYear(title, record) {
 }
 // The title as it was before titleOfYear(): the town's parish by its present name
 function presentParishTitle(title) {
-  for (const [code, names] of Object.entries(TOWN_NAMES)) {
-    for (const [name] of names.filter(([n]) => n !== municipalityName(code))) {
+  for (const code of new Set([...Object.keys(TOWN_NAMES), ...Object.keys(placeTimelines)])) {
+    const names = [...(TOWN_NAMES[code] || []).map(([n]) => n), ...(placeTimelines[code] || []).map((p) => placeParts(p.name)[0])];
+    for (const name of new Set(names.filter((n) => n && n !== municipalityName(code)))) {
       const renamed = renameParish(title, name, municipalityName(code));
       if (renamed !== title) return renamed;
     }
@@ -1401,6 +1405,7 @@ function factAdditions(person, record, tree, name, opts = {}) {
   const out = [];
   const place = recordPlace(record);
   const year = recordYearOf(record);
+  const kind = (record.recordTypeInfo || {}).type;
   const ids = opts.ids || [];
   const ours = (f) => Boolean(f && f.from && ids.includes(f.from.id));
   const stale = (f) => reasonFrom(f.from.reason) !== reasonFrom(opts.reason);
@@ -1474,6 +1479,18 @@ function factAdditions(person, record, tree, name, opts = {}) {
       out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place), ...refresh(fs, false), value });
     }
   }
+  // The vitals the record is about (the source's tags: a burial's death and burial, a
+  // baptism's birth and christening) that the record gives no date for (a burial's death):
+  // FS's place of a renamed town by its name of FS's year ("Fredrikstad, Østfold, Norway"
+  // for a death in 1782: Fredrikstad, Smaalenene), FS's date kept
+  for (const fact of defaultTags(kind, roleKind(person))) {
+    const type = VITAL_TYPES[fact];
+    const fs = type && !out.some((a) => a.type === type) && full[fact.toLowerCase()];
+    const fsYearOf = fs && fsYear(fs.date);
+    if (!fsYearOf || !placeText(fs.place) || !notOfYear(fs.place, fsYearOf)) continue;
+    out.push({ fact, action: 'edit', type, current: joined(fs.date, fs.place),
+      value: { date: String(fs.date).trim(), place: fsPlaceOfYear(fs.place, fsYearOf) } });
+  }
 
   // A marriage: on the couple relationship of the groom and the bride paired with him
   // (`opts.spouse`), where FS keeps it; added, or FS's (the one its family card shows)
@@ -1501,7 +1518,6 @@ function factAdditions(person, record, tree, name, opts = {}) {
   // An emigrant protocol's residence is the emigrant's home, anywhere in Norway, not in
   // the police district; one abroad ("Amerika": an American going back) isn't added,
   // since FS would place it in a village of that name somewhere.
-  const kind = (record.recordTypeInfo || {}).type;
   const isCensus = kind === 'census';
   const home = cleanPlace(isCensus ? (record.census || {}).residence : person.residence);
   const ofYear = (full.residences || []).filter((r) => fsYear(r.date) === year);
@@ -2263,6 +2279,7 @@ function readDetails() {
     for (const pid of pids) state.detailsPending.delete(pid);
     for (const row of state.rows) row.showFacts();
     showFsCheck();  // a title may have taken a tree person's name (unnamedChildTitle())
+    readPlaceNames();  // FS's names of the places the tree persons' facts name
   });
   return detailsQueue;
 }
@@ -3506,6 +3523,8 @@ function townPlace(code, record, written) {
   return townPlaceIn(code, recordYearOf(record), written);
 }
 function townPlaceIn(code, year, written) {
+  const fs = fsNameOfYear(code, year);
+  if (fs) return fs;
   const town = townIn(code, year, written);
   const county = town ? town.county : '';
   return joined(town ? town.name : municipalityName(code), county === null ? '' : county || fsCounty(countyName(code.slice(0, 2))), 'Norway');
@@ -3529,34 +3548,244 @@ const placeParts = (place) => String(place || '').split(',').map((x) => x.trim()
 function townOfYear(place, year) {
   if (!year) return place;
   const code = townCode(place);
-  if (code) return townPlaceIn(code, year);
-  // a place in the town: the town, its county (none for Oslo) and Norway after it
+  if (code) return fsNameOfYear(code, year) || (TOWN_NAMES[code] ? townPlaceIn(code, year) : place);
   const parts = placeParts(place);
+  // a part of the town by a direction word, alone ("Østre Fredrikstad, Østfold, Norway"):
+  // FS's name of it in the year, else (FS has the part only in other years, or isn't read
+  // yet) the direction word kept before the town's name of the year ("Østre Fredrikstad,
+  // Smaalenene, Norway"): FS's users wrote it, and the record doesn't say it's wrong
+  const dir = parts.length >= 2 && parts.length <= 3 && placeDirection(parts[0]);
+  if (dir) {
+    const town = [dir.rest, ...parts.slice(1)].join(', ');
+    const of = townCode(town);
+    if (of && townPartIn(parts[0], of)) {
+      const named = partOfYear(of, parts[0], year);
+      if (named) return named;
+      const [first, ...rest] = placeParts(townOfYear(town, year));
+      return joined(dir.word + dir.sep + first, ...rest);
+    }
+  }
+  // a place in the town: the town, its county (none for Oslo) and Norway after it
   if (parts.length >= 3 && parts[parts.length - 1] === 'Norway') {
     for (const size of [3, 2]) {
-      const tail = parts.slice(-size);
-      if (parts.length > size && townCode(tail.join(', '))) return joined(...parts.slice(0, -size), townOfYear(tail.join(', '), year));
+      const tail = parts.slice(-size).join(', ');
+      const of = parts.length > size && townCode(tail);
+      if (!of) continue;
+      // the town's part by a direction word ("Østre Fredrikstad, Fredrikstad, …"): FS's
+      // name of it in the year, else kept before the town of the year, as any place in it
+      const named = parts.length === size + 1 && townPartIn(parts[0], of) ? partOfYear(of, parts[0], year) : null;
+      return named || joined(...parts.slice(0, -size), townOfYear(tail, year));
     }
   }
   return place;
 }
-// The town of TOWN_NAMES that a place of the town alone names (two or three parts, a
-// county the town's, now or then), or ''
+// The municipality or town that a place of it alone names (two or three parts, a county
+// the municipality's, now or then, by DA's tables, TOWN_NAMES or FS's names of it read
+// before), or '': one whose names FS or TOWN_NAMES gives (a municipality FS's names of
+// aren't read yet is asked for, placeNamesWanted). A place that is one of FS's names of
+// it, whatever its parts ("Fredrikstad, Fredrikstad, Østfold, Norway"), is it too.
 function townCode(place) {
+  const text = placeText(place);
+  for (const [code, timeline] of Object.entries(placeTimelines)) {
+    if (timeline.some((period) => placeText(period.name) === text)) return code;
+  }
   const parts = placeParts(place);
   // also FS's place not standardized, the town and its county without Norway ("Halden,
   // Østfold."; the county checked below, so not a farm of the town's name elsewhere)
   if (parts.length === 2 && parts[1] !== 'Norway') parts.push('Norway');
   if (parts.length < 2 || parts.length > 3) return '';
-  for (const [code, names] of Object.entries(TOWN_NAMES)) {
-    const county = fsCounty(countyName(code.slice(0, 2)));
-    const towns = [municipalityName(code), ...names.map((n) => n[0])].map(foldPlace);
-    const counties = [county, ...names.map((n) => n[1]).filter(Boolean)].map(foldPlace);
-    if (!towns.includes(foldPlace(parts[0])) || (parts.length === 3 && !counties.includes(foldPlace(parts[1])))) continue;
-    return code;
+  const town = foldPlace(parts[0]);
+  const county = parts.length === 3 ? foldPlace(parts[1]) : null;
+  const known = [];
+  for (const code of municipalitiesNamed(town)) {
+    const { towns, counties } = namesOf(code);
+    if (!towns.includes(town) || (county !== null && !counties.includes(county))) continue;
+    if (TOWN_NAMES[code] || (placeTimelines[code] && placeTimelines[code].length)) known.push(code);
+    else if (!placeTimelines[code] && DA_MUNICIPALITIES[code]) placeNamesWanted.add(code);
   }
-  return '';
+  // "Halden, Norway": the town only when no other has that name
+  return county === null && parts[1] === 'Norway' && known.length > 1 ? '' : known[0] || '';
 }
+// A municipality's names and counties, folded: DA's, TOWN_NAMES's and FS's of each period
+function namesOf(code) {
+  const towns = [municipalityName(code), ...(TOWN_NAMES[code] || []).map((n) => n[0])];
+  const counties = [fsCounty(countyName(code.slice(0, 2))), countyName(code.slice(0, 2)), ...(TOWN_NAMES[code] || []).map((n) => n[1]).filter(Boolean)];
+  for (const period of placeTimelines[code] || []) {
+    const parts = placeParts(period.name);
+    towns.push(parts[0]);
+    if (parts.length >= 3) counties.push(parts[parts.length - 2]);
+  }
+  return { towns: towns.map(foldPlace), counties: counties.map(foldPlace) };
+}
+// The codes of the municipalities a folded name is one of the names of (DA's,
+// TOWN_NAMES's, FS's read before)
+function municipalitiesNamed(name) {
+  const codes = new Set(Object.keys(TOWN_NAMES).concat(Object.keys(placeTimelines)).filter((code) => namesOf(code).towns.includes(name)));
+  for (const [code, own] of Object.entries(DA_MUNICIPALITIES)) if (foldPlace(own) === name) codes.add(code);
+  return [...codes];
+}
+
+// --- FS's names of places over time -----------------------------------------------
+// FamilySearch's own name of a municipality or town in each period, read from its
+// Places page (fs_attach.js placeNames): "Fredrikstad, Smaalenene, Norway" until 1918,
+// "Tromsø, Finnmark, Norway" before Tromsø amt, so a place is as FS standardizes it in
+// the record's year without rules of our own. Kept in chrome.storage.local `places`
+// ({code: {read, timeline}}) for PLACES_KEEP_MS; a municipality FS has no entry for is
+// kept as an empty timeline (TOWN_NAMES and the present county then). The names are
+// asked for as they're needed (placeNamesWanted) and read by readPlaceNames().
+const PLACES_KEEP_MS = 90 * 24 * 3600 * 1000;
+const MAX_PLACE_READS = 8;
+const placeTimelines = {};
+const placeNamesWanted = new Set();
+const placeNamesAsked = new Set();
+async function loadPlaceNames() {
+  try {
+    const kept = (await chrome.storage.local.get('places')).places || {};
+    for (const [code, entry] of Object.entries(kept)) {
+      if (entry && Array.isArray(entry.timeline) && Date.now() - entry.read < PLACES_KEEP_MS) placeTimelines[code] = entry.timeline;
+    }
+    const parts = (await chrome.storage.local.get('placeParts')).placeParts || {};
+    for (const [key, entry] of Object.entries(parts)) {
+      if (entry && Array.isArray(entry.timeline) && Date.now() - entry.read < PLACES_KEEP_MS) partTimelines[key] = entry.timeline;
+    }
+  } catch (e) { /* only a cache */ }
+}
+// The periods of a timeline holding `year`, the latest-starting first
+const periodsOf = (timeline, year) => timeline.filter((p) => (p.from === null || p.from <= year) && (p.to === null || year <= p.to))
+  .sort((a, b) => (b.from ?? -Infinity) - (a.from ?? -Infinity));
+// FS's name of the municipality `code` in `year` (the latest period holding the year,
+// else the last before it), or null: none read yet (asked for), none for that year
+function fsNameOfYear(code, year) {
+  if (!code || !year) return null;
+  const timeline = placeTimelines[code];
+  if (!timeline) {
+    if (DA_MUNICIPALITIES[code]) placeNamesWanted.add(code);
+    return null;
+  }
+  const holding = periodsOf(timeline, year);
+  if (holding.length) return holding[0].name;
+  const before = timeline.filter((p) => p.to !== null && p.to < year);
+  return before.length ? before.reduce((a, b) => (b.to > a.to ? b : a)).name : null;
+}
+// The municipality's timeline from FS's Places page in the tab: the entry of its name in
+// its county (a town's city, else the municipality), [] when FS has none
+async function placeTimeline(tab, code) {
+  const name = municipalityName(code);
+  const county = fsCounty(countyName(code.slice(0, 2)));
+  const text = foldPlace(name) === foldPlace(county) ? name + ', Norway' : name + ', ' + county + ', Norway';
+  const kinds = Number(code.slice(2)) < 11 ? ['City', 'Town', 'Independent City', 'Municipality'] : ['Municipality', 'City', 'Town', 'Independent City'];
+  const counties = [county, countyName(code.slice(0, 2))].map(foldPlace);
+  for (const pick of [0, 1, 2]) {
+    await navigate(tab.id, PLACES_URL + encodeURIComponent(text), false);
+    const answer = await step(tab.id, 'placeNames', { name, county, kinds, pick });
+    if (!answer.ok) throw stepError(answer);
+    if (!answer.timeline.length) return [];
+    // an entry of another county (a farm or parish of the name elsewhere): the next
+    if (answer.timeline.some((p) => placeParts(p.name).map(foldPlace).some((part) => counties.includes(part)))) return answer.timeline;
+  }
+  return [];
+}
+const PLACES_URL = 'https://www.familysearch.org/en/research/places/?text=';
+
+// A part of a town named by a direction word before the town's name ("Østre
+// Fredrikstad"), as FS's users write a parish of the town: "Østre Fredrikstad, Østfold,
+// Norway", a place FS doesn't have. FS's entries of that name in the town (any kind: FS
+// has Østre Fredrikstad as a parish in Fredrikstad from 1880), read from its Places page
+// as for a municipality and kept in chrome.storage.local `placeParts` by partKey().
+const partTimelines = {};
+const partsWanted = new Map();
+const partsAsked = new Set();
+const partKey = (code, name) => code + '/' + foldPlace(name);
+// FS's name of the part `name` of the town `code` in `year`: its period's name, '' when
+// FS has it in no period holding the year (the town then), null when not read (asked for)
+function partOfYear(code, name, year) {
+  const timeline = partTimelines[partKey(code, name)];
+  if (!timeline) {
+    partsWanted.set(partKey(code, name), { code, name });
+    return null;
+  }
+  const holding = periodsOf(timeline, year);
+  return holding.length ? holding[0].name : '';
+}
+// A place part that is a direction word before a name of the town `code` (and no
+// municipality of its own: Østre Toten), or null
+function townPartIn(part, code) {
+  const dir = placeDirection(part);
+  return dir && namesOf(code).towns.includes(foldPlace(dir.rest)) && !municipalitiesNamed(foldPlace(part)).length ? dir : null;
+}
+// The part's timeline from FS's Places page: the entries of its name in the town
+async function partTimeline(tab, { code, name }) {
+  const town = municipalityName(code);
+  const county = fsCounty(countyName(code.slice(0, 2)));
+  const text = name + ', ' + (foldPlace(town) === foldPlace(county) ? '' : town + ', ') + county + ', Norway';
+  const towns = namesOf(code).towns;
+  for (const pick of [0, 1, 2]) {
+    await navigate(tab.id, PLACES_URL + encodeURIComponent(text), false);
+    const answer = await step(tab.id, 'placeNames', { name, county: town, kinds: [], pick });
+    if (!answer.ok) throw stepError(answer);
+    if (!answer.timeline.length) return [];
+    // one in another town (a farm of the name elsewhere): the next
+    if (answer.timeline.some((p) => placeParts(p.name).slice(1).map(foldPlace).some((x) => towns.includes(x)))) return answer.timeline;
+  }
+  return [];
+}
+// Read FS's names of the municipalities asked for (`codes`, else all wanted), in one
+// hidden window after the other FS reads, at most MAX_PLACE_READS a page; kept, and the
+// rows redrawn by `done` (or showFacts()) when any was read
+function readPlaceNames(codes = [...placeNamesWanted], done) {
+  const todo = [...new Set(codes)].filter((code) => DA_MUNICIPALITIES[code] && !placeTimelines[code] && !placeNamesAsked.has(code))
+    .slice(0, Math.max(0, MAX_PLACE_READS - placeNamesAsked.size));
+  // and the towns' parts asked for (only of a town whose names are known)
+  const parts = [...partsWanted].filter(([key]) => !partTimelines[key] && !partsAsked.has(key))
+    .slice(0, Math.max(0, MAX_PLACE_READS - partsAsked.size));
+  if (!todo.length && !parts.length) return detailsQueue;
+  for (const code of todo) placeNamesAsked.add(code);
+  for (const [key] of parts) partsAsked.add(key);
+  detailsQueue = detailsQueue.then(() => state.residenceRead).then(async () => {
+    const read = {};
+    const readParts = {};
+    let tab = null;
+    try {
+      tab = await hiddenTab();
+      for (const code of todo) {
+        let timeline = await placeTimeline(tab, code).catch(() => null);
+        // a hidden tab FS hasn't drawn: shown for a moment
+        if (!timeline) {
+          await tab.show();
+          timeline = await placeTimeline(tab, code).catch((e) => { console.warn('arkivet2fs: FS\'s names of ' + municipalityName(code), e); return null; });
+          await tab.back();
+        }
+        if (timeline) { placeTimelines[code] = timeline; read[code] = { read: Date.now(), timeline }; }
+      }
+      for (const [key, part] of parts) {
+        const timeline = await partTimeline(tab, part).catch((e) => { console.warn('arkivet2fs: FS\'s names of ' + part.name, e); return null; });
+        if (timeline) { partTimelines[key] = timeline; readParts[key] = { read: Date.now(), timeline }; }
+      }
+    } catch (e) {
+      console.warn('arkivet2fs: reading FS\'s place names', e);
+    } finally {
+      if (tab) tab.close();
+    }
+    if (!Object.keys(read).length && !Object.keys(readParts).length) return;
+    try {
+      const kept = (await chrome.storage.local.get('places')).places || {};
+      const keptParts = (await chrome.storage.local.get('placeParts')).placeParts || {};
+      await chrome.storage.local.set({ places: { ...kept, ...read }, placeParts: { ...keptParts, ...readParts } });
+    } catch (e) { /* only a cache */ }
+    if (done) done();
+    else for (const row of state.rows) row.showFacts();
+  }).catch((e) => console.warn('arkivet2fs: reading FS\'s place names', e));
+  return detailsQueue;
+}
+// The source titles by FS's name of the parish's town in the record's year, once read
+// (before the SourceBox is checked)
+function retitleByYear() {
+  if (state.record) $('f-title').value = titleOfYear(presentParishTitle($('f-title').value), state.record);
+  const other = state.parallel && state.parallel.record;
+  if (other) $('g-title').value = titleOfYear(presentParishTitle($('g-title').value), other);
+  for (const row of state.rows) row.showFacts();
+}
+
 // A DA county as FS names it: DA's Bergen is FS's Hordaland
 const fsCounty = (name) => (name === 'Bergen' ? 'Hordaland' : name);
 // The one municipality of a place's codes, leaving out the neighbours
@@ -4042,6 +4271,7 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const status = $('status');
   try {
+    await loadPlaceNames();  // FS's names of places read before
     if (params.get('rec')) status.textContent = t('Reading the record on DigitalArkivet…');
     let loaded = params.get('draft') ? await loadDraft(params.get('draft')) : params.get('rec') ? await loadFromDA(params.get('rec')) : null;
     if (!loaded) throw new Error(t('No record given. Open the linker from a search hit, or with the extension icon on a DA record.'));
@@ -4079,6 +4309,12 @@ async function main() {
     $('fs-pid').value = pid;
     status.textContent = t('Pairing the people with the FamilySearch family…');
     await setPerson(pid);
+    // FS's names of the record's places in its year, before the SourceBox is checked
+    // for the title
+    if (placeNamesWanted.size || partsWanted.size) {
+      status.textContent = t("Reading FamilySearch's place names…") + ' ' + windowNote();
+      await readPlaceNames(undefined, retitleByYear);
+    }
     // Shown when the SourceBox has told what FS has already
     status.textContent = t('Checking your SourceBox on FamilySearch…') + ' ' + windowNote();
     await checkOnFamilySearch();

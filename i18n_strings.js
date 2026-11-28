@@ -493,7 +493,8 @@ function i18nTable() {
 
     // --- What FS already has (linker.js) --------------------------------------------------
     'Check the SourceBox again': ['Sjekk kildeboksen igjen', 'Sjekk kjeldeboksen igjen'],
-    'Checking your SourceBox on FamilySearch…': ['Sjekker kildeboksen din i FamilySearch…', 'Sjekkar kjeldeboksen din i FamilySearch…'],
+    "Reading FamilySearch's place names…": ['Leser FamilySearchs stedsnavn…', 'Les stadnamna til FamilySearch…'],
+  'Checking your SourceBox on FamilySearch…': ['Sjekker kildeboksen din i FamilySearch…', 'Sjekkar kjeldeboksen din i FamilySearch…'],
     'A FamilySearch window may come up meanwhile; leave it, it closes by itself.': [
       'Et FamilySearch-vindu kan komme opp imens; la det være, det lukkes av seg selv.',
       'Eit FamilySearch-vindauge kan kome opp i mellomtida; la det vere, det blir lukka av seg sjølv.'],

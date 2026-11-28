@@ -653,6 +653,8 @@ function fakeFs(answers, rejected = []) {
       async sendMessage(id, { linker, args, action }) {
         // fs_person.js on a details page: the tree person as FS has them now
         if (action === 'readPerson') return answers.readPerson ? answers.readPerson(urls[id]) : { error: 'not read' };
+        // FS's Places page: no entry of the name, unless a test gives one
+        if (linker === 'placeNames' && !answers.placeNames) return { ok: true, candidates: [], timeline: [] };
         asked.push([linker, args]);
         return answers[linker](args, urls[id]);
       },
@@ -1862,6 +1864,70 @@ test('factAdditions(): FS\'s residence of the record\'s year changed where it is
   assert.equal(w.onTreeAlready({ residences: [{ date: '1874', place: town }] }, edit), true);
 });
 
+test('factAdditions(): FS\'s death and birth in a renamed town by its name of FS\'s year, where the record gives no date (bug: a burial\'s death left "Fredrikstad, Østfold, Norway" for 1782)', () => {
+  const { win, state } = checkedPage();
+  const town = 'Fredrikshald, Smaalenene, Norway';
+  const vitals = (rec, person, fs) => {
+    state.record = rec;
+    state.fs = { pid: 'TEST-LLA', name: person.name, occupations: [], altNames: [], residences: [], ...fs };
+    return plain(win.factAdditions(person, rec, { pid: 'TEST-LLA' })).filter((a) => ['BIRTH', 'CHRISTENING', 'DEATH', 'BURIAL'].includes(a.type))
+      .map(({ fact, action, current, value }) => ({ fact, action, current, value }));
+  };
+  // a burial with no date of death: FS's death, its date kept, the town of FS's year
+  const b = record('burial-1854');
+  const burial = { ...b, county: 'Østfold', church: '', sourceTitle: 'Church book from Halden parish 1850-1860 (0101P)', fields: { ...b.fields } };
+  delete burial.fields['date of death'];
+  delete burial.fields['year of death'];
+  const lars = w.recordPeople(burial)[0];
+  const deaths = vitals(burial, lars, { death: { date: '1854', place: 'Halden, Østfold, Norway' }, burial: { date: '18 April 1854', place: town } }).filter((a) => a.fact === 'Death');
+  assert.deepEqual(deaths, [{ fact: 'Death', action: 'edit', current: '1854, Halden, Østfold, Norway', value: { date: '1854', place: town } }]);
+  // FS's death of the year by its name then, or no place: nothing
+  assert.deepEqual(vitals(burial, lars, { death: { date: '1854', place: town } }).filter((a) => a.fact === 'Death'), []);
+  assert.deepEqual(vitals(burial, lars, { death: { date: '1854' } }).filter((a) => a.fact === 'Death'), []);
+  // a fact of FS's the source isn't about (a burial's christening): left as it is
+  assert.deepEqual(vitals(burial, lars, { christening: { date: '1797', place: 'Halden, Østfold, Norway' } }).filter((a) => a.fact === 'Christening'), []);
+  // a baptism with no date of birth: FS's birth by the town's name of FS's year
+  const c = record('baptism-1846');
+  const baptism = { ...c, county: 'Østfold', church: '', sourceTitle: 'Church book from Halden parish 1845-1856 (0101P)', fields: { ...c.fields } };
+  for (const key of Object.keys(baptism.fields)) if (/birth/.test(key)) delete baptism.fields[key];
+  const child = w.recordPeople(baptism).find((p) => p.current);
+  const births = vitals(baptism, child, { birth: { date: '1846', place: 'Halden, Ostfold, Norway' } }).filter((a) => a.fact === 'Birth');
+  assert.deepEqual(births, [{ fact: 'Birth', action: 'edit', current: '1846, Halden, Ostfold, Norway', value: { date: '1846', place: town } }]);
+});
+
+test('factAdditions(): FS\'s birth and christening in a part of the town FS has only in other years, by the town of the year with the direction word kept (bugs: "Østre <town>, Østfold, Norway" for 1758 marked ✓, nothing offered; then offered as the town without "Østre")', () => {
+  const { win, state } = checkedPage();
+  const town = 'Østre Fredrikshald, Smaalenene, Norway';
+  const c = record('baptism-1846');
+  const baptism = { ...c, county: 'Østfold', church: 'Halden', sourceTitle: 'Church book from Halden parish 1845-1856 (0101P)' };
+  const child = w.recordPeople(baptism).find((p) => p.current);
+  state.record = baptism;
+  const part = 'Østre Halden, Østfold, Norway';  // made up, as FS's users write a parish of the town
+  const vitals = () => {
+    // FS has the record's dates, in the part of the town
+    state.fs = { pid: 'TEST-OHA', name: child.name, occupations: [], altNames: [], residences: [],
+      birth: { date: '16 July 1846', place: part }, christening: { date: '23 August 1846', place: part } };
+    return plain(win.factAdditions(child, baptism, { pid: 'TEST-OHA' })).filter((a) => ['BIRTH', 'CHRISTENING'].includes(a.type))
+      .map(({ fact, action, value }) => ({ fact, action, place: value.place }));
+  };
+  // FS's entries of the part not read yet: the direction word before the town of the
+  // record's year, and asked for
+  assert.deepEqual(vitals(), [{ fact: 'Birth', action: 'edit', place: town }, { fact: 'Christening', action: 'edit', place: town }]);
+  assert.deepEqual(plain([...value(win, 'partsWanted').values()]), [{ code: '0101', name: 'Østre Halden' }]);
+  // FS has it only from 1880 (a parish of the town): the same
+  value(win, 'partTimelines')['0101/østre halden'] = [
+    { from: 1880, to: 1918, name: 'Østre Halden, Fredrikshald, Smaalenene, Norway', kind: 'Lutheran Parish' },
+    { from: 1919, to: null, name: 'Østre Halden, Halden, Østfold, Norway', kind: 'Lutheran Parish' }];
+  assert.deepEqual(vitals(), [{ fact: 'Birth', action: 'edit', place: town }, { fact: 'Christening', action: 'edit', place: town }]);
+  assert.equal(value(win, 'notOfYear')(part, 1846), true);  // the facts table: near (≈) at best
+  // in a year of FS's: FS's name of the part then; within the town ("…, Halden, Østfold, Norway") the same
+  assert.equal(win.townOfYear('Østre Halden, Østfold, Norway', 1900), 'Østre Halden, Fredrikshald, Smaalenene, Norway');
+  assert.equal(win.townOfYear('Østre Halden, Halden, Østfold, Norway', 1758), 'Østre Halden, Fredrikshald, Smaalenene, Norway');
+  assert.equal(win.townOfYear('Østre Halden, Halden, Østfold, Norway', 1900), 'Østre Halden, Fredrikshald, Smaalenene, Norway');
+  // a municipality of its own with a direction word isn't a part of a town
+  assert.equal(win.townOfYear('Østre Toten, Oppland, Norway', 1758), 'Østre Toten, Oppland, Norway');
+});
+
 test('factAdditions(): a marriage in the couple relationship, its town by the name of the year (bug: "Halden, Ostfold" for 1849 not offered a change)', () => {
   const { win, state } = checkedPage();
   const m = { ...record('marriage-bride'), county: 'Østfold', church: '', recordDate: '1849-11-11', sourceTitle: 'Church book from Halden parish 1845-1856 (0101P)' };
@@ -2911,4 +2977,76 @@ test('suggestPairs(): the FS person buried before the baptism is not paired; the
   assert.equal(w.selfContradicted(r, self, LARS_1846), '');
   assert.equal(w.selfContradicted(r, self, { christening: { date: '3 May 1843' } }), 'was christened 3 May 1843');
   assert.equal(w.selfContradicted(r, self, { birth: { date: 'about 1846' }, death: { date: '1846' } }), '');
+});
+
+// FS's names of a town over time (made up as FS's Places page gives them)
+const FREDRIKSTAD_NAMES = [
+  { from: 1567, to: 1918, name: 'Fredrikstad, Smaalenene, Norway', kind: 'City' },
+  { from: 1919, to: 1993, name: 'Fredrikstad, Østfold, Norway', kind: 'City' },
+  { from: 1994, to: null, name: 'Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'City' }];
+
+test('FS\'s names of a place: a town by FS\'s name of the record\'s year, read from FS\'s Places page and kept', async () => {
+  const stored = {};
+  const { chrome, asked } = fakeFs({ placeNames: ({ name }) => ({ ok: true, candidates: [], timeline: name === 'Fredrikstad' ? FREDRIKSTAD_NAMES : [] }) });
+  chrome.storage = { local: { async get(key) { return key in stored ? { [key]: stored[key] } : {}; }, async set(o) { Object.assign(stored, o); } } };
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  const wanted = value(win, 'placeNamesWanted');
+  // not read yet: the present county (bug: a burial in Fredrikstad in 1782 got
+  // "Fredrikstad, Østfold, Norway"), and asked for
+  assert.equal(win.townPlaceIn('0103', 1782), 'Fredrikstad, Østfold, Norway');
+  assert.equal(wanted.has('0103'), true);
+  // a town of TOWN_NAMES without FS's names: TOWN_NAMES's
+  assert.equal(win.townPlaceIn('0101', 1850), 'Fredrikshald, Smaalenene, Norway');
+  await win.readPlaceNames(['0103', '0101']);
+  // FS's Places page searched for the town in its county, a town's entry a city first
+  const fredrikstad = asked.find(([name, args]) => name === 'placeNames' && args.name === 'Fredrikstad');
+  assert.deepEqual(plain(fredrikstad[1]), { name: 'Fredrikstad', county: 'Østfold', kinds: ['City', 'Town', 'Independent City', 'Municipality'], pick: 0 });
+  assert.deepEqual(plain(stored.places['0103'].timeline), FREDRIKSTAD_NAMES);  // kept
+  assert.deepEqual(plain(stored.places['0101'].timeline), []);  // none: kept too, not asked again
+  assert.equal(win.townPlaceIn('0103', 1782), 'Fredrikstad, Smaalenene, Norway');
+  assert.equal(win.townPlaceIn('0103', 1950), 'Fredrikstad, Østfold, Norway');
+  assert.equal(win.townPlaceIn('0101', 1850), 'Fredrikshald, Smaalenene, Norway');  // TOWN_NAMES still
+  assert.equal(win.fsNameOfYear('0103', 1500), null);  // before FS's first period
+  // FS's present name of the town, or a place in it, by the year's
+  assert.equal(win.townOfYear('Fredrikstad, Østfold, Norway', 1782), 'Fredrikstad, Smaalenene, Norway');
+  assert.equal(win.townOfYear('Fredrikstad, Fredrikstad, Østfold, Norway', 1782), 'Fredrikstad, Smaalenene, Norway');
+  assert.equal(win.townOfYear('Domkirken, Fredrikstad, Østfold, Norway', 1782), 'Domkirken, Fredrikstad, Smaalenene, Norway');
+  assert.equal(win.townOfYear('Fredrikstad, Smaalenene, Norway', 1782), 'Fredrikstad, Smaalenene, Norway');
+  // the parish's town in the title of the year, the present name found again
+  const record = { sourceTitle: 'Church book from Fredrikstad parish 1771-1814 (0103P)', recordDate: '1782-05-04' };
+  assert.equal(win.parishTown(record).name, 'Fredrikstad');
+  // read once, from the store, in another page
+  const again = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  await again.loadPlaceNames();
+  assert.equal(again.townPlaceIn('0103', 1782), 'Fredrikstad, Smaalenene, Norway');
+  assert.equal(value(again, 'placeNamesWanted').has('0103'), false);
+});
+
+test('FS\'s names of a place: a town\'s part by a direction word, read from FS\'s Places page and kept', async () => {
+  const stored = {};
+  // made up: a parish of the town from 1880, and a farm of the name in another town first
+  const PART = [{ from: 1880, to: null, name: 'Søndre Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'Lutheran Parish' }];
+  const ELSEWHERE = [{ from: null, to: null, name: 'Søndre Fredrikstad, Sarpsborg, Østfold, Norway', kind: 'Farm' }];
+  const { chrome, asked } = fakeFs({ placeNames: ({ name, pick }) => ({ ok: true, candidates: [],
+    timeline: name === 'Fredrikstad' ? FREDRIKSTAD_NAMES : name === 'Søndre Fredrikstad' ? [ELSEWHERE, PART][pick] || [] : [] }) });
+  chrome.storage = { local: { async get(key) { return key in stored ? { [key]: stored[key] } : {}; }, async set(o) { Object.assign(stored, o); } } };
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  await win.readPlaceNames(['0103']);
+  const place = 'Søndre Fredrikstad, Østfold, Norway';
+  // not read yet: the direction word before the town of the year, and asked for
+  assert.equal(win.townOfYear(place, 1782), 'Søndre Fredrikstad, Smaalenene, Norway');
+  await win.readPlaceNames();
+  // searched for in the town, of any kind; the entry in another town passed over
+  const parts = asked.filter(([name, args]) => name === 'placeNames' && args.name === 'Søndre Fredrikstad').map(([, args]) => plain(args));
+  assert.deepEqual(parts, [{ name: 'Søndre Fredrikstad', county: 'Fredrikstad', kinds: [], pick: 0 },
+    { name: 'Søndre Fredrikstad', county: 'Fredrikstad', kinds: [], pick: 1 }]);
+  assert.deepEqual(plain(stored.placeParts['0103/søndre fredrikstad'].timeline), PART);  // kept
+  // before FS has it: kept before the town of the year; after: FS's name of it
+  assert.equal(win.townOfYear(place, 1782), 'Søndre Fredrikstad, Smaalenene, Norway');
+  assert.equal(win.townOfYear(place, 1900), PART[0].name);
+  // read once, from the store, in another page
+  const again = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  await again.loadPlaceNames();
+  assert.equal(again.townOfYear(place, 1900), PART[0].name);
+  assert.equal(value(again, 'partsWanted').size, 0);
 });

@@ -30,6 +30,9 @@
 //                  or a vital changed, in FS's fact form; `save` false: the fields as
 //                  FS took them (standard places) read back, Cancel, nothing saved
 //   tagFact      — there: the fact's view, Tag Sources, the source by its ID, Tag To
+//   placeNames   — on FS's Places page searched for a place: the entries of that name
+//                  in Norway, and one entry's name in each period of its timeline
+//                  (reads only)
 // Nothing here runs by itself: the user starts it on the linker page, after reviewing.
 // Injected again for each step and page, so it installs its listener only once.
 
@@ -991,6 +994,86 @@ if (!window.__arkivet2fsAttach) {
     throw new Error('FamilySearch did not show the person in the family in time. Look on the FamilySearch tab whether the link was added.');
   }
 
+  // --- FS's names of a place over time (FS's Places page, reads only) -----------------
+  // The page searched for "<name>, <county>, Norway" lists at most ten entries
+  // (`search-result-item`: the name, where it lies, "<Kind>, <from> - <to>"). Clicking
+  // one shows its timeline, a tab per period ("1567 - 1918", "Unknown - 1837", "1994 -
+  // Today"), and the name of the period chosen (`details-name`, "Fredrikstad, Smaalenene,
+  // Norway", with its kind, "City", beside it). The entries of the name in Norway of the
+  // `kinds` asked for, in that order (those in the county first), are `candidates`; the
+  // `pick`th is read: each period's name and kind as `timeline` [{from, to, name, kind}]
+  // (from/to null: Unknown, Today).
+  const placeFold = (s) => clean(s).normalize('NFC').toLowerCase().replace(/å/g, 'aa');
+  const PERIOD = /^(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Today)$/;
+  // An entry's lines: the text of each block (FS splits a line where it marks the words
+  // searched for: "Indre " + "Østfold")
+  function blockLines(root) {
+    const lines = [];
+    let block = null;
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walk.nextNode()) {
+      const node = walk.currentNode;
+      const div = node.parentElement && node.parentElement.closest('div');
+      if (div === block && lines.length) lines[lines.length - 1] += node.textContent;
+      else { lines.push(node.textContent); block = div; }
+    }
+    return lines.map((line) => clean(line).replace(/\s+,/g, ',')).filter(Boolean);
+  }
+  // {name, where, kind}: the two lines before "<Kind> (Top level), 1567 - Today"
+  function placeEntry(item) {
+    const lines = blockLines(item);
+    const k = lines.findIndex((line) => /,\s*(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Today)$/.test(line));
+    if (k < 2) return null;
+    return { item, name: lines[k - 2], where: lines[k - 1], kind: lines[k].replace(/\s*\(.*?\)/, '').replace(/,.*/, '').trim() };
+  }
+  const shownPlace = () => {
+    const h = byTestId('details-name');
+    return h ? [...h.querySelectorAll('span')].map((s) => clean(s.textContent).replace(/,$/, '')).filter(Boolean).join(', ') : '';
+  };
+  const shownKind = () => {
+    const h = byTestId('details-name');
+    return clean(h && h.parentElement && h.parentElement.querySelector('p')?.textContent);
+  };
+  const focusedId = () => new URLSearchParams(location.search).get('focusedId') || '';
+  const periodTabs = () => [...document.querySelectorAll('[role=tablist] [role=tab]')].map((el) => {
+    const m = PERIOD.exec(clean(el.firstElementChild ? el.firstElementChild.textContent : el.textContent));
+    return { el, id: el.getAttribute('value') || '', selected: el.getAttribute('aria-selected') === 'true',
+      from: m && m[1] !== 'Unknown' ? Number(m[1]) : null, to: m && m[2] !== 'Today' ? Number(m[2]) : null, period: !!m };
+  });
+
+  async function placeNames({ name, county = '', kinds = ['Municipality'], pick = 0 }) {
+    if (!/\/research\/places/.test(location.pathname)) throw new Error('FamilySearch did not open its Places page.');
+    const items = await waitFor(() => { const list = document.querySelectorAll('[data-testid="search-result-item"]'); return list.length ? [...list] : null; }, 'the places found', 20000)
+      .catch((e) => { if (e.timeout) return []; throw e; });
+    const wanted = placeFold(name);
+    const inCounty = (entry) => !!county && entry.where.split(/,\s*/).map(placeFold).includes(placeFold(county));
+    // (no `kinds`: any, a parish or part of a town)
+    const candidates = items.map(placeEntry).filter((e) => e && placeFold(e.name) === wanted && /(^|,\s*)Norway$/.test(e.where) && (!kinds.length || kinds.includes(e.kind)))
+      .map((e, order) => ({ ...e, order }))
+      .sort((a, b) => (inCounty(b) - inCounty(a)) || (kinds.indexOf(a.kind) - kinds.indexOf(b.kind)) || (a.order - b.order));
+    const listed = candidates.map((c) => ({ name: c.name, where: c.where, kind: c.kind }));
+    const chosen = candidates[pick];
+    if (!chosen) return { ok: true, candidates: listed, timeline: [] };
+    const before = focusedId();
+    chosen.item.click();
+    await waitFor(() => focusedId() && focusedId() !== before && periodTabs().some((t) => t.selected && t.id === focusedId()), 'the place\'s timeline', 15000);
+    const timeline = [];
+    let last = await waitFor(shownPlace, 'the place\'s name', 10000);
+    for (let i = 0; i < periodTabs().length; i++) {
+      const tab = periodTabs()[i];
+      if (!tab.period) continue;  // "Unknown Time Period"
+      if (!tab.selected) {
+        tab.el.click();
+        await waitFor(() => focusedId() === tab.id && periodTabs().some((t) => t.selected && t.id === tab.id), 'the period ' + (tab.from || 'Unknown') + '–' + (tab.to || 'Today'), 10000);
+        // the name follows the focus; two periods can have the same name
+        await waitFor(() => shownPlace() && shownPlace() !== last, 'the period\'s name', 3000).catch(() => {});
+      }
+      last = shownPlace();
+      timeline.push({ from: tab.from, to: tab.to, name: last, kind: shownKind() });
+    }
+    return { ok: true, candidates: listed, picked: listed[pick], timeline };
+  }
+
   async function cancelAdd() {
     const dialog = addDialog();
     const cancel = dialog && byTestId('cancel-button', dialog);
@@ -1461,7 +1544,7 @@ if (!window.__arkivet2fsAttach) {
     return 'tagged';
   }
 
-  const STEPS = { findSource, attachedTo, createSource, editSource, attach, coupleId, attachCouple, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact, coupleFact };
+  const STEPS = { findSource, attachedTo, createSource, editSource, attach, coupleId, attachCouple, tag, findPerson, createPerson, addMatch, cancelAdd, addFact, tagFact, coupleFact, placeNames };
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Only the steps themselves, not what every object has (constructor, toString)

@@ -38,8 +38,9 @@ API.
 
 On FamilySearch the extension reads the person page you start from (names, events,
 places and family), your SourceBox (whether a source is there and who it is attached
-to), and the pages of the tree persons a record names and of their relatives, to pair
-the record's people with them. These pages can name living people. Some of the reading
+to), the pages of the tree persons a record names and of their relatives, to pair
+the record's people with them, and FamilySearch's Places page for the towns and
+municipalities of a record, to write them by FamilySearch's name of the record's year. These pages can name living people. Some of the reading
 happens in a window of its own, kept behind the extension's page, which it closes when
 done.
 
@@ -59,7 +60,8 @@ anywhere:
   record with them; the last 300 records you attached (the record's Digitalarkivet
   IDs, the FamilySearch source's ID and title, the IDs and names of the people who
   have it, and the facts added), so the search page can mark them; your language
-  choice; and the update check's state and settings.
+  choice; FamilySearch's names of the places read (kept 90 days); and the update
+  check's state and settings.
 
 Removing the extension removes all of it.
 

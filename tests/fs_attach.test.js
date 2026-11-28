@@ -1610,3 +1610,84 @@ test('attachedTo(): a couple relationship the source is attached to, its spouses
   assert.deepEqual(plain(answer.persons.map((p) => p.pid)), ['TEST-KJE']);
   assert.deepEqual(plain(answer.couples), [{ id: 'TEST-C01', pids: ['TEST-LAR', 'TEST-KJE'] }]);
 });
+
+// FS's Places page searched for a place: the entries found (each a block of lines, the
+// words searched for marked, so a line can be two text nodes), and on clicking one its
+// timeline, a tab per period, and the chosen period's name and kind
+function placesPage(entries) {
+  const page = attachPage('https://www.familysearch.org/en/research/places/?text=Fredrikstad%2C+%C3%98stfold%2C+Norway',
+    '<div id="results"></div><div id="details"></div>', { clock: true });
+  const { w } = page;
+  const d = w.document;
+  const clicks = [];
+  const show = (entry, id) => {
+    w.history.pushState({}, '', w.location.pathname + w.location.search.replace(/&focusedId=[^&]*/, '') + '&focusedId=' + id);
+    const period = entry.timeline.find((p) => p.id === id);
+    d.getElementById('details').innerHTML =
+      '<div role="tablist">' + entry.timeline.map((p) => `<button role="tab" value="${p.id}" aria-selected="${p.id === id}"><span>${p.period}</span><span>${p.name ? 'Accepted' : ''}</span></button>`).join('') + '</div>' +
+      (period && period.name ? `<div><h2 data-testid="details-name">${period.name.split(', ').map((part, i, all) => `<span>${part}${i < all.length - 1 ? ',' : ''}</span>`).join('')}</h2><p>${period.kind}</p></div>` : '');
+    for (const tab of d.querySelectorAll('[role=tab]')) tab.addEventListener('click', () => { clicks.push(tab.getAttribute('value')); show(entry, tab.getAttribute('value')); });
+  };
+  const results = d.getElementById('results');
+  for (const entry of entries) {
+    const item = d.createElement('div');
+    item.setAttribute('data-testid', 'search-result-item');
+    const [first, ...rest] = entry.name.split(/(?=stad)/);
+    item.innerHTML = `<div><span>${first}</span><mark>${rest.join('')}</mark></div><div>${entry.where}</div><div>${entry.kind} (Top level), ${entry.years}</div>`;
+    item.addEventListener('click', () => { clicks.push(entry.name + '/' + entry.where); show(entry, entry.timeline[entry.timeline.length - 1].id); });
+    results.append(item);
+  }
+  return { ...page, clicks };
+}
+const FREDRIKSTAD = [
+  { name: 'Fredrikstad', where: 'Fredrikstad, Østfold, Norway', kind: 'Municipality', years: '1838 - Today', timeline: [{ id: 'P1', period: '1838 - Today', name: 'Fredrikstad, Østfold, Norway', kind: 'Municipality' }] },
+  { name: 'Fredrikstad', where: 'Sverige', kind: 'City', years: '1700 - Today', timeline: [{ id: 'P9', period: '1700 - Today', name: 'Fredrikstad, Sverige', kind: 'City' }] },
+  { name: 'Fredrikstad', where: 'Østfold, Norway', kind: 'City', years: '1567 - Today', timeline: [
+    { id: 'P0', period: 'Unknown Time Period', name: '', kind: '' },
+    { id: 'P2', period: '1567 - 1918', name: 'Fredrikstad, Smaalenene, Norway', kind: 'City' },
+    { id: 'P3', period: '1919 - 1993', name: 'Fredrikstad, Østfold, Norway', kind: 'City' },
+    { id: 'P4', period: '1994 - Today', name: 'Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'City' }] }
+];
+
+test('placeNames(): the town\'s entry in Norway of the kind asked for first, and its name in each period (reads only)', async () => {
+  const { step, clicks } = placesPage(FREDRIKSTAD);
+  const answer = await step('placeNames', { name: 'Fredrikstad', county: 'Østfold', kinds: ['City', 'Town', 'Independent City', 'Municipality'] });
+  assert.equal(answer.ok, true, answer.error);
+  assert.deepEqual(plain(answer.candidates), [
+    { name: 'Fredrikstad', where: 'Østfold, Norway', kind: 'City' },
+    { name: 'Fredrikstad', where: 'Fredrikstad, Østfold, Norway', kind: 'Municipality' }]);
+  assert.deepEqual(plain(answer.timeline), [
+    { from: 1567, to: 1918, name: 'Fredrikstad, Smaalenene, Norway', kind: 'City' },
+    { from: 1919, to: 1993, name: 'Fredrikstad, Østfold, Norway', kind: 'City' },
+    { from: 1994, to: null, name: 'Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'City' }]);
+  // the entry, then each period (the one first shown again, once another was); the
+  // one in Sweden never
+  assert.deepEqual(plain(clicks), ['Fredrikstad/Østfold, Norway', 'P2', 'P3', 'P4']);
+});
+
+test('placeNames(): `pick` reads the next entry; none of the name in Norway is an empty timeline', async () => {
+  let { step } = placesPage(FREDRIKSTAD);
+  let answer = await step('placeNames', { name: 'Fredrikstad', county: 'Østfold', kinds: ['City', 'Municipality'], pick: 1 });
+  assert.deepEqual(plain(answer.timeline), [{ from: 1838, to: null, name: 'Fredrikstad, Østfold, Norway', kind: 'Municipality' }]);
+  ({ step } = placesPage(FREDRIKSTAD));
+  answer = await step('placeNames', { name: 'Fredrikshald', county: 'Østfold', kinds: ['City'] });
+  assert.deepEqual([answer.ok, plain(answer.candidates), plain(answer.timeline)], [true, [], []]);
+});
+
+test('placeNames(): no `kinds` takes an entry of any kind, those in the `county` (a town, for a part of it) first', async () => {
+  // made up: a part of the town, a parish there and a farm of the name in another town
+  const PART = [
+    { name: 'Søndre Fredrikstad', where: 'Sarpsborg, Østfold, Norway', kind: 'Farm', years: 'Unknown - Today', timeline: [{ id: 'S1', period: 'Unknown - Today', name: 'Søndre Fredrikstad, Sarpsborg, Østfold, Norway', kind: 'Farm' }] },
+    { name: 'Søndre Fredrikstad', where: 'Fredrikstad, Østfold, Norway', kind: 'Lutheran Parish', years: '1880 - Today', timeline: [{ id: 'S2', period: '1880 - Today', name: 'Søndre Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'Lutheran Parish' }] }];
+  const { step } = placesPage(PART);
+  const answer = await step('placeNames', { name: 'Søndre Fredrikstad', county: 'Fredrikstad', kinds: [] });
+  assert.deepEqual(plain(answer.candidates.map((c) => c.kind)), ['Lutheran Parish', 'Farm']);
+  assert.deepEqual(plain(answer.timeline), [{ from: 1880, to: null, name: 'Søndre Fredrikstad, Fredrikstad, Østfold, Norway', kind: 'Lutheran Parish' }]);
+});
+
+test('placeNames(): only on FS\'s Places page', async () => {
+  const { step } = attachPage('https://www.familysearch.org/en/tree/sources/sourceBox', '');
+  const answer = await step('placeNames', { name: 'Fredrikstad' });
+  assert.equal(answer.ok, false);
+  assert.match(answer.error, /Places page/);
+});

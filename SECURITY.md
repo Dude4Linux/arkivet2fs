@@ -57,7 +57,8 @@ says the same for users.
 - To show what FamilySearch already has, the linker reads FamilySearch pages in a
   window of its own, kept behind the linker's: your SourceBox (is the source there,
   and who is it attached to), the tree persons it pairs (their facts), and their
-  relatives' pages (to pair the others in the record). It only reads there, and closes
+  relatives' pages (to pair the others in the record), and FamilySearch's Places page
+  (a place's names over time). It only reads there, and closes
   the window when done.
 - Search results, the records read, and the relatives' families the linker read are
   kept for the browser session only. The last 30 FamilySearch persons you searched for
