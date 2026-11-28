@@ -1418,6 +1418,31 @@ function otherName(person, record, full, name) {
   return known.includes(sameNameKey([parts.given, parts.surname].filter(Boolean).join(' '))) ? null : { given: parts.given, surname: parts.surname };
 }
 
+// Where a person's residence is, as FS names places ({place, census}): a residence
+// that is a town or municipality ("Chr": Kristiania; "Fhald": Fredrikshald) is the
+// town, else the farm in the parish ("Bakken nedre, Vågå, Oppland, Norway"; not when
+// it is the parish's own name). A record of no parish (the Danish chancery's
+// registers) takes the municipality from DA's "Residence normalized" of the open
+// person, or of the one living at the same place: "Frederichstad" normalized
+// Fredrikstad is the town, of which it is an old spelling (skeleton(): the same
+// consonants), another name a farm in it;
+// else the residence in Norway. `census`: a census's residence, always in the parish.
+function homePlace(home, person, record, parish) {
+  const census = home && !placeIn(home, parish) ? joined(home, parish) : parish;
+  if (!home) return { place: parish, census };
+  const town = fsMunicipality(home, record);
+  if (town) return { place: town, census };
+  if (parish) return { place: census, census };
+  const open = (record.people || []).find((p) => p.current);
+  const fields = record.fields || {};
+  const normalized = open && (isOpenPerson(person, record) || cleanPlace(open.residence) === home)
+    ? cleanPlace(fields['residence normalized']) : '';
+  const municipality = normalized && fsMunicipality(normalized, record, true);
+  if (!municipality) return { place: fsPlace(home, record, true), census };
+  const same = placeIn(home, municipality) || skeleton(home) === skeleton(normalized);
+  return { place: same ? municipality : joined(home, municipality), census };
+}
+
 // `opts`: `ids`, the record's DA permanent IDs (doneIds()), and `reason`, the reason
 // written with the changes (additionReason()). A fact FS has from this record (an
 // earlier run's: its reason names one of `ids`, fs_person.js fromRecord()) is updated
@@ -1545,16 +1570,16 @@ function factAdditions(person, record, tree, name, opts = {}) {
   // since FS would place it in a village of that name somewhere.
   const isCensus = kind === 'census';
   const home = cleanPlace(isCensus ? (record.census || {}).residence : person.residence);
+  const homeAt = homePlace(home, person, record, parish);
+  // a residence that is a town ("Chr": Kristiania; "Fhald": Fredrikshald) is the town,
+  // not a farm in the parish; an emigrant's home anywhere in Norway; none abroad
+  const where = placeAbroad(home) ? '' : kind === 'emigration' ? fsPlace(home, record, true) : isCensus ? homeAt.census : homeAt.place;
   const ofYear = (full.residences || []).filter((r) => fsYear(r.date) === year);
   const ourHome = ofYear.find(ours);
   if (da.Residence && year && !placeAbroad(home) && (ofYear.length < 2 || ourHome)) {
     const census = record.census || {};
-    // a residence that is a town ("Chr": Kristiania; "Fhald": Fredrikshald) is the town,
-    // not a farm in the parish. The description is the residence as the record writes
-    // it ("Fhald", "Chr", a farm), so the source's name stays with the fact
-    const town = home && !isCensus && fsMunicipality(home, record);
-    const where = kind === 'emigration' ? fsPlace(home, record, true)
-      : town || (home && !placeIn(home, parish) ? joined(home, parish) : parish);
+    // The description is the residence as the record writes it ("Fhald", "Chr", a farm),
+    // so the source's name stays with the fact
     const written = String(person.residence || '').replace(/\s+/g, ' ').trim();
     const description = isCensus ? joined(census.residence, census.district) : written;
     const fs = ourHome || ofYear[0];
@@ -1604,7 +1629,9 @@ function factAdditions(person, record, tree, name, opts = {}) {
   // An occupation, written with the English after the words, as the notes have it
   // ("Snedker [joiner]"); this record's updated
   if (da.Occupation) {
-    const value = { date: year ? String(year) : '', place: parishPlace(record), description: expandAbbreviations(da.Occupation.text) };
+    // at the parish; a record of no parish (the Danish chancery's registers) at the
+    // person's residence
+    const value = { date: year ? String(year) : '', place: parish || where, description: expandAbbreviations(da.Occupation.text) };
     const fs = (full.occupations || []).find(ours);
     const edit = (o, rest) => out.push({ fact: 'Occupation', action: 'edit', type: 'OCCUPATION', current: joined(o.description, o.date, o.place), ...rest });
     if (fs) {

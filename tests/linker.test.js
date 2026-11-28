@@ -3133,3 +3133,32 @@ test('suggestPairs(): opened on a namesake child, the father of the FS person\'s
   assert.equal(w.suggestPairs(r, people, w.findSelf(people, young, true), young).pairs[self.key], undefined);
 });
 
+test('factAdditions(): a record of no parish places the residence and occupation by DA\'s normalized residence (bug: "Frederichstad" and no place)', () => {
+  // The Danish chancery's registers name no parish or county: the residence was
+  // offered as "Frederichstad" alone and the occupation without a place
+  const { win, state } = checkedPage();
+  const letter = (residence) => {
+    const r = record('letter-1712');
+    r.people = r.people.map((p) => ({ ...p, residence }));
+    r.fields = { ...r.fields, residence };
+    return r;
+  };
+  const additions = (r) => {
+    state.record = r;
+    state.fs = { pid: 'TEST-EIU', name: 'Eiulf Mikkelsen', gender: 'Male', residences: [], occupations: [], altNames: [] };
+    const groom = w.recordPeople(r).find((p) => p.current);
+    return plain(win.factAdditions(groom, r, { pid: 'TEST-EIU' })).filter((a) => a.fact === 'Residence' || a.fact === 'Occupation').map((a) => [a.fact, a.value]);
+  };
+  // an old spelling of the town DA normalizes it to: the town, as written in the description
+  const town = additions(letter('Frederichstad'));
+  assert.deepEqual(town.find(([fact]) => fact === 'Residence')[1], { date: '1715', place: 'Fredrikstad, Østfold, Norway', description: 'Frederichstad' });
+  assert.equal(town.find(([fact]) => fact === 'Occupation')[1].place, 'Fredrikstad, Østfold, Norway');
+  // another name: a farm in the town
+  const farm = additions(letter('Engli'));
+  assert.equal(farm.find(([fact]) => fact === 'Residence')[1].place, 'Engli, Fredrikstad, Østfold, Norway');
+  assert.equal(farm.find(([fact]) => fact === 'Occupation')[1].place, 'Engli, Fredrikstad, Østfold, Norway');
+  // no normalized residence: the residence in Norway, not alone
+  const none = letter('Engli');
+  delete none.fields['residence normalized'];
+  assert.equal(additions(none).find(([fact]) => fact === 'Residence')[1].place, 'Engli, Norway');
+});
