@@ -2111,22 +2111,43 @@ async function showPeople() {
 
 // A census residence's other households are shown when someone in them is paired: a
 // related family (1865's old parents, a brother's family). The others (the farm's
-// unrelated households in 1801) wait behind a button.
+// unrelated households in 1801) wait behind a button, and so do the residents of the
+// households shown whom the census gives no family position (`outsideFamily()`: 1801's
+// "Tienestefolk", a "Huusholderske", "Logerende", one "Værende i huuset"), unless they
+// are paired, the open person, or named in a hint: they are seldom FS's relatives.
 function showHouseholds() {
   const related = state.related;
   for (const r of state.rows) if (r.pid()) related.add(r.person.household);
   const others = state.rows.filter((r) => !related.has(r.person.household));
-  for (const r of state.rows) r.node.hidden = !state.showAll && !related.has(r.person.household);
+  const outside = state.rows.filter((r) => related.has(r.person.household) && waitingRow(r));
+  for (const r of state.rows) r.node.hidden = !state.showAll && waitingRow(r);
   for (const [h, node] of state.headings) node.hidden = !state.showAll && !related.has(h);
   const n = new Set(others.map((r) => r.person.household)).size;
   const button = $('other-households');
-  button.hidden = !n;
-  const params = { n, people: others.length };
-  button.textContent = state.showAll
-    ? t(n > 1 ? 'Hide the {n} other households at the residence ({people} people), not related in the census or FamilySearch'
-      : 'Hide the other household at the residence ({people} people), not related in the census or FamilySearch', params)
-    : t(n > 1 ? 'Show the {n} other households at the residence ({people} people), not related in the census or FamilySearch'
-      : 'Show the other household at the residence ({people} people), not related in the census or FamilySearch', params);
+  button.hidden = !n && !outside.length;
+  const params = { n, people: others.length + outside.length };
+  button.textContent = outside.length
+    ? t(state.showAll ? 'Hide the {people} at the residence not related in the census or FamilySearch'
+      : 'Show {people} more at the residence, not related in the census or FamilySearch', params)
+    : state.showAll
+      ? t(n > 1 ? 'Hide the {n} other households at the residence ({people} people), not related in the census or FamilySearch'
+        : 'Hide the other household at the residence ({people} people), not related in the census or FamilySearch', params)
+      : t(n > 1 ? 'Show the {n} other households at the residence ({people} people), not related in the census or FamilySearch'
+        : 'Show the other household at the residence ({people} people), not related in the census or FamilySearch', params);
+}
+
+// A row behind the button: in a household not related, or outside the family there
+const waitingRow = (r) => !state.related.has(r.person.household) ||
+  (isCensus() && outsideFamily(r.person, state.people) && !r.pid() && !r.person.current && !r.why());
+
+// A census resident whose family position says they aren't of the family: not a head,
+// spouse, child, grandchild, child-in-law or parent (roleKind()), no kin word
+// (censusKin(): "hans Søster", "Pleiebarn"), and not the first of their household (its
+// head when no position says otherwise). A resident with no position is family.
+const FAMILY_KINDS = new Set(['head', 'spouse', 'child', 'grandchild', 'childInLaw', 'father', 'mother']);
+function outsideFamily(person, people) {
+  if (!String(person.role || '').trim() || FAMILY_KINDS.has(roleKind(person)) || censusKin(person)) return false;
+  return people.find((p) => p.household === person.household) !== person;
 }
 
 // The source describes the FS person's household. When they live in another household
@@ -2194,7 +2215,7 @@ async function readResidence(need, generation) {
     showFsCheck();
     need = next.need.filter((p) => !state.trees[p]);
   }
-  const shown = isCensus() ? state.rows.filter((r) => state.related.has(r.person.household)) : state.rows;
+  const shown = isCensus() ? state.rows.filter((r) => !waitingRow(r)) : state.rows;
   const paired = shown.filter((r) => r.pid()).length;
   const counts = { paired, n: shown.length };
   status.textContent = t(!isCensus() ? '{paired} of {n} in the record paired'

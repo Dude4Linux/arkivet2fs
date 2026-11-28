@@ -361,6 +361,12 @@ function i18nTable() {
     'Show the {n} other households at the residence ({people} people), not related in the census or FamilySearch': [
       'Vis de {n} andre husstandene på bostedet ({people} personer), ikke i slekt i folketellingen eller FamilySearch',
       'Vis dei {n} andre hushalda på bustaden ({people} personar), ikkje i slekt i folketeljinga eller FamilySearch'],
+    'Hide the {people} at the residence not related in the census or FamilySearch': [
+      'Skjul de {people} på bostedet som ikke er i slekt i folketellingen eller FamilySearch',
+      'Skjul dei {people} på bustaden som ikkje er i slekt i folketeljinga eller FamilySearch'],
+    'Show {people} more at the residence, not related in the census or FamilySearch': [
+      'Vis {people} til på bostedet, ikke i slekt i folketellingen eller FamilySearch',
+      'Vis {people} til på bustaden, ikkje i slekt i folketeljinga eller FamilySearch'],
     'Show the other household at the residence ({people} people), not related in the census or FamilySearch': [
       'Vis den andre husstanden på bostedet ({people} personer), ikke i slekt i folketellingen eller FamilySearch',
       'Vis det andre hushaldet på bustaden ({people} personar), ikkje i slekt i folketeljinga eller FamilySearch'],

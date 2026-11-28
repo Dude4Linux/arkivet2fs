@@ -3050,3 +3050,63 @@ test('FS\'s names of a place: a town\'s part by a direction word, read from FS\'
   assert.equal(again.townOfYear(place, 1900), PART[0].name);
   assert.equal(value(again, 'partsWanted').size, 0);
 });
+
+// 1801: a household of the family, four servants and a lodger, all of one household
+// number, so the residence's household button had nothing to hide
+test('showPeople(): a census household\'s servants and lodger wait behind the button; the family is shown', async () => {
+  const chrome = { storage: { local: { async get() { return {}; } }, session: { async get() { return {}; } } } };
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/census-1801-married.html'), fixtureUrl('da/census-1801-married.html'));
+  const head = 'Ingebrigt Jørund Brynjulvsen';
+  const people = win.recordPeople(r).filter((p) => p.household === 1).map((p) => ({ ...p, household: 0, current: p.name === head }));
+  const fs = { pid: 'TEST-ING', name: head, gender: 'Male', families: [] };
+  Object.assign(state, { record: r, people, fs, trusted: true });
+  await win.showPeople();
+  await state.residenceRead;
+  const shown = () => state.rows.filter((row) => !row.node.hidden).map((row) => row.person.name);
+  assert.deepEqual(plain(shown()), [head, 'Hallfrid Jofrid Furuli', 'Magnhild Ranveig Ingebrigtsdatter',
+    'Sigrun Jofrid Ingebrigtsdatter', 'Brynjulv Ingebrigtsen', 'Kolbein Ingebrigtsen']);
+  const button = win.document.getElementById('other-households');
+  assert.equal(button.hidden, false);
+  assert.equal(button.textContent, 'Show 5 more at the residence, not related in the census or FamilySearch');
+  button.click();
+  assert.equal(shown().length, 11);
+  assert.equal(button.textContent, 'Hide the 5 at the residence not related in the census or FamilySearch');
+  // a servant paired by hand stays shown when they're hidden again
+  const servant = state.rows.find((row) => row.person.name === 'Lars Larsen');
+  servant.node.querySelector('select').value = 'other';
+  servant.node.querySelector('input.pid').value = 'TEST-SRV';
+  button.click();
+  assert.deepEqual(plain(shown()).slice(-1), ['Lars Larsen']);
+  assert.equal(button.textContent, 'Show 4 more at the residence, not related in the census or FamilySearch');
+});
+
+test("showPeople(): a baptism's godparents are shown, though no family role names them", async () => {
+  const chrome = { storage: { local: { async get() { return {}; } }, session: { async get() { return {}; } } } };
+  const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
+  const state = value(win, 'state');
+  const r = win.extractRecord(fixtureDoc(win, 'da/baptism-1846.html'), fixtureUrl('da/baptism-1846.html'));
+  r.people.push({ name: 'Ole Olsen', role: 'fadder', roleEnglish: 'Godparent', id: 'pd99000000000099' });
+  const people = win.recordPeople(r);
+  assert.equal(win.roleKind(people.at(-1)), '');
+  Object.assign(state, { record: r, people, fs: LARS_1846, trusted: true });
+  await win.showPeople();
+  await state.residenceRead;
+  assert.ok(state.rows.every((row) => !row.node.hidden));
+  assert.equal(win.document.getElementById('other-households').hidden, true);
+});
+
+test('outsideFamily(): a census resident whose position says they are not of the family', () => {
+  const people = w.recordPeople(record('census-1801-married'));
+  const of = (name) => w.outsideFamily(people.find((p) => p.name === name), people);
+  assert.equal(of('Lars Larsen'), true);           // Tienestefolk
+  assert.equal(of('Magne von Kvamme'), true);      // Logerende
+  assert.equal(of('Magnhild Larsdatter'), true);   // Huusmenniske
+  assert.equal(of('Gurj Finvaldsdatter'), false);  // Hans søster
+  assert.equal(of('Tollef Gudmundsen'), false);    // Hosbonde
+  assert.equal(of('Bodil Yset'), false);           // the first of her household
+  // no family position at all (1865): family
+  const c = w.recordPeople(record('census-1865'));
+  assert.equal(w.outsideFamily(c.find((p) => p.name === 'Lars Ormsen'), c), false);
+});
