@@ -1698,7 +1698,7 @@ test('run(): a SourceBox FS doesn\'t search is searched once more, then the chec
 
 // chrome.storage.local in memory, with its onChanged
 function memoryStorage(kept = {}) {
-  return { local: { async get(key) { return key in kept ? { [key]: kept[key] } : {}; }, async set(items) { Object.assign(kept, items); } }, kept };
+  return { local: { async get(keys) { return Object.fromEntries([keys].flat().filter((k) => k in kept).map((k) => [k, kept[k]])); }, async set(items) { Object.assign(kept, items); } }, kept };
 }
 
 test('run(): what was done is kept for the search page, by the record\'s permanent IDs; a run again replaces it', async () => {
@@ -2988,7 +2988,7 @@ const FREDRIKSTAD_NAMES = [
 test('FS\'s names of a place: a town by FS\'s name of the record\'s year, read from FS\'s Places page and kept', async () => {
   const stored = {};
   const { chrome, asked } = fakeFs({ placeNames: ({ name }) => ({ ok: true, candidates: [], timeline: name === 'Fredrikstad' ? FREDRIKSTAD_NAMES : [] }) });
-  chrome.storage = { local: { async get(key) { return key in stored ? { [key]: stored[key] } : {}; }, async set(o) { Object.assign(stored, o); } } };
+  chrome.storage = { local: { async get(keys) { return Object.fromEntries([keys].flat().filter((k) => k in stored).map((k) => [k, stored[k]])); }, async set(o) { Object.assign(stored, o); } } };
   const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
   const wanted = value(win, 'placeNamesWanted');
   // not read yet: the present county (bug: a burial in Fredrikstad in 1782 got
@@ -3029,7 +3029,7 @@ test('FS\'s names of a place: a town\'s part by a direction word, read from FS\'
   const ELSEWHERE = [{ from: null, to: null, name: 'Søndre Fredrikstad, Sarpsborg, Østfold, Norway', kind: 'Farm' }];
   const { chrome, asked } = fakeFs({ placeNames: ({ name, pick }) => ({ ok: true, candidates: [],
     timeline: name === 'Fredrikstad' ? FREDRIKSTAD_NAMES : name === 'Søndre Fredrikstad' ? [ELSEWHERE, PART][pick] || [] : [] }) });
-  chrome.storage = { local: { async get(key) { return key in stored ? { [key]: stored[key] } : {}; }, async set(o) { Object.assign(stored, o); } } };
+  chrome.storage = { local: { async get(keys) { return Object.fromEntries([keys].flat().filter((k) => k in stored).map((k) => [k, stored[k]])); }, async set(o) { Object.assign(stored, o); } } };
   const win = load([...SHARED, 'linker.js'], { html: 'linker.html', chrome, fast: true });
   await win.readPlaceNames(['0103']);
   const place = 'Søndre Fredrikstad, Østfold, Norway';

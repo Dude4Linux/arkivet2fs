@@ -133,8 +133,7 @@ function selfContradicted(record, person, fs) {
 function namesakeSelf(record, people, self, fs, chosen = {}) {
   const name = splitName(stripNameVariants(fs.name));
   if (!name.surname) return null;
-  const born = (parseFsDate((fs.birth || fs.christening || {}).date || '') || {}).year
-    || Number(((fs.lifespan || '').match(/^\d{4}/) || [])[0]) || null;
+  const born = treeYear(fs);
   const recordYear = recordYearOf(record);
   const sameSurname = (word) => {
     const a = fold(word || ''), b = fold(name.surname);
@@ -173,12 +172,12 @@ function suggestPairs(record, people, self, fs, trees = {}, chosen = {}) {
   // The record against the FS person (buried before this baptism): not paired, but
   // their parents are still the record person's, and the parents' FS families, read
   // as `need`, can pair the namesake brother or sister who fits
-  let open = self && !(self.key in chosen) && !used.has(fs.pid);
+  const open = self && !(self.key in chosen) && !used.has(fs.pid);
   let against = open && !census ? selfContradicted(record, self, fs) : '';
   // Opened on a namesake (the child Halvor, FS's Halvor Larsen his father):
   // the record person of the FS person's full name whom nothing contradicts is them
   const namesake = against ? namesakeSelf(record, people, self, fs, chosen) : null;
-  if (namesake) { self = namesake; against = ''; open = true; }
+  if (namesake) { self = namesake; against = ''; }
   if (open) {
     if (!against) pairs[self.key] = fs.pid;
     why[self.key] = against ? t('FamilySearch {name} {what}: not paired; choose them if it\'s the same person', { name: stripNameVariants(fs.name), what: against })
@@ -1837,12 +1836,7 @@ async function prepareAdditions() {
         if (!kept) continue;
         let fields;
         try {
-          try { fields = await fill(pid, a); } catch (e) {
-            if (e.blocked) throw e;  // FS's block page: shown, it comes again
-            // a covered window may not be drawn (Windows, macOS): once more on top
-            await tab.show();
-            try { await navigate(tab.id, personDetailsUrl(pid)); fields = await fill(pid, a); } finally { await tab.back(); }
-          }
+          fields = await shownRetry(tab, () => fill(pid, a), async () => { await navigate(tab.id, personDetailsUrl(pid)); return fill(pid, a); });
         } catch (e) {
           kept.fs = { error: e.message || String(e) };
           failed++;
@@ -2993,6 +2987,16 @@ function actionLabels(known) {
 function windowNote() {
   return t('A FamilySearch window may come up meanwhile; leave it, it closes by itself.');
 }
+// `run()` in the hidden tab, and on a failure once more (`again()`, else `run()`) with the
+// tab shown, as a covered window may not be drawn; not on FS's block page, which comes
+// again when shown
+async function shownRetry(tab, run, again = run) {
+  try { return await run(); } catch (e) {
+    if (e.blocked) throw e;
+    await tab.show();
+    try { return await again(); } finally { await tab.back(); }
+  }
+}
 
 async function hiddenTab() {
   const here = await chrome.tabs.getCurrent();
@@ -3178,14 +3182,7 @@ async function checkOnFamilySearch() {
   let result, tab = null;
   try {
     tab = await hiddenTab();
-    try {
-      result = { sources: await lookUpSources(tab.id, titles, false, sources) };
-    } catch (e) {
-      // FS's block page comes again when shown: only a window not drawn is tried again
-      if (e.blocked) throw e;
-      await tab.show();
-      try { result = { sources: await lookUpSources(tab.id, titles, false, sources) }; } finally { await tab.back(); }
-    }
+    result = { sources: await shownRetry(tab, () => lookUpSources(tab.id, titles, false, sources)) };
   } catch (e) {
     result = { error: e.message || String(e) };
   } finally {
@@ -3713,14 +3710,14 @@ const placeNamesWanted = new Set();
 const placeNamesAsked = new Set();
 async function loadPlaceNames() {
   try {
-    const kept = (await chrome.storage.local.get('places')).places || {};
-    for (const [code, entry] of Object.entries(kept)) {
-      if (entry && Array.isArray(entry.timeline) && Date.now() - entry.read < PLACES_KEEP_MS) placeTimelines[code] = entry.timeline;
-    }
-    const parts = (await chrome.storage.local.get('placeParts')).placeParts || {};
-    for (const [key, entry] of Object.entries(parts)) {
-      if (entry && Array.isArray(entry.timeline) && Date.now() - entry.read < PLACES_KEEP_MS) partTimelines[key] = entry.timeline;
-    }
+    const { places = {}, placeParts = {} } = await chrome.storage.local.get(['places', 'placeParts']);
+    const keep = (entries, into) => {
+      for (const [key, entry] of Object.entries(entries)) {
+        if (entry && Array.isArray(entry.timeline) && Date.now() - entry.read < PLACES_KEEP_MS) into[key] = entry.timeline;
+      }
+    };
+    keep(places, placeTimelines);
+    keep(placeParts, partTimelines);
   } catch (e) { /* only a cache */ }
 }
 // The periods of a timeline holding `year`, the latest-starting first
@@ -3748,17 +3745,23 @@ async function placeTimeline(tab, code) {
   const text = foldPlace(name) === foldPlace(county) ? name + ', Norway' : name + ', ' + county + ', Norway';
   const kinds = Number(code.slice(2)) < 11 ? ['City', 'Town', 'Independent City', 'Municipality'] : ['Municipality', 'City', 'Town', 'Independent City'];
   const counties = [county, countyName(code.slice(0, 2))].map(foldPlace);
+  // an entry of another county (a farm or parish of the name elsewhere): the next
+  return readTimeline(tab, text, { name, county, kinds },
+    (p) => placeParts(p.name).map(foldPlace).some((part) => counties.includes(part)));
+}
+const PLACES_URL = 'https://www.familysearch.org/en/research/places/?text=';
+// The timeline of FS's first entry for `text` (`args` of placeNames, picks 0–2) of which
+// a period `fits`, [] when FS has none
+async function readTimeline(tab, text, args, fits) {
   for (const pick of [0, 1, 2]) {
     await navigate(tab.id, PLACES_URL + encodeURIComponent(text), false);
-    const answer = await step(tab.id, 'placeNames', { name, county, kinds, pick });
+    const answer = await step(tab.id, 'placeNames', { ...args, pick });
     if (!answer.ok) throw stepError(answer);
     if (!answer.timeline.length) return [];
-    // an entry of another county (a farm or parish of the name elsewhere): the next
-    if (answer.timeline.some((p) => placeParts(p.name).map(foldPlace).some((part) => counties.includes(part)))) return answer.timeline;
+    if (answer.timeline.some(fits)) return answer.timeline;
   }
   return [];
 }
-const PLACES_URL = 'https://www.familysearch.org/en/research/places/?text=';
 
 // A part of a town named by a direction word before the town's name ("Østre
 // Fredrikstad"), as FS's users write a parish of the town: "Østre Fredrikstad, Østfold,
@@ -3792,15 +3795,9 @@ async function partTimeline(tab, { code, name }) {
   const county = fsCounty(countyName(code.slice(0, 2)));
   const text = name + ', ' + (foldPlace(town) === foldPlace(county) ? '' : town + ', ') + county + ', Norway';
   const towns = namesOf(code).towns;
-  for (const pick of [0, 1, 2]) {
-    await navigate(tab.id, PLACES_URL + encodeURIComponent(text), false);
-    const answer = await step(tab.id, 'placeNames', { name, county: town, kinds: [], pick });
-    if (!answer.ok) throw stepError(answer);
-    if (!answer.timeline.length) return [];
-    // one in another town (a farm of the name elsewhere): the next
-    if (answer.timeline.some((p) => placeParts(p.name).slice(1).map(foldPlace).some((x) => towns.includes(x)))) return answer.timeline;
-  }
-  return [];
+  // one in another town (a farm of the name elsewhere): the next
+  return readTimeline(tab, text, { name, county: town, kinds: [] },
+    (p) => placeParts(p.name).slice(1).map(foldPlace).some((x) => towns.includes(x)));
 }
 // Read FS's names of the municipalities asked for (`codes`, else all wanted), in one
 // hidden window after the other FS reads, at most MAX_PLACE_READS a page; kept, and the
@@ -3820,18 +3817,13 @@ function readPlaceNames(codes = [...placeNamesWanted], done) {
     let tab = null;
     try {
       tab = await hiddenTab();
+      const named = (what) => (e) => { console.warn('arkivet2fs: FS\'s names of ' + what, e); return null; };
       for (const code of todo) {
-        let timeline = await placeTimeline(tab, code).catch(() => null);
-        // a hidden tab FS hasn't drawn: shown for a moment
-        if (!timeline) {
-          await tab.show();
-          timeline = await placeTimeline(tab, code).catch((e) => { console.warn('arkivet2fs: FS\'s names of ' + municipalityName(code), e); return null; });
-          await tab.back();
-        }
+        const timeline = await shownRetry(tab, () => placeTimeline(tab, code)).catch(named(municipalityName(code)));
         if (timeline) { placeTimelines[code] = timeline; read[code] = { read: Date.now(), timeline }; }
       }
       for (const [key, part] of parts) {
-        const timeline = await partTimeline(tab, part).catch((e) => { console.warn('arkivet2fs: FS\'s names of ' + part.name, e); return null; });
+        const timeline = await shownRetry(tab, () => partTimeline(tab, part)).catch(named(part.name));
         if (timeline) { partTimelines[key] = timeline; readParts[key] = { read: Date.now(), timeline }; }
       }
     } catch (e) {
@@ -3841,9 +3833,8 @@ function readPlaceNames(codes = [...placeNamesWanted], done) {
     }
     if (!Object.keys(read).length && !Object.keys(readParts).length) return;
     try {
-      const kept = (await chrome.storage.local.get('places')).places || {};
-      const keptParts = (await chrome.storage.local.get('placeParts')).placeParts || {};
-      await chrome.storage.local.set({ places: { ...kept, ...read }, placeParts: { ...keptParts, ...readParts } });
+      const { places = {}, placeParts = {} } = await chrome.storage.local.get(['places', 'placeParts']);
+      await chrome.storage.local.set({ places: { ...places, ...read }, placeParts: { ...placeParts, ...readParts } });
     } catch (e) { /* only a cache */ }
     if (done) done();
     else for (const row of state.rows) row.showFacts();

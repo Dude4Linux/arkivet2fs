@@ -1004,7 +1004,8 @@ if (!window.__arkivet2fsAttach) {
   // `pick`th is read: each period's name and kind as `timeline` [{from, to, name, kind}]
   // (from/to null: Unknown, Today).
   const placeFold = (s) => clean(s).normalize('NFC').toLowerCase().replace(/å/g, 'aa');
-  const PERIOD = /^(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Today)$/;
+  const SPAN = String.raw`(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Today)$`;
+  const PERIOD = new RegExp('^' + SPAN);
   // An entry's lines: the text of each block (FS splits a line where it marks the words
   // searched for: "Indre " + "Østfold")
   function blockLines(root) {
@@ -1022,7 +1023,7 @@ if (!window.__arkivet2fsAttach) {
   // {name, where, kind}: the two lines before "<Kind> (Top level), 1567 - Today"
   function placeEntry(item) {
     const lines = blockLines(item);
-    const k = lines.findIndex((line) => /,\s*(\d{3,4}|Unknown)\s*-\s*(\d{3,4}|Today)$/.test(line));
+    const k = lines.findIndex((line) => new RegExp(',\\s*' + SPAN).test(line));
     if (k < 2) return null;
     return { item, name: lines[k - 2], where: lines[k - 1], kind: lines[k].replace(/\s*\(.*?\)/, '').replace(/,.*/, '').trim() };
   }
@@ -1550,9 +1551,12 @@ if (!window.__arkivet2fsAttach) {
     // Only the steps themselves, not what every object has (constructor, toString)
     const step = request && typeof request.linker === 'string' && Object.hasOwn(STEPS, request.linker) && STEPS[request.linker];
     if (!step) return false;
-    step(request.args || {}).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message || String(error),
-      ...(error && error.blocked ? { blocked: true } : {}), ...(error && error.timeout ? { timeout: true } : {}),
-      ...(error && error.unsaved ? { unsaved: true } : {}), ...(error && error.dialog ? { dialog: error.dialog } : {}) }));
+    step(request.args || {}).then(sendResponse, (error) => {
+      const answer = { ok: false, error: (error && error.message) || String(error) };
+      for (const flag of ['blocked', 'timeout', 'unsaved']) if (error && error[flag]) answer[flag] = true;
+      if (error && error.dialog) answer.dialog = error.dialog;
+      sendResponse(answer);
+    });
     return true;  // answers later
   });
 }
