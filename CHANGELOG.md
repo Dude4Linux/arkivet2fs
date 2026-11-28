@@ -4,6 +4,36 @@ One section per version. The release notes on GitHub come from here, so write fo
 the people who use the extension. The version is in `manifest.json` (MAJOR.MINOR.PATCH:
 fixes, new features, changes that break what users have).
 
+## 1.8.5 - 2026-11-28
+
+- **Towns by FamilySearch's own names of the year:** a renamed town now gets the name
+  FamilySearch itself gives it in the record's year ("Fredrikstad, Smaalenene,
+  Norway" for 1782), read from FamilySearch's Places page and kept for 90 days. While
+  they're being read, a FamilySearch window may come up for a moment; it closes by
+  itself. A part of a town ("Østre Fredrikstad") is named the same way.
+- **A place changed without changing the date:** when a burial or baptism gives no
+  date, but FamilySearch has the death or birth in a renamed town under another name
+  than the year's, the linker offers to change only the place and keeps
+  FamilySearch's date.
+- **A record opened on a namesake:** a baptism opened from the child's entry while
+  searching from the father (the child named after him) paired no one. The linker
+  now finds the father's own entry in the record and pairs the family from there.
+- **A child's burial opened as the child:** the father and mother the burial names
+  are now paired with the child's FamilySearch parents, and the search page counts
+  them when it checks a burial hit.
+- **Servants and lodgers wait behind the button:** in a census where everyone at the
+  residence has one household number (1801: the family, a housekeeper, a lodger and
+  the servants), the residents whose position says they aren't family are hidden
+  behind "Show N more at the residence…", unless they are paired or named in a hint.
+- **Residence and occupation in the Danish chancery's registers:** these registers
+  name no parish, so a residence was added with only the record's spelling as its
+  place ("Frederichstad"), and an occupation had no place. Both are now placed by
+  DigitalArkivet's normalized residence: the town, or a farm in it.
+- **An attach FamilySearch is slow with:** the linker now waits longer for
+  FamilySearch to find the person in the Attach dialog. If FamilySearch still doesn't
+  show them, the dialog is closed (so the next attaches aren't blocked), and the
+  attach is tried once more. The log says what FamilySearch showed.
+
 ## 1.8.4 - 2026-11-26
 
 - **Occupations with their English:** an occupation added to a person is written as
